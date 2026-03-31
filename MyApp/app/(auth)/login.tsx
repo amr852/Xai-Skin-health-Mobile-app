@@ -38,7 +38,7 @@ export default function LoginScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.subtitle}>Log in to continue</Text>
+        <Text style={styles.subtitle}>Log in to continue!</Text>
       </View>
 
       <View style={styles.form}>
@@ -80,16 +80,16 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 24 },
-  header: { marginBottom: 24 },
-  title: { fontSize: 28, fontWeight: '700' },
-  subtitle: { marginTop: 6, color: '#666' },
-  form: { gap: 12 },
-  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12 },
-  errorText: { color: '#c62828', fontSize: 13 },
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  header: { width: '100%', maxWidth: 360, marginBottom: 24, alignItems: 'center' },
+  title: { fontSize: 28, fontWeight: '700', textAlign: 'center' },
+  subtitle: { marginTop: 6, color: '#666', textAlign: 'center' },
+  form: { width: '100%', maxWidth: 360, gap: 12 },
+  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, textAlign: 'center' },
+  errorText: { color: '#c62828', fontSize: 13, textAlign: 'center' },
   button: { backgroundColor: '#000', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 4 },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontWeight: '600' },
-  footer: { marginTop: 16 },
-  link: { textAlign: 'center', color: '#555' },
+  footer: { width: '100%', maxWidth: 360, marginTop: 16 },
+  link:  { textAlign: 'center', color: '#555' },
 });

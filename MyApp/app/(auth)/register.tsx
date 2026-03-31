@@ -16,7 +16,7 @@ export default function RegisterScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Create account</Text>
+      <Text style={styles.title}>Create Account</Text>
 
       <TextInput
         style={styles.input}
@@ -55,10 +55,10 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 24 },
-  title:     { fontSize: 28, fontWeight: '700', marginBottom: 32 },
-  input:     { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, marginBottom: 16 },
-  button:    { backgroundColor: '#000', borderRadius: 8, padding: 14, alignItems: 'center', marginBottom: 16 },
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  title:     { fontSize: 28, fontWeight: '700', marginBottom: 32, textAlign: 'center' },
+  input:     { width: '100%', maxWidth: 360, borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, marginBottom: 16, textAlign: 'center' },
+  button:    { width: '100%', maxWidth: 360, backgroundColor: '#000', borderRadius: 8, padding: 14, alignItems: 'center', marginBottom: 16 },
   buttonText:{ color: '#fff', fontWeight: '600' },
   link:      { textAlign: 'center', color: '#555' },
 });
