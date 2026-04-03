@@ -1,8 +1,3 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
-
 import { Platform } from 'react-native';
 
 const tintColorLight = '#0a7ea4';
@@ -51,3 +46,51 @@ export const Fonts = Platform.select({
     mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
   },
 });
+
+/** Skin health home / vitals palette */
+export const C = {
+  bg: '#FFFFFF',
+  cardGray: '#EDECEA',
+  white: '#FFFFFF',
+  sage: '#C8E0A4',
+  sageDark: '#3D5C1E',
+  sageMid: '#4A7A22',
+  text: '#1A1A18',
+  muted: '#888077',
+  border: '#D8D5CF',
+  blue: '#1E7AAE',
+  blueFill: '#5BAED0',
+  blueLight: '#D4EEF8',
+  amber: '#C08010',
+  amberFill: '#E8A830',
+  amberLight: '#FFF0CC',
+  purple: '#6050B8',
+  purpleFill: '#9080D0',
+  purpleLight: '#EAE6F8',
+  stableText: '#2A6A2A',
+  stableBg: '#DCF0DC',
+  checkText: '#8A5A00',
+  checkBg: '#FFF0CC',
+  urgentText: '#9B1C1C',
+  urgentBg: '#FDE8E8',
+  warnText: '#8A6010',
+  warnBg: '#FFFBEC',
+  warnBorder: '#D4922B',
+  navPillBg: '#E6E5E2',
+  navCircleInactive: '#FAFAF8',
+  navCircleActive: '#1A1A1A',
+  navIconInactive: '#3D3D3A',
+  navIconActive: '#FFFFFF',
+  diagBlue: '#CDE7FA',
+  diagYellow: '#FFF2D6',
+  diagYellowDeep: '#E8A830',
+  diagYellowPale: '#FFF9EC',
+  diagPurpleTint: '#F6F2FC',
+  diagPurpleRing: '#D4CAF0',
+  diagLine: '#1A1A18',
+  diagPanelBorder: '#DDD4F0',
+  lesCardBorder: '#E8E6E3',
+  headerAvatarRing: '#F2D24A',
+  bellBg: '#EBEBEB',
+  bellBadge: '#E85D32',
+} as const;
