@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import {
   ensureNotificationPermissions,
   ensureUvDigestSchedule,
+  ensureWaterRemindersSchedule,
   notificationsNativeSupported,
   registerInboxFromNotifications,
   setNotificationPresentationDefaults,
@@ -18,6 +19,7 @@ export function NotificationBootstrap() {
     void (async () => {
       await setupAndroidChannels();
       await ensureNotificationPermissions();
+      await ensureWaterRemindersSchedule();
       await ensureUvDigestSchedule();
       removeListeners = registerInboxFromNotifications();
     })();

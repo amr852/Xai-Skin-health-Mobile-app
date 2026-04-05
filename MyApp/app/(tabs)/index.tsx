@@ -162,7 +162,17 @@ export default function HomeScreen() {
               <TouchableOpacity
                 key={item.key}
                 style={[s.navIconCircle, active ? s.navIconCircleActive : s.navIconCircleIdle]}
-                onPress={() => setActiveNav(item.key)}
+                onPress={() => {
+                  if (item.key === 'scan') {
+                    router.push('/camera');
+                  } else if (item.key === 'history') {
+                    router.push('/history');
+                  } else if (item.key === 'profile') {
+                    router.push('/profile');
+                  } else {
+                    setActiveNav(item.key);
+                  }
+                }}
                 activeOpacity={0.82}
                 accessibilityRole="button"
                 accessibilityLabel={item.a11y}

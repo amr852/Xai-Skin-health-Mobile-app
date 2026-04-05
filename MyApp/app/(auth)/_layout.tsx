@@ -3,9 +3,24 @@ import '../../global.css';
 
 export default function AuthLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="login" />
-      <Stack.Screen name="register" />
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animationEnabled: false,
+      }}
+    >
+      <Stack.Screen
+        name="login"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="register"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }

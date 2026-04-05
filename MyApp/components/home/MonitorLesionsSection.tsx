@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
+import { useRouter } from 'expo-router';
 import { C } from '@/constants/theme';
 
 export interface LesionEntry {
@@ -39,6 +40,7 @@ function LesionRow({ item }: { item: LesionEntry }) {
 }
 
 export function MonitorLesionsSection() {
+  const router = useRouter();
   const lesions = useMemo<LesionEntry[]>(
     () => [
       {
@@ -87,7 +89,7 @@ export function MonitorLesionsSection() {
             Scan and log spots to track size, shape, and colour over time.
           </Text>
         </View>
-        <TouchableOpacity style={ls.secLinkRow} activeOpacity={0.7} hitSlop={8}>
+        <TouchableOpacity style={ls.secLinkRow} activeOpacity={0.7} hitSlop={8} onPress={() => router.push('/history')}>
           <Text style={ls.secLink}>View all</Text>
           <Feather name="chevron-right" size={14} color={C.text} />
         </TouchableOpacity>
@@ -121,7 +123,7 @@ export function MonitorLesionsSection() {
           </View>
         </View>
 
-        <TouchableOpacity style={ls.scanBanner} activeOpacity={0.85}>
+        <TouchableOpacity style={ls.scanBanner} onPress={() => router.push('/camera')} activeOpacity={0.85}>
           <View style={ls.scanIconWrap}>
             <Feather name="camera" size={20} color={C.sageDark} />
           </View>

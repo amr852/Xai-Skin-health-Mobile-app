@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { WATER_TARGET_L } from '@/components/vitals/vitalsFormat';
 import { appendInboxItem } from '@/lib/notificationInbox';
+import { loadStoredVitals } from '@/lib/vitalsDailyStorage';
 
 const WATER_IDS = ['water-0', 'water-1', 'water-2'] as const;
 const WATER_HOURS = [9, 13, 17];
@@ -61,6 +62,41 @@ export async function syncWaterReminders(waterLiters: number): Promise<void> {
     await cancelByIds(WATER_IDS);
 
     if (waterLiters >= WATER_TARGET_L) return;
+
+    for (let i = 0; i < WATER_IDS.length; i++) {
+      await Notifications.scheduleNotificationAsync({
+        identifier: WATER_IDS[i],
+        content: {
+          title: 'Time to hydrate',
+          body: "You haven't reached today's water goal yet — grab a glass of water.",
+          sound: true,
+          data: { kind: 'water' as const },
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour: WATER_HOURS[i],
+          minute: 0,
+          ...(Platform.OS === 'android' ? { channelId: 'water' } : {}),
+        },
+      });
+    }
+  } catch {
+    /* scheduling failed */
+  }
+}
+
+export async function ensureWaterRemindersSchedule(): Promise<void> {
+  try {
+    if (!notificationsNativeSupported()) return;
+    const ok = await ensureNotificationPermissions();
+    if (!ok) return;
+
+    const { water: wRaw } = await loadStoredVitals();
+    const water = Number.isFinite(wRaw) ? wRaw : 0;
+
+    await cancelByIds(WATER_IDS);
+
+    if (water >= WATER_TARGET_L) return;
 
     for (let i = 0; i < WATER_IDS.length; i++) {
       await Notifications.scheduleNotificationAsync({

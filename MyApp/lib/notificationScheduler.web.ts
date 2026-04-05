@@ -18,6 +18,8 @@ export async function syncWaterReminders(_waterLiters: number): Promise<void> {
   void _waterLiters;
 }
 
+export async function ensureWaterRemindersSchedule(): Promise<void> {}
+
 export async function ensureUvDigestSchedule(): Promise<void> {}
 
 export function registerInboxFromNotifications(): () => void {

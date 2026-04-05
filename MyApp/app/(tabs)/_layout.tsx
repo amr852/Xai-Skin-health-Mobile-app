@@ -18,9 +18,21 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="camera"
         options={{
-          title: 'Explore',
+          title: 'Camera',
+        }}
+      />
+      <Tabs.Screen
+        name="history"
+        options={{
+          title: 'History',
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
         }}
       />
     </Tabs>
