@@ -1,87 +1,59 @@
-import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
 import { C } from '@/constants/theme';
+import { useLesions, type Lesion } from '@/hooks/useLesions';
 
-export interface LesionEntry {
-  id: string;
-  label: string;
-  date: string;
-  status: 'stable' | 'check' | 'urgent';
-  note: string;
-}
+// Map backend status → UI status
+const mapStatus = (status: Lesion['status']): 'stable' | 'check' | 'urgent' => {
+  return status.toLowerCase() as 'stable' | 'check' | 'urgent';
+};
 
-const statusMeta: Record<LesionEntry['status'], { label: string; color: string; bg: string }> = {
+const statusMeta: Record<'stable' | 'check' | 'urgent', { label: string; color: string; bg: string }> = {
   stable: { label: 'Stable', color: C.stableText, bg: C.stableBg },
   check: { label: 'Check', color: C.checkText, bg: C.checkBg },
   urgent: { label: 'Urgent', color: C.urgentText, bg: C.urgentBg },
 };
 
-function LesionRow({ item }: { item: LesionEntry }) {
-  const meta = statusMeta[item.status];
-  return (
-    <View style={ls.lesRow}>
-      <View style={ls.lesThumb}>
-        <Text style={ls.lesThumbTxt}>LS</Text>
-      </View>
-      <View style={ls.lesContent}>
-        <View style={ls.lesTop}>
-          <Text style={ls.lesName}>{item.label}</Text>
-          <View style={[ls.lesBadge, { backgroundColor: meta.bg }]}>
-            <Text style={[ls.lesBadgeTxt, { color: meta.color }]}>{meta.label}</Text>
-          </View>
-        </View>
-        <Text style={ls.lesDate}>{item.date}</Text>
-        <Text style={ls.lesNote}>{item.note}</Text>
-      </View>
-    </View>
-  );
-}
-
 export function MonitorLesionsSection() {
   const router = useRouter();
-  const lesions = useMemo<LesionEntry[]>(
-    () => [
-      {
-        id: '1',
-        label: 'Mole · left forearm',
-        date: 'Last checked 12 Mar 2025',
-        status: 'stable',
-        note: 'No change in size or colour.',
-      },
-      {
-        id: '2',
-        label: 'Patch · right shoulder',
-        date: 'Last checked 28 Mar 2025',
-        status: 'check',
-        note: 'Slight edge irregularity — schedule a review.',
-      },
-      {
-        id: '3',
-        label: 'Spot · upper back',
-        date: 'Added 29 Mar 2025',
-        status: 'urgent',
-        note: 'Rapid change vs last scan — see a dermatologist as soon as you can.',
-      },
-    ],
-    [],
-  );
+  const { lesions, loading, error, fetchLesions } = useLesions();
 
+  useEffect(() => {
+    fetchLesions();
+  }, [fetchLesions]);
+
+  // Format API → UI
+  const formattedLesions = useMemo(() => {
+  return [...lesions] // clone to avoid mutating state
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) // newest first
+    .slice(0, 5) // only latest 5
+    .map(l => ({
+      id: l._id,
+      label: `${l.title} · ${l.location}`,
+      date: `Last checked ${new Date(l.createdAt).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })}`,
+      status: mapStatus(l.status),
+      note: l.notes || l.description,
+    }));
+}, [lesions]);
+
+  // Stats
   const lesionStats = useMemo(() => {
-    let stable = 0;
-    let check = 0;
-    let urgent = 0;
-    for (const l of lesions) {
-      if (l.status === 'stable') stable += 1;
-      else if (l.status === 'check') check += 1;
-      else urgent += 1;
-    }
-    return { stable, check, urgent, total: lesions.length };
-  }, [lesions]);
+    const stats = { stable: 0, check: 0, urgent: 0, total: formattedLesions.length };
+    formattedLesions.forEach(l => {
+      stats[l.status]++;
+    });
+    return stats;
+  }, [formattedLesions]);
 
   return (
     <>
+      {/* HEADER */}
       <View style={ls.secHead}>
         <View style={ls.secHeadText}>
           <Text style={ls.secTitle}>Monitor Lesions</Text>
@@ -89,58 +61,62 @@ export function MonitorLesionsSection() {
             Scan and log spots to track size, shape, and colour over time.
           </Text>
         </View>
-        <TouchableOpacity style={ls.secLinkRow} activeOpacity={0.7} hitSlop={8} onPress={() => router.push('/history')}>
+
+        <TouchableOpacity style={ls.secLinkRow} onPress={() => router.push('/history')}>
           <Text style={ls.secLink}>View all</Text>
           <Feather name="chevron-right" size={14} color={C.text} />
         </TouchableOpacity>
       </View>
+
+      {/* CARD */}
       <View style={ls.lesCard}>
+        {loading && (
+          <ActivityIndicator size="small" color={C.sageDark} style={{ marginBottom: 10 }} />
+        )}
+
+        {error && (
+          <Text style={[ls.lesNote, { color: C.urgentText, marginBottom: 10 }]}>
+            Error: {error}
+          </Text>
+        )}
+
+        {/* STATS */}
         <View style={ls.lesResultsBlock}>
           <Text style={ls.lesResultsTitle}>Monitoring</Text>
           <Text style={ls.lesResultsDesc}>
-            {lesionStats.total} lesion{lesionStats.total === 1 ? '' : 's'} logged — keep scanning on
-            schedule.
+            {lesionStats.total} lesion{lesionStats.total === 1 ? '' : 's'} logged — keep scanning on schedule.
           </Text>
+
           <View style={ls.lesResultsPills}>
-            <View style={[ls.lesResultPill, { backgroundColor: C.stableBg }]}>
-              <View style={[ls.lesResultPillDot, { backgroundColor: C.stableText }]} />
-              <Text style={[ls.lesResultPillTxt, { color: C.stableText }]}>
-                Stable {lesionStats.stable}
-              </Text>
-            </View>
-            <View style={[ls.lesResultPill, { backgroundColor: C.checkBg }]}>
-              <View style={[ls.lesResultPillDot, { backgroundColor: C.checkText }]} />
-              <Text style={[ls.lesResultPillTxt, { color: C.checkText }]}>
-                Check {lesionStats.check}
-              </Text>
-            </View>
-            <View style={[ls.lesResultPill, { backgroundColor: C.urgentBg }]}>
-              <View style={[ls.lesResultPillDot, { backgroundColor: C.urgentText }]} />
-              <Text style={[ls.lesResultPillTxt, { color: C.urgentText }]}>
-                Urgent {lesionStats.urgent}
-              </Text>
-            </View>
+            <StatPill label="Stable" count={lesionStats.stable} bg={C.stableBg} color={C.stableText} />
+            <StatPill label="Check" count={lesionStats.check} bg={C.checkBg} color={C.checkText} />
+            <StatPill label="Urgent" count={lesionStats.urgent} bg={C.urgentBg} color={C.urgentText} />
           </View>
         </View>
 
-        <TouchableOpacity style={ls.scanBanner} onPress={() => router.push('/camera')} activeOpacity={0.85}>
+        {/* SCAN BUTTON */}
+        <TouchableOpacity style={ls.scanBanner} onPress={() => router.push('/camera')}>
           <View style={ls.scanIconWrap}>
             <Feather name="camera" size={20} color={C.sageDark} />
           </View>
+
           <View style={ls.scanBody}>
             <Text style={ls.scanTitle}>Scan a new lesion</Text>
             <Text style={ls.scanSub}>Log & track changes over time</Text>
           </View>
-          <Feather name="chevron-right" size={22} color={C.sageMid} style={ls.scanArrowIcon} />
+
+          <Feather name="chevron-right" size={22} color={C.sageMid} />
         </TouchableOpacity>
 
         <View style={ls.divider} />
         <Text style={ls.lesListTitle}>LOGGED LESIONS</Text>
 
-        {lesions.map(item => (
+        {/* LIST */}
+        {formattedLesions.map(item => (
           <LesionRow key={item.id} item={item} />
         ))}
 
+        {/* DISCLAIMER */}
         <View style={ls.disclaimer}>
           <Text style={ls.disclaimerTxt}>
             For tracking only. Always consult a dermatologist for medical advice.
@@ -151,6 +127,49 @@ export function MonitorLesionsSection() {
   );
 }
 
+// ---------- SUB COMPONENTS ----------
+
+function StatPill({ label, count, bg, color }: any) {
+  return (
+    <View style={[ls.lesResultPill, { backgroundColor: bg }]}>
+      <View style={[ls.lesResultPillDot, { backgroundColor: color }]} />
+      <Text style={[ls.lesResultPillTxt, { color }]}>
+        {label} {count}
+      </Text>
+    </View>
+  );
+}
+
+function LesionRow({ item }: { item: any }) {
+  const meta = statusMeta[item.status];
+
+  return (
+    <View style={ls.lesRow}>
+      <View style={ls.lesThumb}>
+        <Text style={ls.lesThumbTxt}>LS</Text>
+      </View>
+
+      <View style={ls.lesContent}>
+        <View style={ls.lesTop}>
+          <Text style={ls.lesName} numberOfLines={1}>
+            {item.label}
+          </Text>
+
+          <View style={[ls.lesBadge, { backgroundColor: meta.bg }]}>
+            <Text style={[ls.lesBadgeTxt, { color: meta.color }]}>
+              {meta.label}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={ls.lesDate}>{item.date}</Text>
+        <Text style={ls.lesNote} numberOfLines={2}>
+          {item.note}
+        </Text>
+      </View>
+    </View>
+  );
+}
 const ls = StyleSheet.create({
   secHead: {
     flexDirection: 'row',
@@ -161,26 +180,29 @@ const ls = StyleSheet.create({
     gap: 12,
   },
   secHeadText: { flex: 1, minWidth: 0 },
+
   secTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: C.text,
-    letterSpacing: -0.3,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   secDesc: {
     fontSize: 12,
     color: C.muted,
     marginTop: 4,
     lineHeight: 17,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
-  secLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 },
+
+  secLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 2,
+  },
   secLink: {
     fontSize: 12,
     color: C.text,
     fontWeight: '500',
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
 
   lesCard: {
@@ -198,9 +220,10 @@ const ls = StyleSheet.create({
           shadowRadius: 12,
         }
       : Platform.OS === 'android'
-        ? { elevation: 3 }
-        : { boxShadow: '0 3px 16px rgba(0,0,0,0.06)' }),
+      ? { elevation: 3 }
+      : {}),
   },
+
   lesResultsBlock: {
     marginBottom: 14,
     paddingBottom: 14,
@@ -210,17 +233,21 @@ const ls = StyleSheet.create({
   lesResultsTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: C.diagLine,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
+    color: C.text,
   },
   lesResultsDesc: {
     fontSize: 12,
     color: C.muted,
     marginTop: 6,
     lineHeight: 17,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
-  lesResultsPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+
+  lesResultsPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
   lesResultPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -229,12 +256,16 @@ const ls = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 99,
   },
-  lesResultPillDot: { width: 6, height: 6, borderRadius: 3 },
+  lesResultPillDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
   lesResultPillTxt: {
     fontSize: 11,
     fontWeight: '600',
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
+
   scanBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -250,31 +281,38 @@ const ls = StyleSheet.create({
     backgroundColor: C.sage,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
   scanBody: { flex: 1 },
   scanTitle: {
     fontSize: 13,
     fontWeight: '500',
     color: C.text,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   scanSub: {
     fontSize: 11,
     color: C.muted,
     marginTop: 1,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
-  scanArrowIcon: { flexShrink: 0 },
-  divider: { height: 1, backgroundColor: C.border, marginVertical: 13 },
+
+  divider: {
+    height: 1,
+    backgroundColor: C.border,
+    marginVertical: 13,
+  },
+
   lesListTitle: {
     fontSize: 9,
     letterSpacing: 1.2,
     color: C.muted,
     marginBottom: 10,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
-  lesRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginBottom: 12 },
+
+  lesRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
   lesThumb: {
     width: 46,
     height: 46,
@@ -282,50 +320,55 @@ const ls = StyleSheet.create({
     backgroundColor: C.border,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
   lesThumbTxt: {
     fontSize: 10,
     fontWeight: '700',
     color: C.muted,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
+
   lesContent: { flex: 1 },
-  lesTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 1 },
+
+  lesTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 1,
+  },
   lesName: {
     fontSize: 12,
     fontWeight: '500',
     color: C.text,
     flex: 1,
     marginRight: 6,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
-  lesBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99 },
+
+  lesBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 99,
+  },
   lesBadgeTxt: {
     fontSize: 9,
     fontWeight: '600',
-    letterSpacing: 0.3,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
+
   lesDate: {
     fontSize: 10,
     color: C.muted,
     marginBottom: 1,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   lesNote: {
     fontSize: 10,
     color: C.muted,
     lineHeight: 15,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
+
   disclaimer: {
     backgroundColor: C.warnBg,
     borderRadius: 10,
     borderLeftWidth: 3,
     borderLeftColor: C.warnBorder,
-    borderTopLeftRadius: 0,
-    borderBottomLeftRadius: 0,
     padding: 10,
     marginTop: 4,
   },
@@ -333,6 +376,5 @@ const ls = StyleSheet.create({
     fontSize: 10,
     color: C.warnText,
     lineHeight: 15,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
 });

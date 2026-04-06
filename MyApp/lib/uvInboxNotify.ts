@@ -29,7 +29,7 @@ export async function notifyUvInboxIfChanged(uv: number): Promise<void> {
   const meta = uviToRiskMeta(uv);
 
   await saveInboxItem({
-    id: `uv-${Date.now()}`, // ✅ IMPORTANT FIX (see below)
+    id: `uv-${Date.now()}`, 
     title: 'UV index update',
     body: `UV is ${uviToDisplay(uv)} UVI (${meta.label}) near you.`,
     createdAt: new Date().toISOString(),
