@@ -1,5 +1,6 @@
 import React, { createContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearInbox } from '@/lib/notificationInbox';
 
 const API_URL = 'http://localhost:3000';
 
@@ -121,20 +122,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const logout = useCallback(async (): Promise<void> => {
-    setIsLoading(true);
-    try {
-      await AsyncStorage.removeItem('authToken');
-      await AsyncStorage.removeItem('authUser');
-      setToken(null);
-      setUser(null);
-      setError(null);
-    } catch (err) {
-      console.log('Logout error:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+// In AuthContext.tsx, inside the logout function:
+const logout = useCallback(async (): Promise<void> => {
+  try {
+    await clearInbox();
+    await AsyncStorage.removeItem('authToken');
+    await AsyncStorage.removeItem('authUser');
+    console.log('Token cleared, setting null...');
+    setToken(null);
+    setUser(null);
+    setError(null);
+    console.log('State set to null');
+  } catch (err) {
+    console.log('Logout error:', err);
+  }
+}, []);
 
   return (
     <AuthContext.Provider value={{ user, token, isLoading, error, register, login, logout }}>

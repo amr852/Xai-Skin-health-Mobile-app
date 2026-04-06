@@ -1,5 +1,5 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, Redirect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import "../global.css";
@@ -7,27 +7,32 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { NotificationBootstrap } from '@/components/NotificationBootstrap';
 import { AuthProvider } from '@/context/AuthContext';
 import { useAuth } from '@/hooks/useAuth';
+import { ActivityIndicator, View } from 'react-native';
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
   const { token, isLoading } = useAuth();
 
   if (isLoading) {
-    // Show loading screen while checking auth state
     return (
-      <Stack>
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      </Stack>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
     );
   }
 
   return (
-    <Stack initialRouteName={token ? '(tabs)' : '(auth)'}>
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      <Stack.Screen name="notifications" options={{ headerShown: false }} />
-    </Stack>
+    <>
+      {/* Always declare all screens so Redirect can find them */}
+      <Stack>
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="notifications" options={{ headerShown: false }} />
+        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+      </Stack>
+
+      {/* Redirect based on auth state */}
+      {!token && <Redirect href="/(auth)/login" />}
+    </>
   );
 }
 

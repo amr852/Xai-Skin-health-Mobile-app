@@ -20,7 +20,7 @@ import { useUvIndex } from '@/hooks/useUvIndex';
 import { uviToDisplay, uviToRiskMeta } from '@/lib/uvIndexMeta';
 import { MonitorLesionsSection } from '@/components/home/MonitorLesionsSection';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { countUnread, loadInbox, subscribeInboxChange } from '@/lib/notificationInbox';
+import { countUnread,subscribeInboxChange } from '@/lib/notificationInbox';
 import { useAuth } from '@/hooks/useAuth';
 
 type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
@@ -56,20 +56,20 @@ export default function HomeScreen() {
   }, [refresh]);
 
   useFocusEffect(
-    useCallback(() => {
-      let alive = true;
-      const upd = async () => {
-        const items = await loadInbox();
-        if (alive) setUnreadCount(countUnread(items));
-      };
-      void upd();
-      const unsub = subscribeInboxChange(() => void upd());
-      return () => {
-        alive = false;
-        unsub();
-      };
-    }, []),
-  );
+  useCallback(() => {
+    let alive = true;
+    const upd = async () => {
+      const count = await countUnread();  // ← no argument, awaited
+      if (alive) setUnreadCount(count);
+    };
+    void upd();
+    const unsub = subscribeInboxChange(() => void upd());
+    return () => {
+      alive = false;
+      unsub();
+    };
+  }, []),
+);
 
   const uvDisplay = loading && uvi == null ? null : uviToDisplay(uvi ?? NaN);
   const uvRisk =

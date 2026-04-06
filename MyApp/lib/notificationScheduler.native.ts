@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { WATER_TARGET_L } from '@/components/vitals/vitalsFormat';
-import { appendInboxItem } from '@/lib/notificationInbox';
+import { saveInboxItem } from '@/lib/notificationInbox';
 import { loadStoredVitals } from '@/lib/vitalsDailyStorage';
 
 const WATER_IDS = ['water-0', 'water-1', 'water-2'] as const;
@@ -176,21 +176,21 @@ function contentKind(data: unknown): 'water' | 'uv' | 'system' {
 export function registerInboxFromNotifications(): () => void {
   const received = Notifications.addNotificationReceivedListener(n => {
     const { title, body, data } = n.request.content;
-    void appendInboxItem({
+    void  saveInboxItem({
+      id: n.request.identifier,
       title: title ?? 'Notification',
       body: body ?? '',
-      kind: contentKind(data),
-      read: false,
+      createdAt: new Date().toISOString(),
     });
   });
 
   const response = Notifications.addNotificationResponseReceivedListener(r => {
     const { title, body, data } = r.notification.request.content;
-    void appendInboxItem({
+    void  saveInboxItem({
+      id: r.notification.request.identifier,
       title: title ?? 'Notification',
       body: body ?? '',
-      kind: contentKind(data),
-      read: false,
+      createdAt: new Date().toISOString(),
     });
   });
 
