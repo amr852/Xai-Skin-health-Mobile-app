@@ -4,6 +4,7 @@ import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import { C } from '@/constants/theme';
 import Feather from '@expo/vector-icons/Feather';
+import { useAuth } from '@/hooks/useAuth';
 
 type Gender = 'male' | 'female' | null;
 
@@ -11,13 +12,15 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [gender, setGender] = useState<Gender>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [calendarDate, setCalendarDate] = useState(new Date(new Date().getFullYear() - 18, new Date().getMonth(), 1));
   const [showCalendar, setShowCalendar] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const { register, isLoading } = useAuth();
 
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -56,7 +59,7 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     setError('');
 
-    if (!email.trim() || !password.trim() || !confirmPassword.trim() || !gender || !selectedDate) {
+    if (!email.trim() || !password.trim() || !confirmPassword.trim() || !firstName.trim() || !lastName.trim() || !gender || !selectedDate) {
       setError('Please fill in all fields.');
       return;
     }
@@ -71,19 +74,12 @@ export default function RegisterScreen() {
       return;
     }
 
-    try {
-      setIsLoading(true);
-
-      // TODO: add your registration logic here
-      // e.g. await signUp(email, password, gender, birthDate);
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
-      router.replace('/(auth)/login');
-    } catch (registerError) {
-      console.error(registerError);
-      setError('Registration failed. Please try again.');
-    } finally {
-      setIsLoading(false);
+    const result = await register(email.trim(), password, firstName, lastName, gender, selectedDate);
+    
+    if (result.success) {
+      router.replace('/(tabs)');
+    } else {
+      setError(result.error || 'Registration failed. Please try again.');
     }
   };
 
@@ -106,6 +102,30 @@ export default function RegisterScreen() {
             </View>
 
             <View style={s.form}>
+              <View style={s.inputGroup}>
+                <Text style={s.label}>First Name</Text>
+                <TextInput
+                  style={s.input}
+                  placeholder="Enter your first name"
+                  placeholderTextColor={C.muted}
+                  value={firstName}
+                  onChangeText={setFirstName}
+                  editable={!isLoading}
+                />
+              </View>
+
+              <View style={s.inputGroup}>
+                <Text style={s.label}>Last Name</Text>
+                <TextInput
+                  style={s.input}
+                  placeholder="Enter your last name"
+                  placeholderTextColor={C.muted}
+                  value={lastName}
+                  onChangeText={setLastName}
+                  editable={!isLoading}
+                />
+              </View>
+
               <View style={s.inputGroup}>
                 <Text style={s.label}>Email</Text>
                 <TextInput

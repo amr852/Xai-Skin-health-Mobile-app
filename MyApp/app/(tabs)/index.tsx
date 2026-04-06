@@ -21,6 +21,7 @@ import { uviToDisplay, uviToRiskMeta } from '@/lib/uvIndexMeta';
 import { MonitorLesionsSection } from '@/components/home/MonitorLesionsSection';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { countUnread, loadInbox, subscribeInboxChange } from '@/lib/notificationInbox';
+import { useAuth } from '@/hooks/useAuth';
 
 type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
 type NavKey = 'home' | 'scan' | 'history' | 'profile';
@@ -28,11 +29,22 @@ type NavKey = 'home' | 'scan' | 'history' | 'profile';
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [activeNav, setActiveNav] = useState<NavKey>('home');
   const [unreadCount, setUnreadCount] = useState(0);
   const { vitals } = useHomeVitals();
   const { uvi, loading, error, permissionDenied, subtitle, refresh } = useUvIndex();
   const [uvRefreshing, setUvRefreshing] = useState(false);
+
+  // Get user initials
+  const getInitials = (firstName?: string, lastName?: string) => {
+    const first = firstName?.[0]?.toUpperCase() || '';
+    const last = lastName?.[0]?.toUpperCase() || '';
+    return (first + last) || 'SH';
+  };
+
+  const userInitials = getInitials(user?.firstName, user?.lastName);
+  const userName = user?.firstName || 'User';
 
   const onUvRefresh = useCallback(async () => {
     setUvRefreshing(true);
@@ -92,9 +104,9 @@ export default function HomeScreen() {
         <View style={s.header}>
           <View style={s.headerLeft}>
             <View style={s.avatar}>
-              <Text style={s.avatarTxt}>LH</Text>
+              <Text style={s.avatarTxt}>{userInitials}</Text>
             </View>
-            <Text style={s.helloTxt}>Hello, Layla!</Text>
+            <Text style={s.helloTxt}>Hello, {userName}!</Text>
           </View>
           <TouchableOpacity
             style={s.bell}

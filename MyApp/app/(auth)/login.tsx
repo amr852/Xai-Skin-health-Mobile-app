@@ -4,12 +4,13 @@ import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import { C } from '@/constants/theme';
 import Feather from '@expo/vector-icons/Feather';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const { login, isLoading } = useAuth();
 
   const handleLogin = async () => {
     setError('');
@@ -19,20 +20,13 @@ export default function LoginScreen() {
       return;
     }
 
-    try {
-      setIsLoading(true);
-
-      // TODO: replace this with your real auth call
-      // Example: await signIn(email.trim(), password);
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
+    const result = await login(email.trim(), password.trim());
+    
+    if (result.success) {
       router.replace('/(tabs)');
-    } catch (loginError) {
-      console.error(loginError);
-      setError('Login failed. Please try again.');
-      Alert.alert('Login failed', 'Please check your credentials and try again.');
-    } finally {
-      setIsLoading(false);
+    } else {
+      setError(result.error || 'Login failed. Please try again.');
+      Alert.alert('Login failed', result.error || 'Please check your credentials and try again.');
     }
   };
 

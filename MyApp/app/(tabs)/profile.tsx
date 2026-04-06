@@ -17,30 +17,43 @@ import Feather from '@expo/vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { C } from '@/constants/theme';
+import { useAuth } from '@/hooks/useAuth';
 
 type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
-
-// Mock user data - replace with actual auth context later
-const mockUserData = {
-  id: '1',
-  name: 'Layla Harris',
-  email: 'layla.harris@example.com',
-  initials: 'LH',
-  avatar: '#FF6B9D',
-};
 
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user, logout } = useAuth();
   const [activeNav, setActiveNav] = useState<NavKey>('profile');
-  const [user] = useState(mockUserData);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [showChangeEmailModal, setShowChangeEmailModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [newEmail, setNewEmail] = useState(user.email);
+  const [newEmail, setNewEmail] = useState(user?.email || '');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Get user initials
+  const getInitials = (firstName?: string, lastName?: string) => {
+    const first = firstName?.[0]?.toUpperCase() || '';
+    const last = lastName?.[0]?.toUpperCase() || '';
+    return (first + last) || 'SH';
+  };
+
+  const handleLogout = () => {
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+      {
+        text: 'Logout',
+        onPress: async () => {
+          await logout();
+          router.replace('/(auth)/welcome');
+        },
+        style: 'destructive',
+      },
+    ]);
+  };
 
   const navItems: { key: NavKey; icon: FeatherIconName; a11y: string }[] = [
     { key: 'home', icon: 'home', a11y: 'Home' },
@@ -90,7 +103,7 @@ export default function ProfileScreen() {
       Alert.alert('Error', 'Please enter a valid email');
       return;
     }
-    if (newEmail === user.email) {
+    if (newEmail === user?.email) {
       Alert.alert('Error', 'New email is the same as current email');
       return;
     }
@@ -104,7 +117,7 @@ export default function ProfileScreen() {
           text: 'OK',
           onPress: () => {
             setShowChangeEmailModal(false);
-            setNewEmail(user.email);
+            setNewEmail(user?.email || '');
           },
         },
       ]);
@@ -113,29 +126,6 @@ export default function ProfileScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      {
-        text: 'Cancel',
-        onPress: () => {},
-        style: 'cancel',
-      },
-      {
-        text: 'Logout',
-        onPress: async () => {
-          try {
-            // TODO: Replace with actual logout API call and clear auth state
-            await new Promise((resolve) => setTimeout(resolve, 400));
-            router.replace('/(auth)/login');
-          } catch (error) {
-            Alert.alert('Error', 'Failed to logout');
-          }
-        },
-        style: 'destructive',
-      },
-    ]);
   };
 
   const settingsOptions: {
@@ -192,11 +182,11 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}>
         {/* Header Section */}
         <View style={s.headerSection}>
-          <View style={[s.largeAvatar, { backgroundColor: user.avatar }]}>
-            <Text style={s.largeAvatarText}>{user.initials}</Text>
+          <View style={[s.largeAvatar, { backgroundColor: C.blue }]}>
+            <Text style={s.largeAvatarText}>{getInitials(user?.firstName, user?.lastName)}</Text>
           </View>
-          <Text style={s.userName}>{user.name}</Text>
-          <Text style={s.userEmail}>{user.email}</Text>
+          <Text style={s.userName}>{user?.firstName} {user?.lastName}</Text>
+          <Text style={s.userEmail}>{user?.email}</Text>
         </View>
 
         {/* Profile Actions */}
@@ -425,7 +415,7 @@ export default function ProfileScreen() {
             <View style={s.modalInputGroup}>
               <Text style={s.inputLabel}>Current Email</Text>
               <View style={s.disabledInput}>
-                <Text style={s.disabledInputText}>{user.email}</Text>
+                <Text style={s.disabledInputText}>{user?.email}</Text>
               </View>
             </View>
 
