@@ -21,11 +21,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  dateOfBirth: Date,
+  dateOfBirth: {
+    type: Date,
+    required: true
+  },
   gender: {
     type: String,
-    enum: ['male', 'female', 'other', null],
-    default: null
+    enum: ['male', 'female'],
+    required: true
   },
   profilePicture: String,
   createdAt: {
@@ -38,27 +41,17 @@ const userSchema = new mongoose.Schema({
   }
 });
 
-// Hash password before saving
-userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
-    return next();
-  }
-  
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error);
-  }
+// Fixed pre-save hook — no next() parameter
+userSchema.pre('save', async function() {
+  if (!this.isModified('password')) return;
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
 });
 
-// Method to compare password
 userSchema.methods.comparePassword = async function(enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Remove password from response
 userSchema.methods.toJSON = function() {
   const obj = this.toObject();
   delete obj.password;

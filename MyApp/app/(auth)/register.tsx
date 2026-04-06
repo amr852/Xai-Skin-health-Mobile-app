@@ -45,8 +45,10 @@ export default function RegisterScreen() {
   };
 
   const handleNextMonth = () => {
-    const nextMonth = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1);
-    if (nextMonth <= new Date()) {
+  const now = new Date();
+const nextMonth = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1);
+if (nextMonth.getFullYear() < now.getFullYear() ||
+   (nextMonth.getFullYear() === now.getFullYear() && nextMonth.getMonth() <= now.getMonth())) {
       setCalendarDate(nextMonth);
     }
   };
@@ -74,7 +76,10 @@ export default function RegisterScreen() {
       return;
     }
 
-    const result = await register(email.trim(), password, firstName, lastName, gender, selectedDate);
+    const result = await register(
+  email.trim(), password, firstName, lastName, gender,
+  selectedDate.toISOString()  // ← serialize to string
+);
     
     if (result.success) {
       router.replace('/(tabs)');
@@ -92,9 +97,10 @@ export default function RegisterScreen() {
         showsVerticalScrollIndicator={false}>
         <View style={s.container}>
           <View style={s.card}>
-            <View style={s.headerIcon}>
-              <Feather name="user-plus" size={32} color={C.sage} />
-            </View>
+           <View style={s.headerIconWrapper}>
+  <View style={s.headerIconBg} />
+  <Feather name="user-plus" size={32} color={C.sage} />
+</View>
 
             <View style={s.header}>
               <Text style={s.title}>Create Account</Text>
@@ -462,22 +468,7 @@ const s = StyleSheet.create({
     color: C.text,
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
-  datePickerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: C.cardGray,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  datePickerText: {
-    fontSize: 14,
-    color: C.text,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
+ 
   calendarContainer: {
     marginTop: 12,
     borderWidth: 1,
@@ -666,4 +657,15 @@ const s = StyleSheet.create({
     fontSize: 15,
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
+  headerIconWrapper: {
+  width: 56, height: 56, borderRadius: 28,
+  alignItems: 'center', justifyContent: 'center',
+  alignSelf: 'center', marginBottom: 16,
+},
+headerIconBg: {
+  ...StyleSheet.absoluteFillObject,
+  borderRadius: 28,
+  backgroundColor: C.sage,
+  opacity: 0.15,
+},
 });

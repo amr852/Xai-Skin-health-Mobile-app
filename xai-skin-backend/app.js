@@ -19,7 +19,13 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/xai-skin-
 
 // CORS Configuration
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:8081', 'http://localhost:19006', 'http://localhost:5173'],
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:8081',
+    'http://localhost:19006',
+    'http://localhost:5173',
+    'http://localhost:19000', 
+  ],
   credentials: true
 }));
 

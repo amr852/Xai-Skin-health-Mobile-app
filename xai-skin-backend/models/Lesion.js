@@ -9,23 +9,13 @@ const lesionSchema = new mongoose.Schema({
   title: String,
   description: String,
   location: String,
-  severity: {
+  status: {
     type: String,
-    enum: ['low', 'moderate', 'high'],
-    default: 'moderate'
+    enum: ['Stable','Check' ,'Urgent'],
+    default: 'Stable'
   },
   imageUrl: String,
   notes: String,
-  status: {
-    type: String,
-    enum: ['monitoring', 'improving', 'worsening', 'resolved'],
-    default: 'monitoring'
-  },
-  vitals: {
-    temperature: Number,
-    humidity: Number,
-    uvIndex: Number
-  },
   createdAt: {
     type: Date,
     default: Date.now
