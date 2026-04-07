@@ -25,3 +25,15 @@ export async function ensureUvDigestSchedule(): Promise<void> {}
 export function registerInboxFromNotifications(): () => void {
   return () => {};
 }
+
+export async function syncWaterInboxItems(): Promise<void> {}
+
+export async function syncUrgentLesionAlerts(
+  _lesions: { _id: string; title: string; status: string }[],
+): Promise<void> {}
+
+export async function loadUrgentAlertStates(): Promise<Record<string, { lastNotifiedAt: string; dismissed: boolean }>> {
+  return {};
+}
+
+export async function dismissUrgentAlert(_lesionId: string): Promise<void> {}

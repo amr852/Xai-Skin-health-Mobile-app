@@ -5,7 +5,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Platform,
   Alert,
@@ -14,7 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { C } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';

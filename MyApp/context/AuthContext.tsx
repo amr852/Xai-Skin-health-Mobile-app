@@ -1,8 +1,11 @@
 import React, { createContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { clearInbox } from '@/lib/notificationInbox';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = Platform.OS === 'web'
+  ? 'http://localhost:3000'
+  : 'http://192.168.1.5:3000';
 
 type User = {
   _id: string;
@@ -67,7 +70,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     dateOfBirth: string
   ): Promise<AuthResult> => {
     setError(null);
-    setIsLoading(true);
     try {
       const response = await fetch(`${API_URL}/users/register`, {
         method: 'POST',
@@ -87,8 +89,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const errorMessage = err.message || 'Registration failed';
       setError(errorMessage);
       return { success: false, error: errorMessage };
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
@@ -97,7 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string
   ): Promise<AuthResult> => {
     setError(null);
-    setIsLoading(true);
     try {
       const response = await fetch(`${API_URL}/users/login`, {
         method: 'POST',
@@ -117,8 +116,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const errorMessage = err.message || 'Login failed';
       setError(errorMessage);
       return { success: false, error: errorMessage };
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 

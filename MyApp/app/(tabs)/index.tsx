@@ -5,14 +5,13 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Platform,
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from '@/constants/theme';
 import { VitalCard } from '@/components/vitals/VitalCard';
 import { useHomeVitals } from '@/hooks/useHomeVitals';
@@ -20,7 +19,8 @@ import { useUvIndex } from '@/hooks/useUvIndex';
 import { uviToDisplay, uviToRiskMeta } from '@/lib/uvIndexMeta';
 import { MonitorLesionsSection } from '@/components/home/MonitorLesionsSection';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { countUnread,subscribeInboxChange } from '@/lib/notificationInbox';
+import { countUnread, subscribeInboxChange } from '@/lib/notificationInbox';
+import { syncWaterInboxItems } from '@/lib/notificationScheduler';
 import { useAuth } from '@/hooks/useAuth';
 
 type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
@@ -59,9 +59,12 @@ export default function HomeScreen() {
   useCallback(() => {
     let alive = true;
     const upd = async () => {
-      const count = await countUnread();  // ← no argument, awaited
+      const count = await countUnread();
       if (alive) setUnreadCount(count);
     };
+    // Sync water inbox items every time the home screen comes into focus
+    // — user is guaranteed to be logged in at this point
+    void syncWaterInboxItems();
     void upd();
     const unsub = subscribeInboxChange(() => void upd());
     return () => {

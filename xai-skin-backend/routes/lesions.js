@@ -1,7 +1,23 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const Lesion = require('../models/Lesion');
+
+// ── Image upload setup ──────────────────────────────────────────────────────
+const uploadsDir = path.join(__dirname, '../public/uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, `lesion-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -19,6 +35,16 @@ const verifyToken = (req, res, next) => {
     res.status(401).json({ error: 'Invalid token' });
   }
 };
+
+// Upload lesion image — must be before /:id routes
+router.post('/upload-image', verifyToken, (req, res) => {
+  upload.single('image')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'Upload failed' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    res.status(200).json({ url: `${baseUrl}/uploads/${req.file.filename}` });
+  });
+});
 
 // Get all lesions for current user
 router.get('/', verifyToken, async (req, res) => {
@@ -48,17 +74,16 @@ router.get('/:id', verifyToken, async (req, res) => {
 // Create new lesion
 router.post('/', verifyToken, async (req, res) => {
   try {
-    const { title, description, location, severity, imageUrl, notes, vitals } = req.body;
-    
+    const { title, description, location, status, imageUrl, notes } = req.body;
+
     const lesion = new Lesion({
       userId: req.userId,
       title,
       description,
       location,
-      severity,
+      status,
       imageUrl,
       notes,
-      vitals
     });
     
     await lesion.save();

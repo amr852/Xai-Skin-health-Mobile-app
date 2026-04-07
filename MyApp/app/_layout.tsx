@@ -7,18 +7,10 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { NotificationBootstrap } from '@/components/NotificationBootstrap';
 import { AuthProvider } from '@/context/AuthContext';
 import { useAuth } from '@/hooks/useAuth';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 function RootLayoutNav() {
   const { token, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
 
   return (
     <>
@@ -30,11 +22,27 @@ function RootLayoutNav() {
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
 
-      {/* Redirect based on auth state */}
-      {!token && <Redirect href="/(auth)/login" />}
+      {/* Redirect based on auth state — only after bootstrap completes */}
+      {!isLoading && !token && <Redirect href="/(auth)/welcome" />}
+
+      {/* Overlay spinner only during initial bootstrap (token check) */}
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" />
+        </View>
+      )}
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+});
 
 export const unstable_settings = {
   anchor: '(auth)',

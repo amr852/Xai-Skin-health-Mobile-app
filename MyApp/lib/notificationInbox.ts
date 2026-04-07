@@ -1,6 +1,8 @@
 // lib/notificationInbox.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const INBOX_KEY = '@skinhealth/inbox';
+
 export type InboxItem = {
   id: string;
   title: string;
@@ -9,23 +11,9 @@ export type InboxItem = {
   createdAt: string;
 };
 
-// ← Get the current user's ID from storage
-async function getUserKey(): Promise<string> {
-  const raw = await AsyncStorage.getItem('authUser');
-  if (!raw) return 'guest';
-  const user = JSON.parse(raw);
-  return user._id ?? user.id ?? 'guest';
-}
-
-async function getInboxKey(): Promise<string> {
-  const uid = await getUserKey();
-  return `inbox:${uid}`;  // e.g. "inbox:64abc123..."
-}
-
 export async function loadInbox(): Promise<InboxItem[]> {
   try {
-    const key = await getInboxKey();
-    const raw = await AsyncStorage.getItem(key);
+    const raw = await AsyncStorage.getItem(INBOX_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as InboxItem[];
     return parsed.sort(
@@ -38,10 +26,12 @@ export async function loadInbox(): Promise<InboxItem[]> {
 
 export async function saveInboxItem(item: Omit<InboxItem, 'read'>): Promise<void> {
   try {
-    const key = await getInboxKey();
-    const existing = await loadInbox();
+    const raw = await AsyncStorage.getItem(INBOX_KEY);
+    const existing: InboxItem[] = raw ? JSON.parse(raw) : [];
+    // Skip if an item with this ID already exists (prevents duplicates)
+    if (existing.some(i => i.id === item.id)) return;
     const updated = [{ ...item, read: false }, ...existing];
-    await AsyncStorage.setItem(key, JSON.stringify(updated));
+    await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(updated));
   } catch (e) {
     console.warn('saveInboxItem error', e);
   }
@@ -49,10 +39,9 @@ export async function saveInboxItem(item: Omit<InboxItem, 'read'>): Promise<void
 
 export async function markInboxItemRead(id: string): Promise<void> {
   try {
-    const key = await getInboxKey();
-    const existing = await loadInbox();
-    const updated = existing.map(i => (i.id === id ? { ...i, read: true } : i));
-    await AsyncStorage.setItem(key, JSON.stringify(updated));
+    const items = await loadInbox();
+    const updated = items.map(i => (i.id === id ? { ...i, read: true } : i));
+    await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(updated));
   } catch (e) {
     console.warn('markInboxItemRead error', e);
   }
@@ -60,10 +49,9 @@ export async function markInboxItemRead(id: string): Promise<void> {
 
 export async function markAllInboxRead(): Promise<void> {
   try {
-    const key = await getInboxKey();
-    const existing = await loadInbox();
-    const updated = existing.map(i => ({ ...i, read: true }));
-    await AsyncStorage.setItem(key, JSON.stringify(updated));
+    const items = await loadInbox();
+    const updated = items.map(i => ({ ...i, read: true }));
+    await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(updated));
   } catch (e) {
     console.warn('markAllInboxRead error', e);
   }
@@ -71,13 +59,11 @@ export async function markAllInboxRead(): Promise<void> {
 
 export async function clearInbox(): Promise<void> {
   try {
-    const key = await getInboxKey();
-    await AsyncStorage.removeItem(key);
+    await AsyncStorage.removeItem(INBOX_KEY);
   } catch (e) {
     console.warn('clearInbox error', e);
   }
 }
-// Add these two exports to the bottom of lib/notificationInbox.ts
 
 export async function countUnread(): Promise<number> {
   try {

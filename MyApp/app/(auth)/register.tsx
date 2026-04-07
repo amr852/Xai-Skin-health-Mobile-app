@@ -1,5 +1,6 @@
 // app/(auth)/register.tsx
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar, ActivityIndicator, Platform, ScrollView, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, ActivityIndicator, Platform, ScrollView, Modal } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import { C } from '@/constants/theme';

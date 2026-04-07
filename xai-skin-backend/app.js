@@ -17,17 +17,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/xai-skin-
 .then(() => console.log('MongoDB connected successfully'))
 .catch(err => console.log('MongoDB connection error:', err));
 
-// CORS Configuration
-app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:8081',
-    'http://localhost:19006',
-    'http://localhost:5173',
-    'http://localhost:19000', 
-  ],
-  credentials: true
-}));
+// CORS Configuration — allow all origins so React Native (no Origin header) works
+app.use(cors({ origin: true, credentials: true }));
 
 app.use(logger('dev'));
 app.use(express.json());
@@ -38,5 +29,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/lesions', lesionsRouter);
+
+// Global JSON error handler — prevents Express from returning HTML error pages
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+});
 
 module.exports = app;

@@ -1,9 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const getKey = (userId: string, key: string) => `@skinhealth/${userId}/${key}`;
-const KEY_DATE = 'vitals_date';
-const KEY_WATER = 'water_liters';
-const KEY_SLEEP = 'sleep_hours';
+const PREFIX = '@skinhealth/vitals';
 
 export function getLocalDateKey(d = new Date()): string {
   const y = d.getFullYear();
@@ -12,16 +9,16 @@ export function getLocalDateKey(d = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
-export async function loadStoredVitals(userId: string): Promise<{
+export async function loadStoredVitals(): Promise<{
   storedDate: string | null;
   water: number;
   sleep: number;
 }> {
   try {
     const [storedDate, w, s] = await Promise.all([
-      AsyncStorage.getItem(getKey(userId, KEY_DATE)),
-      AsyncStorage.getItem(getKey(userId, KEY_WATER)),
-      AsyncStorage.getItem(getKey(userId, KEY_SLEEP)),
+      AsyncStorage.getItem(`${PREFIX}/date`),
+      AsyncStorage.getItem(`${PREFIX}/water`),
+      AsyncStorage.getItem(`${PREFIX}/sleep`),
     ]);
 
     return {
@@ -35,14 +32,13 @@ export async function loadStoredVitals(userId: string): Promise<{
 }
 
 export async function persistVitals(
-  userId: string,
   dateKey: string,
   water: number,
   sleep: number
 ): Promise<void> {
   await AsyncStorage.multiSet([
-    [getKey(userId, KEY_DATE), dateKey],
-    [getKey(userId, KEY_WATER), String(water)],
-    [getKey(userId, KEY_SLEEP), String(sleep)],
+    [`${PREFIX}/date`, dateKey],
+    [`${PREFIX}/water`, String(water)],
+    [`${PREFIX}/sleep`, String(sleep)],
   ]);
 }
