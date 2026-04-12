@@ -321,11 +321,12 @@ export async function syncUrgentLesionAlerts(
   }
 }
 
-function contentKind(data: unknown): 'water' | 'uv' | 'system' {
+function contentKind(data: unknown): 'water' | 'uv' | 'urgent' | 'system' {
   if (data && typeof data === 'object' && 'kind' in data) {
     const k = (data as { kind?: string }).kind;
     if (k === 'uv') return 'uv';
     if (k === 'water') return 'water';
+    if (k === 'urgent') return 'urgent';
   }
   return 'system';
 }

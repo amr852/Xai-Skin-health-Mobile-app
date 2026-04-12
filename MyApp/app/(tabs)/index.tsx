@@ -1,14 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  StatusBar,
-  Platform,
-  RefreshControl,
-  ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity,
+  StyleSheet, StatusBar, Platform, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,13 +11,13 @@ import { useHomeVitals } from '@/hooks/useHomeVitals';
 import { useUvIndex } from '@/hooks/useUvIndex';
 import { uviToDisplay, uviToRiskMeta } from '@/lib/uvIndexMeta';
 import { MonitorLesionsSection } from '@/components/home/MonitorLesionsSection';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { BottomTabBar, type NavKey } from '@/components/ui/BottomTabBar';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { countUnread, subscribeInboxChange } from '@/lib/notificationInbox';
 import { syncWaterInboxItems } from '@/lib/notificationScheduler';
 import { useAuth } from '@/hooks/useAuth';
-
-type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
-type NavKey = 'home' | 'scan' | 'history' | 'profile';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -36,385 +29,228 @@ export default function HomeScreen() {
   const { uvi, loading, error, permissionDenied, subtitle, refresh } = useUvIndex();
   const [uvRefreshing, setUvRefreshing] = useState(false);
 
-  // Get user initials
-  const getInitials = (firstName?: string, lastName?: string) => {
-    const first = firstName?.[0]?.toUpperCase() || '';
-    const last = lastName?.[0]?.toUpperCase() || '';
-    return (first + last) || 'SH';
-  };
-
-  const userInitials = getInitials(user?.firstName, user?.lastName);
-  const userName = user?.firstName || 'User';
+  const initials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`.toUpperCase() || 'SH';
+  const userName  = user?.firstName || 'User';
 
   const onUvRefresh = useCallback(async () => {
     setUvRefreshing(true);
-    try {
-      await refresh();
-    } finally {
-      setUvRefreshing(false);
-    }
+    try { await refresh(); } finally { setUvRefreshing(false); }
   }, [refresh]);
 
   useFocusEffect(
-  useCallback(() => {
-    let alive = true;
-    const upd = async () => {
-      const count = await countUnread();
-      if (alive) setUnreadCount(count);
-    };
-    // Sync water inbox items every time the home screen comes into focus
-    // — user is guaranteed to be logged in at this point
-    void syncWaterInboxItems();
-    void upd();
-    const unsub = subscribeInboxChange(() => void upd());
-    return () => {
-      alive = false;
-      unsub();
-    };
-  }, []),
-);
+    useCallback(() => {
+      let alive = true;
+      const upd = async () => {
+        const count = await countUnread();
+        if (alive) setUnreadCount(count);
+      };
+      void syncWaterInboxItems();
+      void upd();
+      const unsub = subscribeInboxChange(() => void upd());
+      return () => { alive = false; unsub(); };
+    }, []),
+  );
 
   const uvDisplay = loading && uvi == null ? null : uviToDisplay(uvi ?? NaN);
-  const uvRisk =
-    uvi != null
-      ? uviToRiskMeta(uvi)
-      : permissionDenied
-        ? { label: 'Location off', color: C.muted }
-        : error
-          ? { label: 'Unavailable', color: C.muted }
-          : loading
-            ? { label: 'Loading…', color: C.muted }
-            : { label: '—', color: C.muted };
+  const uvRisk = uvi != null
+    ? uviToRiskMeta(uvi)
+    : permissionDenied ? { label: 'Location off',  color: C.textHint }
+    : error             ? { label: 'Unavailable',   color: C.textHint }
+    : loading           ? { label: 'Loading…',      color: C.textHint }
+    :                     { label: '—',             color: C.textHint };
 
-  const navItems: { key: NavKey; icon: FeatherIconName; a11y: string }[] = [
-    { key: 'home', icon: 'home', a11y: 'Home' },
-    { key: 'scan', icon: 'camera', a11y: 'Camera' },
-    { key: 'history', icon: 'clock', a11y: 'History' },
-    { key: 'profile', icon: 'user', a11y: 'Profile' },
-  ];
+  const TAB_HEIGHT = 60 + insets.bottom;
+
+  const handleNav = (key: NavKey) => {
+    if      (key === 'scan')    router.push('/camera');
+    else if (key === 'history') router.push('/history');
+    else if (key === 'profile') router.push('/profile');
+    else setActiveNav(key);
+  };
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
 
       <ScrollView
         style={s.scroll}
-        contentContainerStyle={[s.scrollContent, { paddingBottom: 88 + insets.bottom }]}
+        contentContainerStyle={{ paddingBottom: TAB_HEIGHT + 16 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={uvRefreshing} onRefresh={onUvRefresh} tintColor={C.amber} />
+          <RefreshControl refreshing={uvRefreshing} onRefresh={onUvRefresh} tintColor={C.primary} />
         }>
-        <View style={s.header}>
-          <View style={s.headerLeft}>
-            <View style={s.avatar}>
-              <Text style={s.avatarTxt}>{userInitials}</Text>
+
+        {/* Page header */}
+        <PageHeader
+          initials={initials}
+          name={userName}
+          unreadCount={unreadCount}
+          onBellPress={() => router.push('/notifications')}
+        />
+
+        {/* Page title */}
+        <View style={s.pageTitleBlock}>
+          <View style={s.pageTitleRow}>
+            <View style={s.pageTitleIcon}>
+              <Feather name="heart" size={14} color={C.primary} />
             </View>
-            <Text style={s.helloTxt}>Hello, {userName}!</Text>
+            <Text style={s.pageTitle}>Skin Dashboard</Text>
           </View>
-          <TouchableOpacity
-            style={s.bell}
-            onPress={() => router.push('/notifications')}
-            activeOpacity={0.75}
-            accessibilityRole="button"
-            accessibilityLabel="Notifications">
-            <Feather name="bell" size={22} color={C.text} />
-            {unreadCount > 0 ? <View style={s.bellDot} /> : null}
-          </TouchableOpacity>
+          <Text style={s.pageSub}>Your daily dermatology health overview</Text>
         </View>
 
-        <View style={s.greetWrap}>
-          <Text style={s.greetHead}>Skin Lesions Tracker</Text>
+        {/* UV index card */}
+        <View style={s.uvCard}>
+          {/* Left medical accent bar */}
+          <View style={s.uvAccentBar} />
+
+          <View style={s.uvInner}>
+            <View style={s.uvTop}>
+              <View style={s.uvIconRow}>
+                <View style={s.uvIconBg}>
+                  <Feather name="sun" size={16} color={C.primary} />
+                </View>
+                <View>
+                  <Text style={s.uvLabel}>UV INDEX</Text>
+                  <Text style={s.uvLabelSub}>Solar exposure reading</Text>
+                </View>
+              </View>
+              <View style={[s.uvRiskPill, { backgroundColor: uvRisk.color + '22' }]}>
+                <View style={[s.uvDot, { backgroundColor: uvRisk.color }]} />
+                <Text style={[s.uvRiskTxt, { color: uvRisk.color }]}>{uvRisk.label}</Text>
+              </View>
+            </View>
+            <View style={s.uvBody}>
+              <View>
+                <View style={s.uvValueRow}>
+                  {uvDisplay == null ? (
+                    <ActivityIndicator size="large" color={C.primary} />
+                  ) : (
+                    <Text style={s.uvValue}>{uvDisplay}</Text>
+                  )}
+                  <Text style={s.uvUnit}>UVI</Text>
+                </View>
+                <Text style={s.uvSubtitle}>{subtitle}</Text>
+              </View>
+              {/* Graduated gauge bars — taller toward active level */}
+              <View style={s.uvGauge}>
+                {[1,2,3,4,5].map(i => {
+                  const isActive = uvi != null && i <= Math.ceil(uvi / 2.2);
+                  const heights = [18, 22, 28, 22, 18];
+                  return (
+                    <View
+                      key={i}
+                      style={[
+                        s.uvGaugeBar,
+                        { height: heights[i - 1] },
+                        isActive
+                          ? { backgroundColor: C.primary }
+                          : { backgroundColor: C.border },
+                      ]}
+                    />
+                  );
+                })}
+              </View>
+            </View>
+          </View>
         </View>
 
-        <View style={s.uvHeroCard}>
-          <View style={s.uvHeroLeft}>
-            <View style={s.uvHeroIconWrap}>
-              <Feather name="sun" size={18} color={C.amber} />
-            </View>
-            <Text style={s.uvHeroTitle}>UV index</Text>
-            <Text style={s.uvHeroSub}>{subtitle}</Text>
-            <View style={s.uvHeroStatusRow}>
-              <View style={[s.vStatusDot, { backgroundColor: uvRisk.color }]} />
-              <Text style={[s.uvHeroStatus, { color: uvRisk.color }]}>{uvRisk.label}</Text>
-            </View>
-          </View>
-          <View style={s.uvHeroBigBox}>
-            {uvDisplay == null ? (
-              <ActivityIndicator size="small" color={C.amber} />
-            ) : (
-              <Text style={s.uvHeroBigNum}>{uvDisplay}</Text>
-            )}
-            <Text style={s.uvHeroBigUnit}>UVI</Text>
-          </View>
-        </View>
-
-        <View style={s.secHead}>
-          <View style={s.secHeadText}>
-            <Text style={s.secTitle}>Daily necessities</Text>
-            <Text style={s.secDesc}>
-              Hydration and rest help your skin repair and stay resilient.
-            </Text>
-          </View>
-        </View>
+        {/* Health metrics */}
+        <SectionHeader
+          title="Health Metrics"
+          subtitle="Track hydration, sleep, and UV exposure"
+        />
         <View style={s.vitalsGrid}>
           {vitals.map((v, i) => (
             <VitalCard key={i} {...v} />
           ))}
         </View>
 
+        {/* Monitor lesions */}
         <MonitorLesionsSection />
 
-        <View style={{ height: 24 }} />
+        <View style={{ height: 8 }} />
       </ScrollView>
 
-      <View
-        style={[s.navOuter, { paddingBottom: Math.max(insets.bottom, 16) }]}
-        pointerEvents="box-none">
-        <View style={s.navPill}>
-          {navItems.map(item => {
-            const active = activeNav === item.key;
-            return (
-              <TouchableOpacity
-                key={item.key}
-                style={[s.navIconCircle, active ? s.navIconCircleActive : s.navIconCircleIdle]}
-                onPress={() => {
-                  if (item.key === 'scan') {
-                    router.push('/camera');
-                  } else if (item.key === 'history') {
-                    router.push('/history');
-                  } else if (item.key === 'profile') {
-                    router.push('/profile');
-                  } else {
-                    setActiveNav(item.key);
-                  }
-                }}
-                activeOpacity={0.82}
-                accessibilityRole="button"
-                accessibilityLabel={item.a11y}
-                accessibilityState={{ selected: active }}>
-                <Feather
-                  name={item.icon}
-                  size={21}
-                  color={active ? C.navIconActive : C.navIconInactive}
-                />
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
+      <BottomTabBar active={activeNav} onPress={handleNav} />
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg },
+  safe:   { flex: 1, backgroundColor: C.bg },
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 8 },
 
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 22,
-    paddingTop: 16,
-    marginBottom: 14,
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: C.headerAvatarRing,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  avatarTxt: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#2E2608',
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
-  helloTxt: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: C.text,
-    letterSpacing: -0.2,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
-  bell: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: C.bellBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bellDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: C.bellBadge,
-    position: 'absolute',
-    top: 7,
-    right: 7,
-    borderWidth: 2.5,
-    borderColor: C.bg,
-  },
-
-  greetWrap: { paddingHorizontal: 22, marginBottom: 10 },
-  greetHead: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: C.text,
-    letterSpacing: -0.6,
-    lineHeight: 34,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
-
-  uvHeroCard: {
-    marginHorizontal: 18,
-    marginBottom: 12,
-    backgroundColor: C.diagYellow,
-    borderRadius: 20,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  uvHeroLeft: { flex: 1 },
-  uvHeroIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: C.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  uvHeroTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: C.text,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
-  uvHeroSub: {
-    fontSize: 12,
-    color: C.amber,
-    marginTop: 3,
-    lineHeight: 18,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
-  uvHeroStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
-  vStatusDot: { width: 5, height: 5, borderRadius: 2.5 },
-  uvHeroStatus: {
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
-  uvHeroBigBox: {
-    width: 78,
-    height: 78,
-    borderRadius: 14,
-    backgroundColor: C.diagYellowPale,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(192, 128, 16, 0.2)',
-  },
-  uvHeroBigNum: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: C.diagLine,
-    letterSpacing: -1,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
-  uvHeroBigUnit: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: C.amber,
-    marginTop: 2,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
-
-  secHead: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 22,
-    marginBottom: 10,
-  },
-  secHeadText: { flex: 1, minWidth: 0 },
-  secTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: C.text,
-    letterSpacing: -0.3,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
-  secDesc: {
-    fontSize: 12,
-    color: C.muted,
-    marginTop: 4,
-    lineHeight: 17,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
-
-  vitalsGrid: {
-    paddingHorizontal: 18,
-    marginBottom: 14,
-    gap: 10,
-    width: '100%',
-    alignSelf: 'stretch',
-  },
-
-  navOuter: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
+  pageTitleBlock: {
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 4, paddingBottom: 16,
   },
-  navPill: {
+  pageTitleRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3,
+  },
+  pageTitleIcon: {
+    width: 26, height: 26, borderRadius: 8,
+    backgroundColor: C.primaryLight,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pageTitle: {
+    fontSize: 26, fontWeight: '800', color: C.text, letterSpacing: -0.5,
+  },
+  pageSub: { fontSize: 13, color: C.textHint, marginTop: 0 },
+
+  // ── UV Card ──────────────────────────────────────────────────────
+  uvCard: {
+    marginHorizontal: 20, marginBottom: 20,
+    backgroundColor: C.surface,
+    borderRadius: 20,
+    borderWidth: 1, borderColor: C.border,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    backgroundColor: C.navPillBg,
-    borderRadius: 999,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    gap: 22,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.05)',
+    overflow: 'hidden',
     ...(Platform.OS === 'ios'
-      ? {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.08,
-          shadowRadius: 12,
-        }
-      : Platform.OS === 'android'
-        ? { elevation: 6 }
-        : { boxShadow: '0 4px 20px rgba(0,0,0,0.07)' }),
+      ? { shadowColor: '#1E1010', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 10 }
+      : Platform.OS === 'android' ? { elevation: 4 } : {}),
   },
-  navIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // Left colored accent bar — medical record style
+  uvAccentBar: {
+    width: 4,
+    backgroundColor: C.primary,
+    borderTopLeftRadius: 20,
+    borderBottomLeftRadius: 20,
   },
-  navIconCircleIdle: {
-    backgroundColor: C.navCircleInactive,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.04)',
+  uvInner: { flex: 1, padding: 18 },
+  uvTop: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    justifyContent: 'space-between', marginBottom: 14,
   },
-  navIconCircleActive: {
-    backgroundColor: C.navCircleActive,
-    borderColor: C.navCircleActive,
+  uvIconRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  uvIconBg: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: C.primaryLight,
+    alignItems: 'center', justifyContent: 'center',
   },
+  uvLabel: {
+    fontSize: 12, fontWeight: '700', color: C.primary, letterSpacing: 0.8,
+  },
+  uvLabelSub: {
+    fontSize: 10, color: C.textHint, marginTop: 2, fontWeight: '400',
+  },
+  uvRiskPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 9999,
+  },
+  uvDot: { width: 6, height: 6, borderRadius: 3 },
+  uvRiskTxt: { fontSize: 12, fontWeight: '700' },
+
+  uvBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  uvValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginBottom: 4 },
+  uvValue: {
+    fontSize: 52, fontWeight: '800', color: C.text, letterSpacing: -2,
+    lineHeight: 56,
+  },
+  uvUnit: { fontSize: 16, fontWeight: '700', color: C.textHint, paddingBottom: 6 },
+  uvSubtitle: { fontSize: 12, color: C.textHint, lineHeight: 17, maxWidth: 180 },
+  uvGauge: { flexDirection: 'row', gap: 5, alignItems: 'flex-end', paddingBottom: 6 },
+  uvGaugeBar: { width: 10, borderRadius: 4 },
+
+  vitalsGrid: { paddingHorizontal: 20, marginBottom: 20, gap: 12 },
 });

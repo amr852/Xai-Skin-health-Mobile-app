@@ -109,7 +109,7 @@ export function VitalCard(props: VitalCardProps) {
       <View style={s.vBoxSleepWave}>
         <View style={s.vWaveHead}>
           <View style={s.vWhiteIconCircle}>
-            <Feather name={icon} size={16} color={iconColor} />
+            <Feather name={icon} size={20} color={iconColor} />
           </View>
           <Text style={s.vWaveTitle}>{label}</Text>
         </View>
@@ -187,7 +187,7 @@ export function VitalCard(props: VitalCardProps) {
           <View style={[s.vStatusDot, { backgroundColor: statusColor }]} />
           <Text style={[s.vWaveStatus, { color: statusColor }]}>{status}</Text>
         </View>
-        <View style={[s.vBarBgSleepWave, { backgroundColor: 'rgba(96, 80, 184, 0.20)' }]}>
+        <View style={s.vBarBgSleepWave}>
           <View style={[s.vBarFill, { width: `${fillPct}%`, backgroundColor: fillColor }]} />
         </View>
       </View>
@@ -199,7 +199,7 @@ export function VitalCard(props: VitalCardProps) {
       <View style={s.vBoxWave}>
         <View style={s.vWaveHead}>
           <View style={s.vWhiteIconCircle}>
-            <Feather name={icon} size={16} color={iconColor} />
+            <Feather name={icon} size={20} color={iconColor} />
           </View>
           <Text style={s.vWaveTitle}>{label}</Text>
         </View>
@@ -255,7 +255,7 @@ export function VitalCard(props: VitalCardProps) {
           <View style={[s.vStatusDot, { backgroundColor: statusColor }]} />
           <Text style={[s.vWaveStatus, { color: statusColor }]}>{status}</Text>
         </View>
-        <View style={[s.vBarBgWave, { backgroundColor: 'rgba(30, 122, 174, 0.2)' }]}>
+        <View style={s.vBarBgWave}>
           <View style={[s.vBarFill, { width: `${fillPct}%`, backgroundColor: fillColor }]} />
         </View>
       </View>
@@ -276,7 +276,7 @@ export function VitalCard(props: VitalCardProps) {
       <View style={s.vBoxSeg}>
         <View style={s.vSegTop}>
           <View style={s.vWhiteIconCircleSm}>
-            <Feather name={icon} size={17} color={iconColor} />
+            <Feather name={icon} size={22} color={iconColor} />
           </View>
           <View style={s.vSegTitleBlock}>
             <Text style={s.vSegBig}>
@@ -297,8 +297,8 @@ export function VitalCard(props: VitalCardProps) {
                 style={[
                   s.vSegChunk,
                   i === active
-                    ? { backgroundColor: C.diagYellowDeep }
-                    : { backgroundColor: C.diagYellowPale },
+                    ? { backgroundColor: C.diagYellowDeep }   // terracotta active
+                    : { backgroundColor: 'rgba(255,255,255,0.55)' }, // soft inactive
                 ]}
               />
               <Text style={s.vSegLbl} numberOfLines={1}>
@@ -315,7 +315,7 @@ export function VitalCard(props: VitalCardProps) {
     <View style={s.vBoxPanel}>
       <View style={s.vPanelLeft}>
         <View style={s.vPanelMoonCircle}>
-          <Feather name={icon} size={28} color={iconColor} />
+          <Feather name={icon} size={30} color={iconColor} />
         </View>
       </View>
       <View style={s.vPanelRight}>

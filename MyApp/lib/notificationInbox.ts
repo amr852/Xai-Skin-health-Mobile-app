@@ -2,6 +2,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const INBOX_KEY = '@skinhealth/inbox';
+// Must match the key used in uvInboxNotify.ts — cleared together so UV items
+// regenerate after logout (the sig would otherwise block re-writing).
+const UV_SIG_KEY = '@skinhealth/last_uv_inbox_sig';
 
 export type InboxItem = {
   id: string;
@@ -59,7 +62,7 @@ export async function markAllInboxRead(): Promise<void> {
 
 export async function clearInbox(): Promise<void> {
   try {
-    await AsyncStorage.removeItem(INBOX_KEY);
+    await AsyncStorage.multiRemove([INBOX_KEY, UV_SIG_KEY]);
   } catch (e) {
     console.warn('clearInbox error', e);
   }

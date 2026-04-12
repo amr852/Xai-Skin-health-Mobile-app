@@ -4,21 +4,19 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Platform,
-  ActivityIndicator,
   Image,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
-import { C } from '@/constants/theme';
+import { C, FontSize, Space, Radius, Shadow } from '@/constants/theme';
 import { useLesions, type Lesion } from '@/hooks/useLesions';
 import { syncUrgentLesionAlerts } from '@/lib/notificationScheduler';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { DisclaimerBox } from '@/components/ui/DisclaimerBox';
+import { EmptyState } from '@/components/ui/EmptyState';
 
-const statusMeta: Record<'Stable' | 'Check' | 'Urgent', { label: string; color: string; bg: string }> = {
-  Stable: { label: 'Stable', color: C.stableText, bg: C.stableBg },
-  Check:  { label: 'Check',  color: C.checkText,  bg: C.checkBg  },
-  Urgent: { label: 'Urgent', color: C.urgentText,  bg: C.urgentBg },
-};
+type StatusKey = 'Stable' | 'Check' | 'Urgent';
 
 export function MonitorLesionsSection() {
   const router = useRouter();
@@ -35,7 +33,7 @@ export function MonitorLesionsSection() {
   }, [lesions]);
 
   const lesionStats = useMemo(() => {
-    const stats = { Stable: 0, Check: 0, Urgent: 0 };
+    const stats = { Stable: 0, Check: 0, Urgent: 0 } as Record<StatusKey, number>;
     lesions.forEach(l => { stats[l.status] = (stats[l.status] ?? 0) + 1; });
     return stats;
   }, [lesions]);
@@ -50,213 +48,260 @@ export function MonitorLesionsSection() {
 
   return (
     <>
-      {/* HEADER */}
-      <View style={ls.secHead}>
-        <View style={ls.secHeadText}>
-          <Text style={ls.secTitle}>Monitor Lesions</Text>
-          <Text style={ls.secDesc}>
-            Scan and log spots to track size, shape, and colour over time.
-          </Text>
-        </View>
-        <TouchableOpacity style={ls.secLinkRow} onPress={() => router.push('/history')}>
-          <Text style={ls.secLink}>View all</Text>
-          <Feather name="chevron-right" size={14} color={C.text} />
-        </TouchableOpacity>
+      {/* ── Section Header ── */}
+      <SectionHeader
+        title="Monitor Lesions"
+        subtitle="Scan and log spots to track size, shape, and colour over time."
+        linkLabel="View all"
+        onLinkPress={() => router.push('/history')}
+      />
+
+      {/* ── Stats Pills Row ── */}
+      <View style={ls.statsRow}>
+        <StatPill
+          label="Stable"
+          count={lesionStats.Stable}
+          bg={C.stableBg}
+          color={C.stableText}
+        />
+        <StatPill
+          label="Check"
+          count={lesionStats.Check}
+          bg={C.checkBg}
+          color={C.checkText}
+        />
+        <StatPill
+          label="Urgent"
+          count={lesionStats.Urgent}
+          bg={C.urgentBg}
+          color={C.urgentText}
+        />
       </View>
 
-      {/* CARD */}
-      <View style={ls.lesCard}>
-        {loading && (
-          <ActivityIndicator size="small" color={C.sageDark} style={{ marginBottom: 10 }} />
-        )}
-        {!loading && error && (
-          <View style={ls.errorBox}>
-            <Feather name="alert-circle" size={16} color={C.urgentText} />
-            <Text style={ls.errorTxt}>Could not load lesions</Text>
-            <TouchableOpacity onPress={() => void fetchLesions()} style={ls.retryBtn}>
-              <Text style={ls.retryTxt}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* STATS */}
-        <View style={ls.lesResultsBlock}>
-          <Text style={ls.lesResultsTitle}>Monitoring</Text>
-          <Text style={ls.lesResultsDesc}>
-            {lesions.length} lesion{lesions.length === 1 ? '' : 's'} logged — keep scanning on schedule.
-          </Text>
-          <View style={ls.lesResultsPills}>
-            <StatPill label="Stable" count={lesionStats.Stable} bg={C.stableBg} color={C.stableText} />
-            <StatPill label="Check"  count={lesionStats.Check}  bg={C.checkBg}  color={C.checkText}  />
-            <StatPill label="Urgent" count={lesionStats.Urgent} bg={C.urgentBg} color={C.urgentText} />
-          </View>
+      {/* ── Loading / Error states ── */}
+      {loading && (
+        <View style={ls.loadingWrap}>
+          <EmptyState
+            icon="clock"
+            title="Loading lesions…"
+          />
         </View>
+      )}
 
-        {/* SCAN BUTTON */}
-        <TouchableOpacity style={ls.scanBanner} onPress={() => router.push('/camera')}>
-          <View style={ls.scanIconWrap}>
-            <Feather name="camera" size={20} color={C.sageDark} />
+      {!loading && error && (
+        <View style={ls.errorWrap}>
+          <EmptyState
+            icon="alert-circle"
+            title="Could not load lesions"
+            message={error}
+            actionLabel="Retry"
+            onAction={() => void fetchLesions()}
+            variant="error"
+          />
+        </View>
+      )}
+
+      {/* ── Scan a new lesion banner ── */}
+      {!loading && !error && (
+        <TouchableOpacity
+          style={ls.scanBanner}
+          onPress={() => router.push('/camera')}
+          activeOpacity={0.8}>
+          {/* Camera icon circle */}
+          <View style={ls.scanIconCircle}>
+            <Feather name="camera" size={22} color="#fff" />
           </View>
-          <View style={ls.scanBody}>
+          {/* Text */}
+          <View style={ls.scanTextBlock}>
             <Text style={ls.scanTitle}>Scan a new lesion</Text>
-            <Text style={ls.scanSub}>Log & track changes over time</Text>
+            <Text style={ls.scanSub}>Log &amp; track changes over time</Text>
           </View>
-          <Feather name="chevron-right" size={22} color={C.sageMid} />
+          {/* Arrow */}
+          <View style={ls.scanArrowCircle}>
+            <Feather name="arrow-right" size={16} color={C.primary} />
+          </View>
         </TouchableOpacity>
+      )}
 
-        {/* RECENT LIST */}
-        {recentLesions.length > 0 && (
-          <>
-            <View style={ls.divider} />
-            <Text style={ls.lesListTitle}>RECENT LESIONS</Text>
-            {recentLesions.map(item => (
-              <LesionRow key={item._id} item={item} onPress={() => router.push('/history')} />
-            ))}
-          </>
-        )}
-
-        {/* DISCLAIMER */}
-        <View style={ls.disclaimer}>
-          <Text style={ls.disclaimerTxt}>
-            For tracking only. Always consult a dermatologist for medical advice.
-          </Text>
+      {/* ── Recent Lesions ── */}
+      {!loading && !error && recentLesions.length > 0 && (
+        <View style={ls.recentCard}>
+          <Text style={ls.recentHeading}>Recent Lesions</Text>
+          {recentLesions.map((item, idx) => (
+            <React.Fragment key={item._id}>
+              <LesionRow
+                item={item}
+                onPress={() => router.push('/history')}
+              />
+              {idx < recentLesions.length - 1 && <View style={ls.rowDivider} />}
+            </React.Fragment>
+          ))}
         </View>
-      </View>
+      )}
+
+      {/* ── Empty state when no lesions ── */}
+      {!loading && !error && lesions.length === 0 && (
+        <View style={ls.emptyWrap}>
+          <EmptyState
+            icon="inbox"
+            title="No lesions logged yet"
+            message="Tap 'Scan a new lesion' above to add your first one."
+          />
+        </View>
+      )}
+
+      {/* ── Disclaimer ── */}
+      <DisclaimerBox />
     </>
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function StatPill({ label, count, bg, color }: { label: string; count: number; bg: string; color: string }) {
+// ── Stat Pill ─────────────────────────────────────────────────────────────────
+function StatPill({
+  label, count, bg, color,
+}: {
+  label: string; count: number; bg: string; color: string;
+}) {
   return (
-    <View style={[ls.lesResultPill, { backgroundColor: bg }]}>
-      <View style={[ls.lesResultPillDot, { backgroundColor: color }]} />
-      <Text style={[ls.lesResultPillTxt, { color }]}>
-        {label} {count}
-      </Text>
+    <View style={[ls.statPill, { backgroundColor: bg }]}>
+      <Text style={[ls.statCount, { color }]}>{count}</Text>
+      <Text style={[ls.statLabel, { color }]}>{label}</Text>
     </View>
   );
 }
 
+// ── Lesion Row ─────────────────────────────────────────────────────────────────
 function LesionRow({ item, onPress }: { item: Lesion; onPress: () => void }) {
-  const meta = statusMeta[item.status] ?? statusMeta.Stable;
   return (
     <TouchableOpacity style={ls.lesRow} onPress={onPress} activeOpacity={0.7}>
+      {/* 64px thumbnail */}
       {item.imageUrl ? (
         <Image source={{ uri: item.imageUrl }} style={ls.lesThumb} resizeMode="cover" />
       ) : (
         <View style={[ls.lesThumb, ls.lesThumbPlaceholder]}>
-          <Feather name="image" size={18} color={C.muted} />
+          <Feather name="image" size={20} color={C.muted} />
         </View>
       )}
+
+      {/* Title / location / date */}
       <View style={ls.lesContent}>
-        <View style={ls.lesTop}>
-          <Text style={ls.lesName} numberOfLines={1}>
-            {item.title}{item.location ? ` · ${item.location}` : ''}
-          </Text>
-          <View style={[ls.lesBadge, { backgroundColor: meta.bg }]}>
-            <Text style={[ls.lesBadgeTxt, { color: meta.color }]}>{meta.label}</Text>
+        <Text style={ls.lesName} numberOfLines={1}>{item.title || 'Untitled'}</Text>
+        {!!item.location && (
+          <View style={ls.lesMetaItem}>
+            <Feather name="map-pin" size={11} color={C.muted} />
+            <Text style={ls.lesMeta}>{item.location}</Text>
           </View>
-        </View>
+        )}
         <Text style={ls.lesDate}>
           {new Date(item.createdAt).toLocaleDateString('en-GB', {
             day: '2-digit', month: 'short', year: 'numeric',
           })}
         </Text>
-        {!!(item.notes || item.description) && (
-          <Text style={ls.lesNote} numberOfLines={2}>{item.notes || item.description}</Text>
-        )}
       </View>
-      <Feather name="chevron-right" size={16} color={C.muted} style={{ alignSelf: 'center' }} />
+
+      {/* Status badge */}
+      <StatusBadge status={item.status} size="sm" />
     </TouchableOpacity>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
+// ── Styles ─────────────────────────────────────────────────────────────────────
 const ls = StyleSheet.create({
-  secHead: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-    paddingHorizontal: 22, marginBottom: 10, gap: 12,
+  // Stats pills row
+  statsRow: {
+    flexDirection: 'row',
+    gap: Space[3],
+    paddingHorizontal: Space[5],
+    marginBottom: Space[4],
   },
-  secHeadText: { flex: 1, minWidth: 0 },
-  secTitle: { fontSize: 20, fontWeight: '700', color: C.text },
-  secDesc: { fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 17 },
-  secLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 },
-  secLink: { fontSize: 12, color: C.text, fontWeight: '500' },
+  statPill: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Space[3],
+    borderRadius: Radius.lg,
+    gap: 3,
+  },
+  statCount: {
+    fontSize: FontSize.xl,
+    fontWeight: '800',
+  },
+  statLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: '600',
+  },
 
-  lesCard: {
-    marginHorizontal: 18, backgroundColor: C.white, borderRadius: 28, padding: 18,
-    borderWidth: 1, borderColor: C.lesCardBorder,
-    ...(Platform.OS === 'ios'
-      ? { shadowColor: '#1A1A18', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: 12 }
-      : Platform.OS === 'android' ? { elevation: 3 } : {}),
-  },
+  loadingWrap: { marginBottom: Space[2] },
+  errorWrap:   { marginBottom: Space[2] },
+  emptyWrap:   { marginBottom: Space[2] },
 
-  errorBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: C.urgentBg, borderRadius: 10, padding: 10, marginBottom: 10,
-  },
-  errorTxt: { flex: 1, fontSize: 12, color: C.urgentText },
-  retryBtn: {
-    paddingHorizontal: 10, paddingVertical: 4,
-    backgroundColor: C.white, borderRadius: 6,
-    borderWidth: 1, borderColor: C.urgentText + '40',
-  },
-  retryTxt: { fontSize: 12, fontWeight: '600', color: C.urgentText },
-
-  lesResultsBlock: {
-    marginBottom: 12, paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
-  },
-  lesResultsTitle: { fontSize: 16, fontWeight: '700', color: C.text },
-  lesResultsDesc: { fontSize: 12, color: C.muted, marginTop: 6, lineHeight: 17 },
-  lesResultsPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
-  lesResultPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 6, paddingHorizontal: 10, borderRadius: 99,
-  },
-  lesResultPillDot: { width: 6, height: 6, borderRadius: 3 },
-  lesResultPillTxt: { fontSize: 11, fontWeight: '600' },
-
+  // Scan banner
   scanBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: C.cardGray, borderRadius: 18, padding: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Space[5],
+    marginBottom: Space[4],
+    backgroundColor: C.surface,
+    borderRadius: Radius.xl,
+    padding: Space[4],
+    borderWidth: 1,
+    borderColor: C.border,
+    gap: Space[3],
+    ...Shadow.sm,
   },
-  scanIconWrap: {
-    width: 42, height: 42, borderRadius: 12, backgroundColor: C.sage,
+  scanIconCircle: {
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: C.primary,
     alignItems: 'center', justifyContent: 'center',
   },
-  scanBody: { flex: 1 },
-  scanTitle: { fontSize: 13, fontWeight: '500', color: C.text },
-  scanSub: { fontSize: 11, color: C.muted, marginTop: 1 },
+  scanTextBlock: { flex: 1 },
+  scanTitle:  { fontSize: FontSize.base, fontWeight: '700', color: C.text },
+  scanSub:    { fontSize: FontSize.xs + 1, color: C.muted, marginTop: 2 },
+  scanArrowCircle: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: C.primaryLight,
+    alignItems: 'center', justifyContent: 'center',
+  },
 
-  divider: { height: 1, backgroundColor: C.border, marginVertical: 13 },
-  lesListTitle: { fontSize: 9, letterSpacing: 1.2, color: C.muted, marginBottom: 10 },
+  // Recent lesions card
+  recentCard: {
+    marginHorizontal: Space[5],
+    marginBottom: Space[4],
+    backgroundColor: C.surface,
+    borderRadius: Radius.xl,
+    padding: Space[4],
+    borderWidth: 1,
+    borderColor: C.border,
+    ...Shadow.xs,
+  },
+  recentHeading: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: C.muted,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: Space[3],
+  },
 
+  // Lesion row
   lesRow: {
-    flexDirection: 'row', gap: 10, alignItems: 'flex-start',
-    marginBottom: 12, paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space[3],
+    paddingVertical: Space[2],
   },
-  lesThumb: { width: 46, height: 46, borderRadius: 10, overflow: 'hidden' },
+  lesThumb: {
+    width: 64, height: 64,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    backgroundColor: C.cardGray,
+  },
   lesThumbPlaceholder: {
-    backgroundColor: C.border, alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
-  lesContent: { flex: 1 },
-  lesTop: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 2,
-  },
-  lesName: { fontSize: 12, fontWeight: '500', color: C.text, flex: 1, marginRight: 6 },
-  lesBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99 },
-  lesBadgeTxt: { fontSize: 9, fontWeight: '600' },
-  lesDate: { fontSize: 10, color: C.muted, marginBottom: 1 },
-  lesNote: { fontSize: 10, color: C.muted, lineHeight: 15 },
-
-  disclaimer: {
-    backgroundColor: C.warnBg, borderRadius: 10, borderLeftWidth: 3,
-    borderLeftColor: C.warnBorder, padding: 10, marginTop: 8,
-  },
-  disclaimerTxt: { fontSize: 10, color: C.warnText, lineHeight: 15 },
+  lesContent: { flex: 1, minWidth: 0 },
+  lesName:    { fontSize: FontSize.sm + 1, fontWeight: '600', color: C.text, marginBottom: 3 },
+  lesMetaItem:{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
+  lesMeta:    { fontSize: FontSize.xs, color: C.muted },
+  lesDate:    { fontSize: FontSize.xs, color: C.muted },
+  rowDivider: { height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: Space[1] },
 });

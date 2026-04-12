@@ -1,17 +1,8 @@
 import { useRef, useState } from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  StatusBar,
-  Platform,
-  Image,
-  ActivityIndicator,
-  ScrollView,
-  TextInput,
-  KeyboardAvoidingView,
-  Alert,
+  StyleSheet, Text, View, TouchableOpacity,
+  StatusBar, Platform, Image, ActivityIndicator,
+  ScrollView, KeyboardAvoidingView, Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -19,45 +10,35 @@ import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
 import { C } from '@/constants/theme';
 import { useLesions, type LesionFields } from '@/hooks/useLesions';
-
-type NavKey = 'home' | 'scan' | 'history' | 'profile';
-type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
+import { AppInput } from '@/components/ui/AppInput';
+import { AppButton } from '@/components/ui/AppButton';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { BottomTabBar, type NavKey } from '@/components/ui/BottomTabBar';
 
 const STATUS_OPTIONS: LesionFields['status'][] = ['Stable', 'Check', 'Urgent'];
-const STATUS_COLOR: Record<LesionFields['status'], { bg: string; text: string }> = {
-  Stable: { bg: C.stableBg,  text: C.stableText },
-  Check:  { bg: C.checkBg,   text: C.checkText  },
-  Urgent: { bg: C.urgentBg,  text: C.urgentText  },
-};
 
 const DEFAULT_FORM: LesionFields = {
-  title: '',
-  description: '',
-  location: '',
-  status: 'Stable',
-  notes: '',
+  title: '', description: '', location: '', status: 'Stable', notes: '',
+};
+
+const STATUS_META: Record<LesionFields['status'], { bg: string; border: string; text: string }> = {
+  Stable: { bg: C.stableBg,  border: C.stableText,  text: C.stableText  },
+  Check:  { bg: C.checkBg,   border: C.checkText,   text: C.checkText   },
+  Urgent: { bg: C.urgentBg,  border: C.urgentText,  text: C.urgentText  },
 };
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
-  const [isFacingFront, setIsFacingFront]   = useState(false);
-  const [capturedPhoto, setCapturedPhoto]   = useState<string | null>(null);
-  const [form, setForm]                     = useState<LesionFields>(DEFAULT_FORM);
-  const [saving, setSaving]                 = useState(false);
-  const [activeNav, setActiveNav]           = useState<NavKey>('scan');
+  const [isFacingFront, setIsFacingFront] = useState(false);
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const [form, setForm]                   = useState<LesionFields>(DEFAULT_FORM);
+  const [saving, setSaving]               = useState(false);
+  const [activeNav, setActiveNav]         = useState<NavKey>('scan');
   const cameraRef = useRef<CameraView>(null);
   const router    = useRouter();
   const insets    = useSafeAreaInsets();
   const { addLesion } = useLesions();
 
-  const navItems: { key: NavKey; icon: FeatherIconName; a11y: string }[] = [
-    { key: 'home',    icon: 'home',   a11y: 'Home'    },
-    { key: 'scan',    icon: 'camera', a11y: 'Camera'  },
-    { key: 'history', icon: 'clock',  a11y: 'History' },
-    { key: 'profile', icon: 'user',   a11y: 'Profile' },
-  ];
-
-  // ── Handlers ────────────────────────────────────────────────────────────────
   const handleTakePhoto = async () => {
     if (!cameraRef.current) return;
     const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
@@ -67,10 +48,7 @@ export default function CameraScreen() {
     }
   };
 
-  const handleRetake = () => {
-    setCapturedPhoto(null);
-    setForm(DEFAULT_FORM);
-  };
+  const handleRetake = () => { setCapturedPhoto(null); setForm(DEFAULT_FORM); };
 
   const handleSave = async () => {
     if (!form.title.trim()) {
@@ -79,171 +57,133 @@ export default function CameraScreen() {
     }
     setSaving(true);
     try {
-      await addLesion(
-        { ...form, title: form.title.trim() },
-        capturedPhoto ?? undefined,
-      );
+      await addLesion({ ...form, title: form.title.trim() }, capturedPhoto ?? undefined);
       Alert.alert('Saved', 'Lesion recorded successfully.', [
-        {
-          text: 'View History',
-          onPress: () => {
-            setCapturedPhoto(null);
-            router.push('/history');
-          },
-        },
-        {
-          text: 'Scan Another',
-          onPress: () => {
-            setCapturedPhoto(null);
-            setForm(DEFAULT_FORM);
-          },
-        },
+        { text: 'View History', onPress: () => { setCapturedPhoto(null); router.push('/history'); } },
+        { text: 'Scan Another', onPress: () => { setCapturedPhoto(null); setForm(DEFAULT_FORM); } },
       ]);
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to save lesion. Please try again.');
+      Alert.alert('Error', e.message || 'Failed to save. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
-  // ── Permission screen ────────────────────────────────────────────────────────
+  const handleNav = (key: NavKey) => {
+    if      (key === 'home')    router.push('/');
+    else if (key === 'history') router.push('/history');
+    else if (key === 'profile') router.push('/profile');
+    else setActiveNav(key);
+  };
+
+  // ── Permission ──────────────────────────────────────────────────────────────
   if (!permission?.granted) {
     return (
-      <SafeAreaView style={s.container}>
+      <SafeAreaView style={s.safe} edges={['top']}>
         <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
-        <View style={s.permissionWrap}>
-          <Feather name="camera-off" size={64} color={C.muted} />
-          <Text style={s.permissionTitle}>Camera Access Required</Text>
-          <Text style={s.permissionText}>
-            We need camera access to capture skin photos for analysis.
-          </Text>
-          <TouchableOpacity style={s.permissionButton} onPress={requestPermission} activeOpacity={0.7}>
-            <Text style={s.permissionButtonText}>Grant Permission</Text>
-          </TouchableOpacity>
+        <View style={s.permWrap}>
+          <View style={s.permIconCircle}>
+            <Feather name="camera-off" size={36} color={C.textHint} />
+          </View>
+          <Text style={s.permTitle}>Camera Access Required</Text>
+          <Text style={s.permMsg}>We need camera access to capture skin photos for analysis.</Text>
+          <AppButton label="Grant Permission" onPress={requestPermission} size="lg" style={s.permBtn} />
         </View>
-        <NavBar navItems={navItems} activeNav={activeNav} setActiveNav={setActiveNav} insets={insets} router={router} />
+        <BottomTabBar active={activeNav} onPress={handleNav} />
       </SafeAreaView>
     );
   }
 
-  // ── Form screen (after photo captured) ──────────────────────────────────────
+  // ── Post-capture form ───────────────────────────────────────────────────────
   if (capturedPhoto) {
     return (
-      <SafeAreaView style={[s.container, { backgroundColor: C.bg }]}>
+      <SafeAreaView style={[s.safe, { backgroundColor: C.bg }]} edges={['top']}>
         <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
 
         {/* Header */}
         <View style={s.formHeader}>
-          <TouchableOpacity onPress={handleRetake} style={s.formBackBtn} hitSlop={10} disabled={saving}>
-            <Feather name="arrow-left" size={22} color={saving ? C.muted : C.text} />
+          <TouchableOpacity onPress={handleRetake} style={s.formBack} hitSlop={10} disabled={saving}>
+            <Feather name="arrow-left" size={20} color={saving ? C.textHint : C.text} />
           </TouchableOpacity>
           <Text style={s.formHeaderTitle}>New Lesion</Text>
-          <View style={{ width: 44 }} />
+          <View style={{ width: 40 }} />
         </View>
 
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={[s.formScroll, { paddingBottom: 24 + insets.bottom }]}
+            contentContainerStyle={[s.formScroll, { paddingBottom: 32 + insets.bottom }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
 
-            {/* Photo thumbnail */}
-            <Image source={{ uri: capturedPhoto }} style={s.thumbnail} resizeMode="cover" />
+            {/* Photo */}
+            <Image source={{ uri: capturedPhoto }} style={s.photo} resizeMode="cover" />
 
-            {/* Title */}
-            <Text style={s.fieldLabel}>Title <Text style={s.required}>*</Text></Text>
-            <TextInput
-              style={s.input}
-              placeholder="e.g. Mole on left arm"
-              placeholderTextColor={C.muted}
-              value={form.title}
-              onChangeText={v => setForm(f => ({ ...f, title: v }))}
-              editable={!saving}
-              returnKeyType="next"
-            />
+            {/* Form card */}
+            <View style={s.formCard}>
+              <AppInput
+                label="Title" required
+                value={form.title}
+                onChangeText={v => setForm(f => ({ ...f, title: v }))}
+                placeholder="e.g. Mole on left arm"
+                editable={!saving}
+                returnKeyType="next"
+              />
+              <AppInput
+                label="Description"
+                value={form.description}
+                onChangeText={v => setForm(f => ({ ...f, description: v }))}
+                placeholder="Size, colour, texture…"
+                multiline editable={!saving}
+              />
+              <AppInput
+                label="Body Location"
+                value={form.location}
+                onChangeText={v => setForm(f => ({ ...f, location: v }))}
+                placeholder="e.g. Left forearm"
+                editable={!saving} returnKeyType="next"
+              />
 
-            {/* Description */}
-            <Text style={s.fieldLabel}>Description</Text>
-            <TextInput
-              style={[s.input, s.inputMulti]}
-              placeholder="Describe the lesion (size, colour, texture…)"
-              placeholderTextColor={C.muted}
-              value={form.description}
-              onChangeText={v => setForm(f => ({ ...f, description: v }))}
-              multiline
-              numberOfLines={3}
-              editable={!saving}
-            />
+              {/* Status selector */}
+              <Text style={s.statusLabel}>Status</Text>
+              <View style={s.statusRow}>
+                {STATUS_OPTIONS.map(opt => {
+                  const active = form.status === opt;
+                  const m = STATUS_META[opt];
+                  return (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[s.statusChip, active && { backgroundColor: m.bg, borderColor: m.border }]}
+                      onPress={() => setForm(f => ({ ...f, status: opt }))}
+                      disabled={saving}
+                      activeOpacity={0.7}>
+                      {active
+                        ? <StatusBadge status={opt} size="sm" />
+                        : <Text style={s.statusChipTxt}>{opt}</Text>
+                      }
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
 
-            {/* Body location */}
-            <Text style={s.fieldLabel}>Body Location</Text>
-            <TextInput
-              style={s.input}
-              placeholder="e.g. Back, Left forearm, Neck…"
-              placeholderTextColor={C.muted}
-              value={form.location}
-              onChangeText={v => setForm(f => ({ ...f, location: v }))}
-              editable={!saving}
-              returnKeyType="next"
-            />
-
-            {/* Status */}
-            <Text style={s.fieldLabel}>Status</Text>
-            <View style={s.statusRow}>
-              {STATUS_OPTIONS.map(opt => {
-                const active = form.status === opt;
-                const meta   = STATUS_COLOR[opt];
-                return (
-                  <TouchableOpacity
-                    key={opt}
-                    style={[
-                      s.statusPill,
-                      active
-                        ? { backgroundColor: meta.bg, borderColor: meta.text }
-                        : { backgroundColor: 'transparent', borderColor: C.border },
-                    ]}
-                    onPress={() => setForm(f => ({ ...f, status: opt }))}
-                    disabled={saving}
-                    activeOpacity={0.7}>
-                    <Text style={[s.statusPillText, { color: active ? meta.text : C.muted }]}>
-                      {opt}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+              <AppInput
+                label="Notes" optional
+                value={form.notes}
+                onChangeText={v => setForm(f => ({ ...f, notes: v }))}
+                placeholder="Any additional notes…"
+                multiline editable={!saving}
+              />
             </View>
 
-            {/* Notes */}
-            <Text style={s.fieldLabel}>Notes <Text style={s.optional}>(optional)</Text></Text>
-            <TextInput
-              style={[s.input, s.inputMulti]}
-              placeholder="Any additional notes…"
-              placeholderTextColor={C.muted}
-              value={form.notes}
-              onChangeText={v => setForm(f => ({ ...f, notes: v }))}
-              multiline
-              numberOfLines={3}
-              editable={!saving}
-            />
-
-            {/* Save button */}
-            <TouchableOpacity
-              style={[s.saveButton, saving && s.saveButtonDisabled]}
+            <AppButton
+              label="Save Lesion"
               onPress={handleSave}
-              activeOpacity={0.8}
-              disabled={saving}>
-              {saving ? (
-                <ActivityIndicator color={C.white} />
-              ) : (
-                <>
-                  <Feather name="save" size={18} color={C.white} />
-                  <Text style={s.saveButtonText}>Save Lesion</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              loading={saving}
+              disabled={saving}
+              icon="save"
+              size="lg"
+              style={s.saveBtn}
+            />
 
             <Text style={s.disclaimer}>
               For tracking only. Always consult a dermatologist for medical advice.
@@ -254,158 +194,128 @@ export default function CameraScreen() {
     );
   }
 
-  // ── Camera screen ────────────────────────────────────────────────────────────
+  // ── Live camera ─────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={s.container}>
+    <View style={s.cameraRoot}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       <CameraView
         ref={cameraRef}
-        style={s.camera}
+        style={StyleSheet.absoluteFill}
         facing={isFacingFront ? 'front' : 'back'}
         ratio="16:9"
       />
 
-      <View style={s.topControls}>
-        <TouchableOpacity style={s.circleBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Feather name="x" size={24} color={C.white} />
+      {/* Overlay: top bar */}
+      <View style={[s.camTopBar, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity style={s.camCircleBtn} onPress={() => router.back()} activeOpacity={0.8}>
+          <Feather name="x" size={22} color="#fff" />
         </TouchableOpacity>
-        <Text style={s.cameraHint}>Align the lesion in frame</Text>
-        <TouchableOpacity style={s.circleBtn} onPress={() => setIsFacingFront(v => !v)} activeOpacity={0.7}>
-          <Feather name="rotate-cw" size={24} color={C.white} />
+        <View style={s.camHintPill}>
+          <Feather name="crosshair" size={13} color="rgba(255,255,255,0.9)" />
+          <Text style={s.camHintTxt}>Align lesion in frame</Text>
+        </View>
+        <TouchableOpacity style={s.camCircleBtn} onPress={() => setIsFacingFront(v => !v)} activeOpacity={0.8}>
+          <Feather name="refresh-cw" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
 
-      <View style={[s.captureRow, { paddingBottom: insets.bottom + 16 }]}>
-        <TouchableOpacity style={s.captureButton} onPress={handleTakePhoto} activeOpacity={0.7}>
-          <View style={s.captureDot} />
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
-  );
-}
-
-// ── Reusable nav bar ─────────────────────────────────────────────────────────
-function NavBar({ navItems, activeNav, setActiveNav, insets, router }: any) {
-  return (
-    <View style={[s.navOuter, { paddingBottom: Math.max(insets.bottom, 16) }]} pointerEvents="box-none">
-      <View style={s.navPill}>
-        {navItems.map((item: any) => {
-          const active = activeNav === item.key;
-          return (
-            <TouchableOpacity
-              key={item.key}
-              style={[s.navIconCircle, active ? s.navIconCircleActive : s.navIconCircleIdle]}
-              onPress={() => {
-                if (item.key === 'home')    router.push('/');
-                else if (item.key === 'history') router.push('/history');
-                else if (item.key === 'profile') router.push('/profile');
-                else setActiveNav(item.key);
-              }}
-              activeOpacity={0.82}
-              accessibilityRole="button"
-              accessibilityLabel={item.a11y}
-              accessibilityState={{ selected: active }}>
-              <Feather name={item.icon} size={21} color={active ? C.navIconActive : C.navIconInactive} />
-            </TouchableOpacity>
-          );
-        })}
+      {/* Overlay: capture bar */}
+      <View style={[s.camBottomBar, { paddingBottom: insets.bottom + 24 }]}>
+        <View style={s.camShutter}>
+          <TouchableOpacity style={s.camShutterBtn} onPress={handleTakePhoto} activeOpacity={0.85}>
+            <View style={s.camShutterInner} />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  safe: { flex: 1, backgroundColor: C.bg },
 
   // Permission
-  permissionWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28, backgroundColor: C.bg },
-  permissionTitle: { fontSize: 20, fontWeight: '600', color: C.text, marginTop: 16, marginBottom: 8, textAlign: 'center' },
-  permissionText:  { fontSize: 14, color: C.muted, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-  permissionButton: { backgroundColor: C.blue, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 },
-  permissionButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-
-  // Camera
-  camera: { flex: 1 },
-  topControls: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 40 : 16,
-    paddingBottom: 16,
-  },
-  cameraHint: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
-  circleBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  permWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  permIconCircle: {
+    width: 88, height: 88, borderRadius: 28,
+    backgroundColor: C.surfaceAlt,
     alignItems: 'center', justifyContent: 'center',
+    marginBottom: 20,
   },
-  captureRow: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    alignItems: 'center', paddingTop: 16,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  captureButton: {
-    width: 70, height: 70, borderRadius: 35,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    borderWidth: 3, borderColor: '#fff',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  captureDot: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff' },
+  permTitle: { fontSize: 22, fontWeight: '800', color: C.text, textAlign: 'center', marginBottom: 10 },
+  permMsg:   { fontSize: 14, color: C.textHint, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
+  permBtn:   { width: '100%' },
 
   // Form
   formHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 12, paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
-    backgroundColor: C.bg,
+    paddingHorizontal: 16, paddingVertical: 12,
+    backgroundColor: C.surface,
+    borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  formBackBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  formBack: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: C.surfaceAlt,
+    alignItems: 'center', justifyContent: 'center',
+  },
   formHeaderTitle: { fontSize: 17, fontWeight: '700', color: C.text },
-  formScroll: { paddingHorizontal: 20, paddingTop: 4 },
-  thumbnail: {
-    width: '100%', height: 200, borderRadius: 16,
-    marginTop: 16, marginBottom: 20, backgroundColor: '#111',
+  formScroll: { paddingHorizontal: 16, paddingTop: 16 },
+  photo: {
+    width: '100%', height: 220, borderRadius: 16,
+    backgroundColor: '#111', marginBottom: 16,
   },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: C.text, marginBottom: 6 },
-  required: { color: C.urgentText },
-  optional: { color: C.muted, fontWeight: '400' },
-  input: {
-    backgroundColor: C.white, borderWidth: 1.5, borderColor: C.border,
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11,
-    fontSize: 15, color: C.text, marginBottom: 16,
+  formCard: {
+    backgroundColor: C.surface, borderRadius: 20,
+    padding: 18, borderWidth: 1, borderColor: C.border,
+    marginBottom: 16,
   },
-  inputMulti: { height: 90, textAlignVertical: 'top', paddingTop: 11 },
-  statusRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  statusPill: {
-    flex: 1, paddingVertical: 10, borderRadius: 10,
-    borderWidth: 1.5, alignItems: 'center', justifyContent: 'center',
+  statusLabel: { fontSize: 13, fontWeight: '600', color: C.text, marginBottom: 8 },
+  statusRow:   { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  statusChip: {
+    flex: 1, height: 44, borderRadius: 12,
+    borderWidth: 1.5, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: C.surface,
   },
-  statusPillText: { fontSize: 13, fontWeight: '700' },
-  saveButton: {
-    backgroundColor: C.blue, borderRadius: 14,
-    paddingVertical: 15, alignItems: 'center', justifyContent: 'center',
-    flexDirection: 'row', gap: 8, marginTop: 4, marginBottom: 16,
-  },
-  saveButtonDisabled: { opacity: 0.6 },
-  saveButtonText: { fontSize: 16, fontWeight: '700', color: C.white },
+  statusChipTxt: { fontSize: 13, fontWeight: '600', color: C.textHint },
+  saveBtn:    { marginBottom: 14 },
   disclaimer: {
-    fontSize: 12, color: C.muted, textAlign: 'center', lineHeight: 17, marginBottom: 8,
+    fontSize: 12, color: C.textHint, textAlign: 'center', lineHeight: 18, marginBottom: 8,
   },
 
-  // Nav bar
-  navOuter: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', paddingHorizontal: 20, paddingTop: 8 },
-  navPill: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', alignSelf: 'center',
-    backgroundColor: C.navPillBg, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 12,
-    gap: 22, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.05)',
-    ...(Platform.OS === 'ios'
-      ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12 }
-      : Platform.OS === 'android' ? { elevation: 6 }
-      : { boxShadow: '0 4px 20px rgba(0,0,0,0.07)' }),
+  // Camera
+  cameraRoot: { flex: 1, backgroundColor: '#000' },
+  camTopBar: {
+    position: 'absolute', top: 0, left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingBottom: 16,
   },
-  navIconCircle: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
-  navIconCircleIdle: { backgroundColor: C.navCircleInactive, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.04)' },
-  navIconCircleActive: { backgroundColor: C.navCircleActive, borderColor: C.navCircleActive },
+  camCircleBtn: {
+    width: 46, height: 46, borderRadius: 23,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+  },
+  camHintPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9999,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+  },
+  camHintTxt: { fontSize: 12, color: 'rgba(255,255,255,0.9)', fontWeight: '500' },
+  camBottomBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingTop: 20,
+  },
+  camShutter: { alignItems: 'center' },
+  camShutterBtn: {
+    width: 78, height: 78, borderRadius: 39,
+    borderWidth: 4, borderColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  camShutterInner: { width: 62, height: 62, borderRadius: 31, backgroundColor: '#fff' },
 });

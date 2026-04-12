@@ -37,7 +37,20 @@ export function NotificationBootstrap() {
 
   useEffect(() => {
     setNotificationPresentationDefaults();
-    if (!notificationsNativeSupported()) return;
+
+    // Water inbox sync runs on all platforms (pure AsyncStorage, no push needed)
+    void syncWaterIfLoggedIn();
+
+    const onAppState = (next: AppStateStatus) => {
+      if (next === 'active') {
+        void syncWaterIfLoggedIn();
+      }
+    };
+    const sub = AppState.addEventListener('change', onAppState);
+
+    if (!notificationsNativeSupported()) {
+      return () => sub.remove();
+    }
 
     let removeListeners: (() => void) | undefined;
 
@@ -46,16 +59,8 @@ export function NotificationBootstrap() {
       await ensureNotificationPermissions();
       await ensureWaterRemindersSchedule();
       await ensureUvDigestSchedule();
-      await syncWaterIfLoggedIn();
       removeListeners = registerInboxFromNotifications();
     })();
-
-    const onAppState = (next: AppStateStatus) => {
-      if (next === 'active') {
-        void syncWaterIfLoggedIn();
-      }
-    };
-    const sub = AppState.addEventListener('change', onAppState);
 
     return () => {
       removeListeners?.();

@@ -2,17 +2,22 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   StatusBar, Platform, Image, ActivityIndicator, Modal,
-  TextInput, KeyboardAvoidingView, Alert,
+  KeyboardAvoidingView, Alert,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { C } from '@/constants/theme';
+import { C, FontSize, Space, Radius, Shadow } from '@/constants/theme';
 import { useLesions, type Lesion, type LesionFields } from '@/hooks/useLesions';
 import { useAuth } from '@/hooks/useAuth';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { DisclaimerBox } from '@/components/ui/DisclaimerBox';
+import { AppButton } from '@/components/ui/AppButton';
+import { AppInput } from '@/components/ui/AppInput';
+import { BottomTabBar, type NavKey } from '@/components/ui/BottomTabBar';
 
-type NavKey = 'home' | 'scan' | 'history' | 'profile';
-type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
 type StatusKey = 'Stable' | 'Check' | 'Urgent';
 type FilterKey = 'all' | StatusKey;
 
@@ -62,7 +67,7 @@ function EditModal({
             style={em.headerBtn}
             hitSlop={10}>
             {saving
-              ? <ActivityIndicator size="small" color={C.blue} />
+              ? <ActivityIndicator size="small" color={C.primary} />
               : <Text style={[em.headerSave, (!fields.title.trim()) && { opacity: 0.4 }]}>Save</Text>}
           </TouchableOpacity>
         </View>
@@ -74,79 +79,73 @@ function EditModal({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
 
-            {/* Title */}
-            <Text style={em.label}>Title <Text style={em.required}>*</Text></Text>
-            <TextInput
-              style={em.input}
-              value={fields.title}
-              onChangeText={v => set('title', v)}
-              placeholder="e.g. Mole on left arm"
-              placeholderTextColor={C.muted}
-              editable={!saving}
-              returnKeyType="next"
-            />
+            <View style={em.formCard}>
+              <AppInput
+                label="Title"
+                required
+                value={fields.title}
+                onChangeText={v => set('title', v)}
+                placeholder="e.g. Mole on left arm"
+                editable={!saving}
+                returnKeyType="next"
+              />
 
-            {/* Description */}
-            <Text style={em.label}>Description</Text>
-            <TextInput
-              style={[em.input, em.inputMulti]}
-              value={fields.description}
-              onChangeText={v => set('description', v)}
-              placeholder="Describe the lesion…"
-              placeholderTextColor={C.muted}
-              multiline numberOfLines={3}
-              editable={!saving}
-            />
+              <AppInput
+                label="Description"
+                optional
+                multiline
+                value={fields.description}
+                onChangeText={v => set('description', v)}
+                placeholder="Describe the lesion…"
+                editable={!saving}
+              />
 
-            {/* Location */}
-            <Text style={em.label}>Body Location</Text>
-            <TextInput
-              style={em.input}
-              value={fields.location}
-              onChangeText={v => set('location', v)}
-              placeholder="e.g. Left forearm"
-              placeholderTextColor={C.muted}
-              editable={!saving}
-              returnKeyType="next"
-            />
+              <AppInput
+                label="Body Location"
+                optional
+                value={fields.location}
+                onChangeText={v => set('location', v)}
+                placeholder="e.g. Left forearm"
+                editable={!saving}
+                returnKeyType="next"
+              />
 
-            {/* Status */}
-            <Text style={em.label}>Status</Text>
-            <View style={em.statusRow}>
-              {STATUS_OPTIONS.map(opt => {
-                const active = fields.status === opt;
-                const meta   = statusMeta[opt];
-                return (
-                  <TouchableOpacity
-                    key={opt}
-                    style={[
-                      em.statusPill,
-                      active
-                        ? { backgroundColor: meta.bg, borderColor: meta.color }
-                        : { backgroundColor: 'transparent', borderColor: C.border },
-                    ]}
-                    onPress={() => set('status', opt)}
-                    disabled={saving}
-                    activeOpacity={0.7}>
-                    <Text style={[em.statusPillTxt, { color: active ? meta.color : C.muted }]}>
-                      {opt}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+              {/* Status Selector */}
+              <Text style={em.label}>Status</Text>
+              <View style={em.statusRow}>
+                {STATUS_OPTIONS.map(opt => {
+                  const active = fields.status === opt;
+                  const meta   = statusMeta[opt];
+                  return (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[
+                        em.statusPill,
+                        active
+                          ? { backgroundColor: meta.bg, borderColor: meta.color }
+                          : { backgroundColor: 'transparent', borderColor: C.border },
+                      ]}
+                      onPress={() => set('status', opt)}
+                      disabled={saving}
+                      activeOpacity={0.7}>
+                      <Text style={[em.statusPillTxt, { color: active ? meta.color : C.muted }]}>
+                        {opt}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <AppInput
+                label="Notes"
+                optional
+                multiline
+                value={fields.notes}
+                onChangeText={v => set('notes', v)}
+                placeholder="Any additional notes…"
+                editable={!saving}
+              />
             </View>
-
-            {/* Notes */}
-            <Text style={em.label}>Notes</Text>
-            <TextInput
-              style={[em.input, em.inputMulti]}
-              value={fields.notes}
-              onChangeText={v => set('notes', v)}
-              placeholder="Any additional notes…"
-              placeholderTextColor={C.muted}
-              multiline numberOfLines={3}
-              editable={!saving}
-            />
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -154,7 +153,7 @@ function EditModal({
   );
 }
 
-// ── Lesion Card ───────────────────────────────────────────────────────────────
+// ── Lesion Card (vertical layout) ────────────────────────────────────────────
 function LesionCard({
   item,
   onEdit,
@@ -164,55 +163,65 @@ function LesionCard({
   onEdit: (l: Lesion) => void;
   onDelete: (l: Lesion) => void;
 }) {
-  const meta = statusMeta[item.status] ?? statusMeta.Stable;
   return (
     <View style={hs.lesionCard}>
+      {/* Full-width image on top */}
       {item.imageUrl ? (
-        <Image source={{ uri: item.imageUrl }} style={hs.lesionImage} />
+        <Image source={{ uri: item.imageUrl }} style={hs.lesionImage} resizeMode="cover" />
       ) : (
         <View style={[hs.lesionImage, hs.lesionImagePlaceholder]}>
-          <Feather name="image" size={28} color={C.muted} />
+          <Feather name="image" size={32} color={C.muted} />
+          <Text style={hs.noImgTxt}>No image</Text>
         </View>
       )}
 
+      {/* Content below image */}
       <View style={hs.lesionContent}>
+        {/* Title row + badge */}
         <View style={hs.cardTop}>
           <Text style={hs.lesionLabel} numberOfLines={1}>{item.title || 'Untitled'}</Text>
-          <View style={[hs.statusBadge, { backgroundColor: meta.bg }]}>
-            <Text style={[hs.statusBadgeText, { color: meta.color }]}>{meta.label}</Text>
-          </View>
+          <StatusBadge status={item.status} size="sm" />
         </View>
 
         {!!item.description && (
           <Text style={hs.lesionDescription} numberOfLines={2}>{item.description}</Text>
         )}
 
-        {!!item.location && (
+        <View style={hs.metaRow}>
+          {!!item.location && (
+            <View style={hs.metaItem}>
+              <Feather name="map-pin" size={12} color={C.muted} />
+              <Text style={hs.metaText}>{item.location}</Text>
+            </View>
+          )}
           <View style={hs.metaItem}>
-            <Feather name="map-pin" size={12} color={C.muted} />
-            <Text style={hs.metaText}>{item.location}</Text>
+            <Feather name="calendar" size={12} color={C.muted} />
+            <Text style={hs.metaText}>
+              {new Date(item.createdAt).toLocaleDateString('en-US', {
+                day: 'numeric', month: 'short', year: 'numeric',
+              })}
+            </Text>
           </View>
-        )}
-
-        <View style={hs.metaItem}>
-          <Feather name="calendar" size={12} color={C.muted} />
-          <Text style={hs.metaText}>
-            {new Date(item.createdAt).toLocaleDateString('en-US', {
-              day: 'numeric', month: 'short', year: 'numeric',
-            })}
-          </Text>
         </View>
 
         {/* Action buttons */}
         <View style={hs.actions}>
-          <TouchableOpacity style={hs.editBtn} onPress={() => onEdit(item)} activeOpacity={0.7}>
-            <Feather name="edit-2" size={13} color={C.blue} />
-            <Text style={hs.editBtnTxt}>Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={hs.deleteBtn} onPress={() => onDelete(item)} activeOpacity={0.7}>
-            <Feather name="trash-2" size={13} color={C.urgentText} />
-            <Text style={hs.deleteBtnTxt}>Delete</Text>
-          </TouchableOpacity>
+          <AppButton
+            label="Edit"
+            icon="edit-2"
+            onPress={() => onEdit(item)}
+            variant="secondary"
+            size="sm"
+            style={hs.actionBtn}
+          />
+          <AppButton
+            label="Delete"
+            icon="trash-2"
+            onPress={() => onDelete(item)}
+            variant="danger"
+            size="sm"
+            style={hs.actionBtn}
+          />
         </View>
       </View>
     </View>
@@ -222,16 +231,15 @@ function LesionCard({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function HistoryScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { lesions, loading, error, fetchLesions, updateLesion, deleteLesion } = useLesions();
-  const [activeNav, setActiveNav]       = useState<NavKey>('history');
-  const [statusFilter, setStatusFilter] = useState<FilterKey>('all');
+  const [activeNav, setActiveNav]         = useState<NavKey>('history');
+  const [statusFilter, setStatusFilter]   = useState<FilterKey>('all');
   const [editingLesion, setEditingLesion] = useState<Lesion | null>(null);
-  const [saving, setSaving]             = useState(false);
+  const [saving, setSaving]               = useState(false);
 
   const userInitials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`.toUpperCase() || 'SH';
-  const userName = user?.firstName || 'User';
+  const userName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
 
   useFocusEffect(
     useCallback(() => { void fetchLesions(); }, [fetchLesions]),
@@ -284,15 +292,15 @@ export default function HistoryScreen() {
     [deleteLesion],
   );
 
-  const navItems: { key: NavKey; icon: FeatherIconName; a11y: string }[] = [
-    { key: 'home',    icon: 'home',   a11y: 'Home'    },
-    { key: 'scan',    icon: 'camera', a11y: 'Camera'  },
-    { key: 'history', icon: 'clock',  a11y: 'History' },
-    { key: 'profile', icon: 'user',   a11y: 'Profile' },
-  ];
+  const handleNav = (key: NavKey) => {
+    if      (key === 'scan')    router.push('/camera');
+    else if (key === 'home')    router.push('/');
+    else if (key === 'profile') router.push('/profile');
+    else setActiveNav(key);
+  };
 
   return (
-    <SafeAreaView style={hs.safe}>
+    <SafeAreaView style={hs.safe} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
 
       {/* Edit Modal */}
@@ -307,88 +315,97 @@ export default function HistoryScreen() {
 
       <ScrollView
         style={hs.scroll}
-        contentContainerStyle={[hs.scrollContent, { paddingBottom: 88 + insets.bottom }]}
+        contentContainerStyle={hs.scrollContent}
         showsVerticalScrollIndicator={false}>
 
-        {/* Header row */}
-        <View style={hs.headerTop}>
-          <View style={hs.headerLeft}>
-            <View style={hs.avatar}>
-              <Text style={hs.avatarTxt}>{userInitials}</Text>
-            </View>
-            <Text style={hs.helloTxt}>Hello, {userName}!</Text>
-          </View>
-          <TouchableOpacity style={hs.bell} onPress={() => router.push('/notifications')}
-            activeOpacity={0.75} accessibilityRole="button" accessibilityLabel="Notifications">
-            <Feather name="bell" size={22} color={C.text} />
-          </TouchableOpacity>
+        {/* Page Header */}
+        <PageHeader
+          initials={userInitials}
+          name={userName}
+          onBellPress={() => router.push('/notifications')}
+        />
+
+        {/* Title block */}
+        <View style={hs.titleBlock}>
+          <Text style={hs.pageTitle}>Lesion History</Text>
+          <Text style={hs.pageSubtitle}>Track all your logged lesions and their status</Text>
         </View>
 
-        <View style={hs.header}>
-          <Text style={hs.headerTitle}>Lesion History</Text>
-          <Text style={hs.headerSubtitle}>Track all your logged lesions and their status</Text>
-        </View>
-
-        {/* Stats */}
-        <View style={hs.statsSection}>
-          {(['all', 'Stable', 'Check', 'Urgent'] as const).map(key => (
-            <View key={key} style={hs.statItem}>
-              <Text style={[hs.statNumber, {
-                color: key === 'Stable' ? C.stableText
-                  : key === 'Check' ? C.checkText
-                  : key === 'Urgent' ? C.urgentText
-                  : C.blue,
-              }]}>
-                {key === 'all' ? lesions.length : lesions.filter(l => l.status === key).length}
-              </Text>
-              <Text style={hs.statLabel}>{key === 'all' ? 'Total' : key}</Text>
+        {/* Stats row — individual small cards */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={hs.statsRow}
+          style={hs.statsScroll}>
+          {([
+            { key: 'all',    label: 'Total',  count: lesions.length,                                  color: C.primary   },
+            { key: 'Stable', label: 'Stable', count: lesions.filter(l => l.status === 'Stable').length, color: C.stableText },
+            { key: 'Check',  label: 'Check',  count: lesions.filter(l => l.status === 'Check').length,  color: C.checkText  },
+            { key: 'Urgent', label: 'Urgent', count: lesions.filter(l => l.status === 'Urgent').length, color: C.urgentText },
+          ] as const).map(s => (
+            <View key={s.key} style={hs.statCard}>
+              <Text style={[hs.statNumber, { color: s.color }]}>{s.count}</Text>
+              <Text style={hs.statLabel}>{s.label}</Text>
             </View>
           ))}
-        </View>
+        </ScrollView>
 
-        {/* Filter pills */}
-        <View style={hs.filterSection}>
+        {/* Filter pills — horizontally scrollable */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={hs.filterRow}
+          style={hs.filterScroll}>
           {(['all', 'Stable', 'Check', 'Urgent'] as const).map(key => {
             const active = statusFilter === key;
             const bg = active
-              ? key === 'all' ? C.blue
-                : key === 'Stable' ? C.stableBg
-                : key === 'Check' ? C.checkBg
-                : C.urgentBg
-              : 'transparent';
+              ? key === 'all'    ? C.primary
+              : key === 'Stable' ? C.stableBg
+              : key === 'Check'  ? C.checkBg
+              : C.urgentBg
+              : C.surface;
             const color = active
-              ? key === 'all' ? C.white
-                : key === 'Stable' ? C.stableText
-                : key === 'Check' ? C.checkText
-                : C.urgentText
-              : C.text;
+              ? key === 'all'    ? C.white
+              : key === 'Stable' ? C.stableText
+              : key === 'Check'  ? C.checkText
+              : C.urgentText
+              : C.textSub;
+            const borderColor = active
+              ? key === 'all'    ? C.primary
+              : key === 'Stable' ? C.stableBg
+              : key === 'Check'  ? C.checkBg
+              : C.urgentBg
+              : C.border;
             return (
-              <TouchableOpacity key={key}
-                style={[hs.filterButton, { backgroundColor: bg }, active && hs.filterButtonActive]}
-                onPress={() => setStatusFilter(key)} activeOpacity={0.7}>
-                <Text style={[hs.filterButtonText, { color }]}>
+              <TouchableOpacity
+                key={key}
+                style={[hs.filterPill, { backgroundColor: bg, borderColor }]}
+                onPress={() => setStatusFilter(key)}
+                activeOpacity={0.7}>
+                <Text style={[hs.filterPillText, { color }]}>
                   {key === 'all' ? 'All' : key}
                 </Text>
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
 
-        {/* List */}
+        {/* List content */}
         {loading ? (
-          <View style={hs.emptyState}>
-            <ActivityIndicator size="large" color={C.blue} />
-            <Text style={[hs.emptyStateText, { marginTop: 12 }]}>Loading lesions…</Text>
-          </View>
+          <EmptyState
+            icon="clock"
+            title="Loading lesions…"
+            message="Please wait while we fetch your data."
+          />
         ) : error ? (
-          <View style={hs.emptyState}>
-            <Feather name="alert-circle" size={48} color={C.urgentText} />
-            <Text style={hs.emptyStateTitle}>Failed to load</Text>
-            <Text style={hs.emptyStateText}>{error}</Text>
-            <TouchableOpacity onPress={fetchLesions} style={hs.retryBtn}>
-              <Text style={hs.retryTxt}>Retry</Text>
-            </TouchableOpacity>
-          </View>
+          <EmptyState
+            icon="alert-circle"
+            title="Failed to load"
+            message={error}
+            actionLabel="Retry"
+            onAction={fetchLesions}
+            variant="error"
+          />
         ) : sortedAndFiltered.length > 0 ? (
           <>
             {sortedAndFiltered.map(l => (
@@ -399,48 +416,24 @@ export default function HistoryScreen() {
                 onDelete={handleDelete}
               />
             ))}
-            <View style={hs.disclaimer}>
-              <Feather name="alert-circle" size={16} color={C.amber} />
-              <Text style={hs.disclaimerText}>
-                For tracking only. Always consult a dermatologist for medical advice.
-              </Text>
+            <View style={hs.disclaimerWrap}>
+              <DisclaimerBox />
             </View>
           </>
         ) : (
-          <View style={hs.emptyState}>
-            <Feather name="inbox" size={48} color={C.muted} />
-            <Text style={hs.emptyStateTitle}>No lesions found</Text>
-            <Text style={hs.emptyStateText}>
-              {statusFilter === 'all'
+          <EmptyState
+            icon="inbox"
+            title="No lesions found"
+            message={
+              statusFilter === 'all'
                 ? 'Start scanning to add your first lesion.'
-                : `No ${statusFilter} lesions yet.`}
-            </Text>
-          </View>
+                : `No ${statusFilter} lesions yet.`
+            }
+          />
         )}
       </ScrollView>
 
-      {/* Nav bar */}
-      <View style={[hs.navOuter, { paddingBottom: Math.max(insets.bottom, 16) }]} pointerEvents="box-none">
-        <View style={hs.navPill}>
-          {navItems.map(item => {
-            const active = activeNav === item.key;
-            return (
-              <TouchableOpacity key={item.key}
-                style={[hs.navIconCircle, active ? hs.navIconCircleActive : hs.navIconCircleIdle]}
-                onPress={() => {
-                  if (item.key === 'scan')    router.push('/camera');
-                  else if (item.key === 'home')    router.push('/');
-                  else if (item.key === 'profile') router.push('/profile');
-                  else setActiveNav(item.key);
-                }}
-                activeOpacity={0.82} accessibilityRole="button"
-                accessibilityLabel={item.a11y} accessibilityState={{ selected: active }}>
-                <Feather name={item.icon} size={21} color={active ? C.navIconActive : C.navIconInactive} />
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
+      <BottomTabBar active={activeNav} onPress={handleNav} />
     </SafeAreaView>
   );
 }
@@ -452,126 +445,102 @@ const em = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
+    backgroundColor: C.surface,
   },
   headerBtn: { minWidth: 64 },
   headerTitle: { fontSize: 17, fontWeight: '700', color: C.text },
   headerCancel: { fontSize: 16, color: C.muted },
-  headerSave: { fontSize: 16, fontWeight: '700', color: C.blue, textAlign: 'right' },
-  scroll: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 40 },
-  label: { fontSize: 13, fontWeight: '600', color: C.text, marginBottom: 6, marginTop: 12 },
-  required: { color: C.urgentText },
-  input: {
-    backgroundColor: C.white, borderWidth: 1.5, borderColor: C.border,
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11,
-    fontSize: 15, color: C.text,
+  headerSave: { fontSize: 16, fontWeight: '700', color: C.primary, textAlign: 'right' },
+  scroll: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40 },
+  formCard: {
+    backgroundColor: C.surface,
+    borderRadius: Radius.xl,
+    padding: Space[5] - 2,
+    borderWidth: 1,
+    borderColor: C.border,
+    ...Shadow.sm,
   },
-  inputMulti: { height: 88, textAlignVertical: 'top', paddingTop: 11 },
-  statusRow: { flexDirection: 'row', gap: 10 },
+  label: { fontSize: FontSize.sm, fontWeight: '600', color: C.text, marginBottom: 8, marginTop: 4 },
+  statusRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   statusPill: {
-    flex: 1, paddingVertical: 10, borderRadius: 10,
+    flex: 1, paddingVertical: 10, borderRadius: Radius.full,
     borderWidth: 1.5, alignItems: 'center',
   },
-  statusPillTxt: { fontSize: 13, fontWeight: '700' },
+  statusPillTxt: { fontSize: FontSize.sm, fontWeight: '700' },
 });
 
 // ── History Screen Styles ────────────────────────────────────────────────────
 const hs = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg },
-  scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 8 },
+  safe:          { flex: 1, backgroundColor: C.bg },
+  scroll:        { flex: 1 },
+  scrollContent: { paddingBottom: 100 },
 
-  headerTop: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 22, paddingTop: 16, marginBottom: 14,
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  avatar: {
-    width: 56, height: 56, borderRadius: 28, backgroundColor: C.headerAvatarRing,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  avatarTxt: { fontSize: 17, fontWeight: '600', color: '#2E2608' },
-  helloTxt: { fontSize: 18, fontWeight: '500', color: C.text, letterSpacing: -0.2 },
-  bell: {
-    width: 48, height: 48, borderRadius: 24, backgroundColor: C.bellBg,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  titleBlock: { paddingHorizontal: Space[5], paddingTop: 4, paddingBottom: Space[4] },
+  pageTitle:   { fontSize: FontSize['3xl'], fontWeight: '800', color: C.text, letterSpacing: -0.5 },
+  pageSubtitle:{ fontSize: FontSize.sm, color: C.muted, marginTop: 4 },
 
-  header: { paddingHorizontal: 22, paddingTop: 8, paddingBottom: 20 },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: C.text, letterSpacing: -0.6, lineHeight: 34 },
-  headerSubtitle: { fontSize: 14, color: C.muted, marginTop: 6, lineHeight: 20 },
-
-  statsSection: {
-    flexDirection: 'row', justifyContent: 'space-around', marginHorizontal: 18,
-    marginBottom: 20, paddingVertical: 14, backgroundColor: C.white,
-    borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)',
+  // Stats
+  statsScroll: { marginBottom: Space[3] },
+  statsRow:    { paddingHorizontal: Space[5], gap: Space[3] },
+  statCard: {
+    backgroundColor: C.surface,
+    borderRadius: Radius.lg,
+    paddingVertical: Space[3],
+    paddingHorizontal: Space[4],
+    alignItems: 'center',
+    minWidth: 72,
+    borderWidth: 1,
+    borderColor: C.border,
+    ...Shadow.xs,
   },
-  statItem: { alignItems: 'center' },
-  statNumber: { fontSize: 20, fontWeight: '700' },
-  statLabel: { fontSize: 12, color: C.muted, marginTop: 4 },
+  statNumber: { fontSize: FontSize.xl, fontWeight: '800' },
+  statLabel:  { fontSize: FontSize.xs, color: C.muted, marginTop: 3, fontWeight: '600' },
 
-  filterSection: { flexDirection: 'row', paddingHorizontal: 18, paddingVertical: 12, gap: 8, marginBottom: 12 },
-  filterButton: {
-    flex: 1, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10,
-    borderWidth: 1.5, borderColor: C.border, alignItems: 'center',
+  // Filter pills
+  filterScroll: { marginBottom: Space[3] },
+  filterRow:    { paddingHorizontal: Space[5], gap: Space[2], paddingVertical: 4 },
+  filterPill: {
+    paddingHorizontal: Space[4],
+    paddingVertical: 9,
+    borderRadius: Radius.full,
+    borderWidth: 1.5,
   },
-  filterButtonActive: { borderWidth: 0 },
-  filterButtonText: { fontSize: 13, fontWeight: '600' },
+  filterPillText: { fontSize: FontSize.sm, fontWeight: '600' },
 
-  // Lesion card
+  // Lesion card — vertical
   lesionCard: {
-    marginHorizontal: 18, marginBottom: 16, borderRadius: 16, overflow: 'hidden',
-    backgroundColor: C.white, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)',
-    flexDirection: 'row',
+    marginHorizontal: Space[5],
+    marginBottom: Space[3],
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+    ...Shadow.sm,
   },
-  lesionImage: { width: 100, height: '100%', minHeight: 110, backgroundColor: '#f0f0f0' },
-  lesionImagePlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  lesionContent: { flex: 1, padding: 12 },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 },
-  lesionLabel: { fontSize: 15, fontWeight: '600', color: C.text, flex: 1, marginRight: 8 },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start' },
-  statusBadgeText: { fontSize: 11, fontWeight: '600' },
-  lesionDescription: { fontSize: 13, color: C.muted, lineHeight: 18, marginBottom: 6 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 },
-  metaText: { fontSize: 12, color: C.muted },
+  lesionImage: {
+    width: '100%',
+    height: 180,
+    backgroundColor: C.cardGray,
+  },
+  lesionImagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  noImgTxt: { fontSize: FontSize.sm, color: C.muted },
+  lesionContent: { padding: Space[4] },
+  cardTop: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: Space[2],
+  },
+  lesionLabel: { fontSize: FontSize.base, fontWeight: '700', color: C.text, flex: 1, marginRight: Space[2] },
+  lesionDescription: { fontSize: FontSize.sm, color: C.textSub, lineHeight: 19, marginBottom: Space[2] },
+  metaRow:  { flexDirection: 'row', flexWrap: 'wrap', gap: Space[3], marginBottom: Space[3] },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  metaText: { fontSize: FontSize.xs + 1, color: C.muted },
+  actions:  { flexDirection: 'row', gap: Space[2] },
+  actionBtn:{ flex: 1 },
 
-  actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  editBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
-    backgroundColor: C.blueLight, borderWidth: 1, borderColor: C.blue + '30',
-  },
-  editBtnTxt: { fontSize: 12, fontWeight: '600', color: C.blue },
-  deleteBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
-    backgroundColor: C.urgentBg, borderWidth: 1, borderColor: C.urgentText + '30',
-  },
-  deleteBtnTxt: { fontSize: 12, fontWeight: '600', color: C.urgentText },
-
-  emptyState: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 20 },
-  emptyStateTitle: { fontSize: 18, fontWeight: '600', color: C.text, marginTop: 16, marginBottom: 8 },
-  emptyStateText: { fontSize: 14, color: C.muted, textAlign: 'center', lineHeight: 20 },
-  retryBtn: { marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: C.blue, borderRadius: 10 },
-  retryTxt: { color: C.white, fontWeight: '600', fontSize: 14 },
-
-  disclaimer: {
-    marginHorizontal: 18, marginBottom: 16, paddingHorizontal: 14, paddingVertical: 12,
-    backgroundColor: '#FFF8E6', borderRadius: 12, borderLeftWidth: 4,
-    borderLeftColor: C.amber, flexDirection: 'row', gap: 10, alignItems: 'flex-start',
-  },
-  disclaimerText: { fontSize: 12, color: '#8B6914', flex: 1, lineHeight: 18 },
-
-  navOuter: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', paddingHorizontal: 20, paddingTop: 8 },
-  navPill: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', alignSelf: 'center',
-    backgroundColor: C.navPillBg, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 12,
-    gap: 22, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.05)',
-    ...(Platform.OS === 'ios'
-      ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12 }
-      : Platform.OS === 'android' ? { elevation: 6 }
-      : { boxShadow: '0 4px 20px rgba(0,0,0,0.07)' }),
-  },
-  navIconCircle: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
-  navIconCircleIdle: { backgroundColor: C.navCircleInactive, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.04)' },
-  navIconCircleActive: { backgroundColor: C.navCircleActive, borderColor: C.navCircleActive },
+  disclaimerWrap: { marginTop: Space[2] },
 });

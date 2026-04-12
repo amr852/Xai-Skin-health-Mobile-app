@@ -1,27 +1,20 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveInboxItem } from '@/lib/notificationInbox';
 import { uviToDisplay, uviToRiskMeta } from '@/lib/uvIndexMeta';
 import { getLocalDateKey } from '@/lib/vitalsDailyStorage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-async function getUvSigKey(): Promise<string> {
-  const raw = await AsyncStorage.getItem('authUser');
-  if (!raw) return '@skinhealth/last_uv_inbox_sig:guest';
-  const user = JSON.parse(raw);
-  const uid = user._id ?? user.id ?? 'guest';
-  return `@skinhealth/last_uv_inbox_sig:${uid}`;
-}
+// Single key — matches UV_SIG_KEY in notificationInbox.ts so clearInbox()
+// wipes it on logout, letting UV items regenerate after re-login.
+const UV_SIG_KEY = '@skinhealth/last_uv_inbox_sig';
 
 export async function notifyUvInboxIfChanged(uv: number): Promise<void> {
   const rounded = Math.round(uv * 10) / 10;
-  const sig = `${getLocalDateKey()}-${rounded}`;
+  const todaySig = `${getLocalDateKey()}-${rounded}`;
 
   try {
-    const key = await getUvSigKey();
-    const prev = await AsyncStorage.getItem(key);
-
-    if (prev === sig) return;
-
-    await AsyncStorage.setItem(key, sig);
+    const prev = await AsyncStorage.getItem(UV_SIG_KEY);
+    if (prev === todaySig) return; // already wrote this exact value today
+    await AsyncStorage.setItem(UV_SIG_KEY, todaySig);
   } catch {
     return;
   }
@@ -29,7 +22,7 @@ export async function notifyUvInboxIfChanged(uv: number): Promise<void> {
   const meta = uviToRiskMeta(uv);
 
   await saveInboxItem({
-    id: `uv-${Date.now()}`, 
+    id: `uv-${getLocalDateKey()}-${rounded}`, // stable per (day, value) — safe to re-write after clear
     title: 'UV index update',
     body: `UV is ${uviToDisplay(uv)} UVI (${meta.label}) near you.`,
     createdAt: new Date().toISOString(),

@@ -2,14 +2,16 @@ import { Platform, StyleSheet } from 'react-native';
 import { C } from '@/constants/theme';
 
 export const vitalStyles = StyleSheet.create({
-  vStatusDot: { width: 5, height: 5, borderRadius: 2.5 },
+  // ── Shared elements ───────────────────────────────────────────
+  vStatusDot: { width: 6, height: 6, borderRadius: 3 },
   vBarFill: { height: '100%', borderRadius: 99 },
 
+  // ── Stepper controls (+/–) ────────────────────────────────────
   vValueStepperRow: {
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    gap: 6,
+    gap: 8,
   },
   vStepperValueMid: {
     flex: 1,
@@ -18,46 +20,58 @@ export const vitalStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   vStepBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: C.white,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.70)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(26,26,24,0.12)',
   },
-  vStepBtnDisabled: { opacity: 0.38 },
+  vStepBtnDisabled: { opacity: 0.35 },
 
+  // ── Goal value display ────────────────────────────────────────
+  vVitalsGoalRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    flexShrink: 1,
+    justifyContent: 'center',
+    columnGap: 3,
+    rowGap: 2,
+  },
+  vVitalsGoalText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: C.text,
+    letterSpacing: -0.3,
+    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // WAVE CARD  (hydration — blush pink bg)
+  // ════════════════════════════════════════════════════════════════
   vBoxWave: {
     width: '100%',
     alignSelf: 'stretch',
-    backgroundColor: C.diagBlue,
-    borderRadius: 22,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    backgroundColor: C.diagBlue,   // Blush pink
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     ...(Platform.OS === 'ios'
-      ? {
-          shadowColor: '#1A1A18',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.08,
-          shadowRadius: 14,
-        }
-      : Platform.OS === 'android'
-        ? { elevation: 4 }
-        : { boxShadow: '0 4px 18px rgba(0,0,0,0.08)' }),
+      ? { shadowColor: '#9B3058', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 12 }
+      : Platform.OS === 'android' ? { elevation: 3 } : { boxShadow: '0 3px 14px rgba(155,48,88,0.08)' }),
   },
   vWaveHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: 10,
+    marginBottom: 10,
   },
   vWhiteIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: C.white,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.75)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -65,78 +79,81 @@ export const vitalStyles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '700',
-    color: C.diagLine,
+    color: C.text,
     letterSpacing: -0.2,
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   vWaveBig: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: C.diagLine,
+    fontSize: 30,
+    fontWeight: '800',
+    color: C.text,
     letterSpacing: -1,
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   vWaveUnit: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
-    color: 'rgba(26,26,24,0.45)',
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
-  vVitalsGoalRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    flexWrap: 'wrap',
-    flexShrink: 1,
-    justifyContent: 'center',
-    columnGap: 4,
-    rowGap: 2,
-  },
-  vVitalsGoalText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: C.text,
-    letterSpacing: -0.25,
+    color: C.textSub,
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   vWaveStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 2,
-    marginBottom: 4,
-    alignSelf: 'stretch',
+    marginTop: 10,
+    marginBottom: 8,
   },
   vWaveStatus: {
     flex: 1,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   vBarBgWave: {
-    height: 4,
+    height: 7,
     borderRadius: 99,
     overflow: 'hidden',
     width: '100%',
-    marginTop: 8,
+    backgroundColor: 'rgba(155,48,88,0.15)',
   },
 
+  // ── Sleep target label ─────────────────────────────────────────
+  vSleepWaveTargetCol: { justifyContent: 'flex-end', marginBottom: 2 },
+  vSleepWaveTarget: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: C.muted,
+    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
+  },
+  vSleepWaveTargetLbl: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: C.muted,
+    marginTop: 1,
+    letterSpacing: 0.3,
+    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
+  },
+  vSleepWaveSub: {
+    fontSize: 12,
+    color: C.textSub,
+    marginTop: 2,
+    lineHeight: 17,
+    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // SLEEP WAVE CARD  (lavender bg)
+  // ════════════════════════════════════════════════════════════════
   vBoxSleepWave: {
     width: '100%',
     alignSelf: 'stretch',
-    backgroundColor: C.purpleLight,
-    borderRadius: 22,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    backgroundColor: C.diagPurpleTint,   // Soft lavender
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     ...(Platform.OS === 'ios'
-      ? {
-          shadowColor: '#6050B8',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.12,
-          shadowRadius: 14,
-        }
-      : Platform.OS === 'android'
-        ? { elevation: 3 }
-        : { boxShadow: '0 4px 18px rgba(96,80,184,0.12)' }),
+      ? { shadowColor: '#6D28D9', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 12 }
+      : Platform.OS === 'android' ? { elevation: 3 } : { boxShadow: '0 3px 14px rgba(109,40,217,0.08)' }),
   },
   vSleepWaveValueRow: {
     flexDirection: 'row',
@@ -153,154 +170,123 @@ export const vitalStyles = StyleSheet.create({
     paddingHorizontal: 2,
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
-  vSleepWaveTargetCol: { justifyContent: 'flex-end', marginBottom: 2 },
-  vSleepWaveTarget: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: C.muted,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
-  vSleepWaveTargetLbl: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: C.muted,
-    marginTop: 2,
-    letterSpacing: 0.3,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
-  vSleepWaveSub: {
-    fontSize: 11,
-    color: C.muted,
-    marginTop: 2,
-    lineHeight: 15,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
   vBarBgSleepWave: {
-    height: 4,
+    height: 7,
     borderRadius: 99,
     overflow: 'hidden',
     width: '100%',
-    marginTop: 8,
+    backgroundColor: 'rgba(109,40,217,0.14)',
   },
 
+  // ════════════════════════════════════════════════════════════════
+  // SEGMENTS CARD  (warm peach bg — UV index)
+  // ════════════════════════════════════════════════════════════════
   vBoxSeg: {
     width: '100%',
     alignSelf: 'stretch',
-    backgroundColor: C.diagYellow,
-    borderRadius: 28,
-    paddingVertical: 18,
-    paddingHorizontal: 18,
+    backgroundColor: C.diagPeach,   // Warm peach
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     ...(Platform.OS === 'ios'
-      ? {
-          shadowColor: '#1A1A18',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.08,
-          shadowRadius: 14,
-        }
-      : Platform.OS === 'android'
-        ? { elevation: 4 }
-        : { boxShadow: '0 4px 18px rgba(0,0,0,0.08)' }),
+      ? { shadowColor: '#B84A3A', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 12 }
+      : Platform.OS === 'android' ? { elevation: 3 } : { boxShadow: '0 3px 14px rgba(184,74,58,0.08)' }),
   },
   vSegTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   vWhiteIconCircleSm: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: C.white,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.70)',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
   },
   vSegTitleBlock: { flex: 1, minWidth: 0 },
   vSegBig: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: C.diagLine,
+    fontSize: 28,
+    fontWeight: '800',
+    color: C.text,
     letterSpacing: -0.5,
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   vSegBigUnit: {
     fontSize: 14,
     fontWeight: '500',
-    color: 'rgba(26,26,24,0.45)',
+    color: C.textSub,
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   vSegSub: {
     fontSize: 13,
     fontWeight: '500',
-    color: 'rgba(26,26,24,0.5)',
+    color: C.textSub,
     marginTop: 2,
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
-  vSegStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, marginBottom: 12 },
+  vSegStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, marginBottom: 10 },
   vSegStatus: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
-  vSegBarRow: { flexDirection: 'row', gap: 8, width: '100%' },
+  vSegBarRow: { flexDirection: 'row', gap: 6, width: '100%' },
   vSegCell: { flex: 1, minWidth: 0, alignItems: 'center' },
   vSegChunk: {
     width: '100%',
     height: 10,
     borderRadius: 6,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   vSegLbl: {
     fontSize: 9,
     fontWeight: '600',
-    color: 'rgba(26,26,24,0.55)',
+    color: C.textSub,
     textAlign: 'center',
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   vBarBgSeg: {
-    height: 5,
+    height: 6,
     borderRadius: 99,
     overflow: 'hidden',
     width: '100%',
-    marginTop: 14,
+    marginTop: 12,
+    backgroundColor: 'rgba(184,74,58,0.15)',
   },
 
+  // ════════════════════════════════════════════════════════════════
+  // PANEL CARD  (lavender bg — sleep alternative)
+  // ════════════════════════════════════════════════════════════════
   vBoxPanel: {
     width: '100%',
     alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
     backgroundColor: C.diagPurpleTint,
-    borderRadius: 28,
+    borderRadius: 14,
     paddingVertical: 16,
     paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: C.diagPanelBorder,
     ...(Platform.OS === 'ios'
-      ? {
-          shadowColor: '#1A1A18',
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.06,
-          shadowRadius: 12,
-        }
-      : Platform.OS === 'android'
-        ? { elevation: 3 }
-        : { boxShadow: '0 3px 16px rgba(0,0,0,0.06)' }),
+      ? { shadowColor: '#6D28D9', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.07, shadowRadius: 10 }
+      : Platform.OS === 'android' ? { elevation: 3 } : { boxShadow: '0 3px 14px rgba(109,40,217,0.07)' }),
   },
   vPanelLeft: { flexShrink: 0 },
   vPanelMoonCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: C.white,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: 'rgba(255,255,255,0.75)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(96, 80, 184, 0.12)',
   },
   vPanelRight: { flex: 1, minWidth: 0 },
   vPanelTitleRow: { flexDirection: 'row', alignItems: 'center' },
   vPanelTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: C.diagLine,
+    color: C.text,
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   vPanelSleepRow: {
@@ -322,18 +308,18 @@ export const vitalStyles = StyleSheet.create({
   },
   vPanelDesc: {
     fontSize: 12,
-    color: C.muted,
-    marginTop: 6,
+    color: C.textSub,
+    marginTop: 5,
     lineHeight: 17,
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
-  vPanelPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  vPanelPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   vPanelPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    gap: 5,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
     borderRadius: 99,
   },
   vPanelPillDot: { width: 6, height: 6, borderRadius: 3 },
@@ -343,11 +329,11 @@ export const vitalStyles = StyleSheet.create({
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   vBarBgPanel: {
-    height: 4,
+    height: 6,
     borderRadius: 99,
     overflow: 'hidden',
     width: '100%',
-    backgroundColor: 'rgba(96, 80, 184, 0.15)',
-    marginTop: 14,
+    backgroundColor: 'rgba(109,40,217,0.14)',
+    marginTop: 12,
   },
 });

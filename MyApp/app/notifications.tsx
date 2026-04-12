@@ -5,18 +5,43 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Platform,
+  StatusBar,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Feather from '@expo/vector-icons/Feather';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { C } from '@/constants/theme';
+import { C, FontSize, Space, Radius } from '@/constants/theme';
 import {
   loadInbox,
   markAllInboxRead,
   markInboxItemRead,
   type InboxItem,
 } from '@/lib/notificationInbox';
+import { syncWaterInboxItems } from '@/lib/notificationScheduler';
+import { EmptyState } from '@/components/ui/EmptyState';
+
+// Accent color per notification type
+type NotifType = 'uv' | 'water' | 'lesion' | 'urgent' | 'default';
+
+function accentColor(type?: string): string {
+  switch (type) {
+    case 'uv':      return C.amber;
+    case 'water':   return '#3B82F6';
+    case 'lesion':  return C.primary;
+    case 'urgent':  return C.urgentText;
+    default:        return C.primary;
+  }
+}
+
+function inferType(item: InboxItem): NotifType {
+  const t = item.title?.toLowerCase() ?? '';
+  const b = item.body?.toLowerCase()  ?? '';
+  if (t.includes('uv') || b.includes('uv'))       return 'uv';
+  if (t.includes('water') || b.includes('water'))  return 'water';
+  if (t.includes('urgent') || b.includes('urgent'))return 'urgent';
+  if (t.includes('lesion') || b.includes('lesion'))return 'lesion';
+  return 'default';
+}
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -24,13 +49,12 @@ export default function NotificationsScreen() {
   const [items, setItems] = useState<InboxItem[]>([]);
 
   const refresh = useCallback(async () => {
+    await syncWaterInboxItems();
     setItems(await loadInbox());
   }, []);
 
   useFocusEffect(
-    useCallback(() => {
-      void refresh();
-    }, [refresh]),
+    useCallback(() => { void refresh(); }, [refresh]),
   );
 
   const onPressRow = async (id: string) => {
@@ -43,22 +67,29 @@ export default function NotificationsScreen() {
     await refresh();
   };
 
-  const unread = items.filter(i => !i.read).length;
-  const hasItems = items.length > 0;
+  const unread    = items.filter(i => !i.read).length;
+  const hasItems  = items.length > 0;
   const canReadAll = hasItems && unread > 0;
 
   return (
-    <SafeAreaView style={st.safe}>
-      <View style={[st.topBar, { paddingTop: Math.max(insets.top, 8) }]}>
+    <SafeAreaView style={st.safe} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
+      {/* ── Top Bar ── */}
+      <View style={st.topBar}>
+        {/* Back button */}
         <TouchableOpacity
           onPress={() => router.back()}
           style={st.backBtn}
           hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="Back">
-          <Feather name="arrow-left" size={22} color={C.text} />
+          <Feather name="arrow-left" size={20} color={C.text} />
         </TouchableOpacity>
+
+        {/* Title */}
         <Text style={st.topTitle}>Notifications</Text>
+
+        {/* Mark all read */}
         {hasItems ? (
           <TouchableOpacity
             onPress={canReadAll ? onReadAll : undefined}
@@ -66,65 +97,81 @@ export default function NotificationsScreen() {
             style={st.readAllBtn}
             hitSlop={6}
             accessibilityRole="button"
-            accessibilityLabel="Read all notifications"
+            accessibilityLabel="Mark all read"
             accessibilityState={{ disabled: !canReadAll }}>
-            <Text style={[st.readAllTxt, !canReadAll && st.readAllTxtDisabled]}>Read all</Text>
+            <Text style={[st.readAllTxt, !canReadAll && st.readAllTxtOff]}>
+              Mark all read
+            </Text>
           </TouchableOpacity>
         ) : (
           <View style={st.readAllPlaceholder} />
         )}
       </View>
 
-      {canReadAll ? (
-        <View style={st.readAllBannerWrap}>
-          <TouchableOpacity
-            style={st.readAllBanner}
-            onPress={onReadAll}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Read all notifications">
-            <Feather name="check-circle" size={20} color={C.white} />
-            <Text style={st.readAllBannerTxt}>Read all notifications</Text>
-          </TouchableOpacity>
+      {/* Unread count chip */}
+      {unread > 0 && (
+        <View style={st.unreadChipRow}>
+          <View style={st.unreadChip}>
+            <View style={st.unreadDot} />
+            <Text style={st.unreadChipTxt}>
+              {unread} unread notification{unread === 1 ? '' : 's'}
+            </Text>
+          </View>
         </View>
-      ) : null}
+      )}
 
       <ScrollView
         style={st.scroll}
-        contentContainerStyle={{ paddingBottom: 24 + insets.bottom }}
+        contentContainerStyle={{ paddingBottom: 32 + insets.bottom }}
         showsVerticalScrollIndicator={false}>
+
         {items.length === 0 ? (
-          <View style={st.empty}>
-            <Feather name="bell-off" size={40} color={C.muted} />
-            <Text style={st.emptyTitle}>No notifications yet</Text>
-            <Text style={st.emptySub}>
-              Reminders for water, UV digests, and live UV updates will appear here. Pull to refresh
-              on Home for the latest UV reading.
-            </Text>
-          </View>
+          <EmptyState
+            icon="bell-off"
+            title="No notifications yet"
+            message="Reminders for water, UV digests, and live UV updates will appear here."
+          />
         ) : (
-          items.map(item => (
-            <TouchableOpacity
-              key={item.id}
-              style={[st.row, !item.read && st.rowUnread]}
-              onPress={() => onPressRow(item.id)}
-              activeOpacity={0.7}>
-              <View style={[st.dot, { backgroundColor: item.read ? C.border : C.blue }]} />
-              <View style={st.rowBody}>
-                <Text style={[st.rowTitle, item.read && st.rowTitleRead]}>{item.title}</Text>
-                <Text style={st.rowBodyTxt}>{item.body}</Text>
-                <Text style={st.rowTime}>
-                  {new Date(item.createdAt).toLocaleString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                </Text>
-              </View>
-              <Feather name="chevron-right" size={18} color={C.muted} />
-            </TouchableOpacity>
-          ))
+          items.map((item, idx) => {
+            const type   = inferType(item);
+            const accent = accentColor(type);
+            const isUnread = !item.read;
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  st.row,
+                  isUnread && st.rowUnread,
+                  idx === items.length - 1 && st.rowLast,
+                ]}
+                onPress={() => onPressRow(item.id)}
+                activeOpacity={0.72}>
+                {/* Colored left accent bar */}
+                <View style={[st.accentBar, { backgroundColor: accent }]} />
+
+                {/* Content */}
+                <View style={st.rowContent}>
+                  <View style={st.rowTop}>
+                    <Text style={[st.rowTitle, !isUnread && st.rowTitleRead]} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    {isUnread && <View style={st.unreadBadge} />}
+                  </View>
+                  <Text style={st.rowBody} numberOfLines={2}>{item.body}</Text>
+                  <Text style={st.rowTime}>
+                    {new Date(item.createdAt).toLocaleString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })}
+                  </Text>
+                </View>
+
+                <Feather name="chevron-right" size={16} color={C.muted} style={st.chevron} />
+              </TouchableOpacity>
+            );
+          })
         )}
       </ScrollView>
     </SafeAreaView>
@@ -133,107 +180,136 @@ export default function NotificationsScreen() {
 
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
+
+  // Top bar
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingBottom: 12,
+    paddingHorizontal: Space[3],
+    paddingVertical: Space[2],
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: C.border,
+    backgroundColor: C.surface,
   },
-  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  backBtn: {
+    width: 40, height: 40,
+    borderRadius: Radius.full,
+    borderWidth: 1, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
   topTitle: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 17,
+    fontSize: FontSize.md,
     fontWeight: '700',
     color: C.text,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
-  readAllBtn: { minWidth: 72, alignItems: 'flex-end', paddingVertical: 8 },
-  readAllPlaceholder: { minWidth: 72 },
+  readAllBtn: {
+    minWidth: 90,
+    alignItems: 'flex-end',
+    paddingVertical: Space[2],
+  },
+  readAllPlaceholder: { minWidth: 90 },
   readAllTxt: {
-    fontSize: 14,
+    fontSize: FontSize.sm,
     fontWeight: '600',
-    color: C.blue,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
+    color: C.primary,
   },
-  readAllTxtDisabled: {
+  readAllTxtOff: {
     color: C.muted,
     fontWeight: '500',
   },
-  readAllBannerWrap: {
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 4,
+
+  // Unread chip
+  unreadChipRow: {
+    paddingHorizontal: Space[5],
+    paddingTop: Space[3],
+    paddingBottom: Space[1],
   },
-  readAllBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: C.blue,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 14,
+  unreadChip: {
+    flexDirection: 'row', alignItems: 'center', gap: Space[2],
+    alignSelf: 'flex-start',
+    backgroundColor: C.primaryLight,
+    borderRadius: Radius.full,
+    paddingHorizontal: Space[3],
+    paddingVertical: 6,
   },
-  readAllBannerTxt: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: C.white,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
+  unreadDot: {
+    width: 7, height: 7, borderRadius: Radius.full,
+    backgroundColor: C.primary,
   },
-  scroll: { flex: 1 },
-  empty: {
-    paddingHorizontal: 32,
-    paddingTop: 48,
-    alignItems: 'center',
-  },
-  emptyTitle: {
-    marginTop: 16,
-    fontSize: 17,
+  unreadChipTxt: {
+    fontSize: FontSize.xs + 1,
     fontWeight: '600',
-    color: C.text,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
+    color: C.primary,
   },
-  emptySub: {
-    marginTop: 8,
-    fontSize: 13,
-    color: C.muted,
-    textAlign: 'center',
-    lineHeight: 19,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
-  },
+
+  scroll: { flex: 1 },
+
+  // Notification rows
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 18,
+    alignItems: 'stretch',
+    backgroundColor: C.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: C.border,
-    gap: 12,
+    minHeight: 72,
   },
-  rowUnread: { backgroundColor: 'rgba(30, 122, 174, 0.06)' },
-  dot: { width: 8, height: 8, borderRadius: 4, marginTop: 4 },
-  rowBody: { flex: 1, minWidth: 0 },
+  rowUnread: {
+    // Slightly tinted background for unread rows
+    backgroundColor: `rgba(155, 48, 88, 0.04)`,
+  },
+  rowLast: {
+    borderBottomWidth: 0,
+  },
+
+  // Left colored accent bar
+  accentBar: {
+    width: 4,
+    borderRadius: 0,
+    alignSelf: 'stretch',
+  },
+
+  rowContent: {
+    flex: 1,
+    paddingVertical: Space[3] + 1,
+    paddingLeft: Space[3],
+    paddingRight: Space[2],
+    minWidth: 0,
+  },
+  rowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space[2],
+    marginBottom: 4,
+  },
   rowTitle: {
-    fontSize: 15,
+    flex: 1,
+    fontSize: FontSize.base,
     fontWeight: '700',
     color: C.text,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
-  rowTitleRead: { fontWeight: '600', color: C.muted },
-  rowBodyTxt: {
-    marginTop: 4,
-    fontSize: 13,
+  rowTitleRead: {
+    fontWeight: '500',
+    color: C.textSub,
+  },
+  unreadBadge: {
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: C.primary,
+  },
+  rowBody: {
+    fontSize: FontSize.sm,
     color: C.muted,
-    lineHeight: 18,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
+    lineHeight: 19,
+    marginBottom: 5,
   },
   rowTime: {
-    marginTop: 6,
-    fontSize: 11,
+    fontSize: FontSize.xs,
     color: C.muted,
-    fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
+  },
+
+  chevron: {
+    alignSelf: 'center',
+    marginRight: Space[3],
   },
 });

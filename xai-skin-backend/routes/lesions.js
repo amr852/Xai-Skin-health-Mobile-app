@@ -38,9 +38,10 @@ const verifyToken = (req, res, next) => {
 
 // Upload lesion image — must be before /:id routes
 router.post('/upload-image', verifyToken, (req, res) => {
-  upload.single('image')(req, res, (err) => {
+  upload.single('image')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message || 'Upload failed' });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     res.status(200).json({ url: `${baseUrl}/uploads/${req.file.filename}` });
   });
