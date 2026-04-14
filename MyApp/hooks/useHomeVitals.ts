@@ -131,5 +131,24 @@ export function useHomeVitals() {
     ];
   }, [waterLiters, sleepHours]);
 
-  return { vitals };
+  const addWater = useCallback((liters: number) => {
+    setWaterLiters(w => {
+      const next = Math.max(0, Math.min(WATER_TARGET_L, Math.round((w + liters) * 100) / 100));
+      return next;
+    });
+  }, []);
+  const resetWater = useCallback(() => setWaterLiters(0), []);
+  const setSleep  = useCallback((hours: number) => {
+    setSleepHours(Math.max(0, Math.min(SLEEP_TARGET_H, Math.round(hours * 100) / 100)));
+  }, []);
+  const addSleep = useCallback((hours: number) => {
+    setSleepHours(h => Math.max(0, Math.min(SLEEP_TARGET_H, Math.round((h + hours) * 100) / 100)));
+  }, []);
+  const resetSleep = useCallback(() => setSleepHours(0), []);
+
+  return {
+    vitals,
+    waterLiters, sleepHours,
+    addWater, resetWater, setSleep, addSleep, resetSleep,
+  };
 }

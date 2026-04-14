@@ -22,6 +22,14 @@ export async function ensureWaterRemindersSchedule(): Promise<void> {}
 
 export async function ensureUvDigestSchedule(): Promise<void> {}
 
+export async function ensureSunProtectionSchedule(): Promise<void> {}
+
+export async function syncSunReminders(_appliedCount: number): Promise<void> {
+  void _appliedCount;
+}
+
+export async function syncSunInboxItems(): Promise<void> {}
+
 export function registerInboxFromNotifications(): () => void {
   return () => {};
 }

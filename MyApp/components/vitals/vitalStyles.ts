@@ -20,14 +20,22 @@ export const vitalStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   vStepBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.70)',
+    width: 38,
+    height: 38,
+    borderRadius: 19,          // full circle
+    backgroundColor: 'rgba(255,255,255,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.09)',
+    // subtle shadow so it lifts off the card background
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.10, shadowRadius: 4 },
+      android: { elevation: 2 },
+      default: {},
+    }),
   },
-  vStepBtnDisabled: { opacity: 0.35 },
+  vStepBtnDisabled: { opacity: 0.30 },
 
   // ── Goal value display ────────────────────────────────────────
   vVitalsGoalRow: {
@@ -70,10 +78,12 @@ export const vitalStyles = StyleSheet.create({
   vWhiteIconCircle: {
     width: 40,
     height: 40,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.75)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.88)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
   },
   vWaveTitle: {
     flex: 1,
@@ -110,7 +120,7 @@ export const vitalStyles = StyleSheet.create({
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   vBarBgWave: {
-    height: 7,
+    height: 8,
     borderRadius: 99,
     overflow: 'hidden',
     width: '100%',
@@ -171,7 +181,7 @@ export const vitalStyles = StyleSheet.create({
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   vBarBgSleepWave: {
-    height: 7,
+    height: 8,
     borderRadius: 99,
     overflow: 'hidden',
     width: '100%',
@@ -196,11 +206,13 @@ export const vitalStyles = StyleSheet.create({
   vWhiteIconCircleSm: {
     width: 44,
     height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.70)',
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.88)',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
   },
   vSegTitleBlock: { flex: 1, minWidth: 0 },
   vSegBig: {
@@ -233,8 +245,8 @@ export const vitalStyles = StyleSheet.create({
   vSegCell: { flex: 1, minWidth: 0, alignItems: 'center' },
   vSegChunk: {
     width: '100%',
-    height: 10,
-    borderRadius: 6,
+    height: 12,
+    borderRadius: 7,
     marginBottom: 6,
   },
   vSegLbl: {
@@ -277,9 +289,11 @@ export const vitalStyles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: 'rgba(255,255,255,0.75)',
+    backgroundColor: 'rgba(255,255,255,0.88)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.6)',
   },
   vPanelRight: { flex: 1, minWidth: 0 },
   vPanelTitleRow: { flexDirection: 'row', alignItems: 'center' },
@@ -329,7 +343,7 @@ export const vitalStyles = StyleSheet.create({
     fontFamily: Platform.select({ ios: undefined, android: 'sans-serif', default: undefined }),
   },
   vBarBgPanel: {
-    height: 6,
+    height: 8,
     borderRadius: 99,
     overflow: 'hidden',
     width: '100%',

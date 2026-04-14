@@ -7,7 +7,8 @@ export default function AuthLayout() {
       initialRouteName="welcome"
       screenOptions={{
         headerShown: false,
-        animationEnabled: false,
+        animation: 'slide_from_right',
+        animationDuration: 240,
       }}
     >
       <Stack.Screen

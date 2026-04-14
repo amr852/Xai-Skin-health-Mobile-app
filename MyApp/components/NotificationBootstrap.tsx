@@ -5,12 +5,14 @@ import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import {
   ensureNotificationPermissions,
+  ensureSunProtectionSchedule,
   ensureUvDigestSchedule,
   ensureWaterRemindersSchedule,
   notificationsNativeSupported,
   registerInboxFromNotifications,
   setNotificationPresentationDefaults,
   setupAndroidChannels,
+  syncSunInboxItems,
   syncWaterInboxItems,
 } from '@/lib/notificationScheduler';
 
@@ -19,6 +21,12 @@ async function syncWaterIfLoggedIn(): Promise<void> {
   const raw = await AsyncStorage.getItem('authUser');
   if (!raw) return; // not logged in yet — skip, home screen will trigger after login
   await syncWaterInboxItems();
+}
+
+async function syncSunIfLoggedIn(): Promise<void> {
+  const raw = await AsyncStorage.getItem('authUser');
+  if (!raw) return;
+  await syncSunInboxItems();
 }
 
 export function NotificationBootstrap() {
@@ -40,10 +48,12 @@ export function NotificationBootstrap() {
 
     // Water inbox sync runs on all platforms (pure AsyncStorage, no push needed)
     void syncWaterIfLoggedIn();
+    void syncSunIfLoggedIn();
 
     const onAppState = (next: AppStateStatus) => {
       if (next === 'active') {
         void syncWaterIfLoggedIn();
+        void syncSunIfLoggedIn();
       }
     };
     const sub = AppState.addEventListener('change', onAppState);
@@ -59,6 +69,7 @@ export function NotificationBootstrap() {
       await ensureNotificationPermissions();
       await ensureWaterRemindersSchedule();
       await ensureUvDigestSchedule();
+      await ensureSunProtectionSchedule();
       removeListeners = registerInboxFromNotifications();
     })();
 

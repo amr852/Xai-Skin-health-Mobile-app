@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   StatusBar, Platform, Image, ActivityIndicator, Modal,
-  KeyboardAvoidingView, Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,10 +13,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SkeletonLesionRow } from '@/components/ui/Skeleton';
 import { DisclaimerBox } from '@/components/ui/DisclaimerBox';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
 import { BottomTabBar, type NavKey } from '@/components/ui/BottomTabBar';
+import { useAppAlert } from '@/components/ui/AppAlert';
+import { countUnread, subscribeInboxChange } from '@/lib/notificationInbox';
 
 type StatusKey = 'Stable' | 'Check' | 'Urgent';
 type FilterKey = 'all' | StatusKey;
@@ -154,6 +157,12 @@ function EditModal({
 }
 
 // ── Lesion Card (vertical layout) ────────────────────────────────────────────
+const statusAccent: Record<string, string> = {
+  Stable: C.stableText,
+  Check:  C.checkText,
+  Urgent: C.urgentText,
+};
+
 function LesionCard({
   item,
   onEdit,
@@ -163,65 +172,75 @@ function LesionCard({
   onEdit: (l: Lesion) => void;
   onDelete: (l: Lesion) => void;
 }) {
+  const accentColor = statusAccent[item.status] ?? C.primary;
   return (
     <View style={hs.lesionCard}>
-      {/* Full-width image on top */}
-      {item.imageUrl ? (
-        <Image source={{ uri: item.imageUrl }} style={hs.lesionImage} resizeMode="cover" />
-      ) : (
-        <View style={[hs.lesionImage, hs.lesionImagePlaceholder]}>
-          <Feather name="image" size={32} color={C.muted} />
-          <Text style={hs.noImgTxt}>No image</Text>
-        </View>
-      )}
+      {/* Left status accent bar */}
+      <View style={[hs.cardAccentBar, { backgroundColor: accentColor }]} />
 
-      {/* Content below image */}
-      <View style={hs.lesionContent}>
-        {/* Title row + badge */}
-        <View style={hs.cardTop}>
-          <Text style={hs.lesionLabel} numberOfLines={1}>{item.title || 'Untitled'}</Text>
-          <StatusBadge status={item.status} size="sm" />
-        </View>
-
-        {!!item.description && (
-          <Text style={hs.lesionDescription} numberOfLines={2}>{item.description}</Text>
+      <View style={hs.cardBody}>
+        {/* Full-width image on top */}
+        {item.imageUrl ? (
+          <Image source={{ uri: item.imageUrl }} style={hs.lesionImage} resizeMode="cover" />
+        ) : (
+          <View style={[hs.lesionImage, hs.lesionImagePlaceholder]}>
+            <View style={hs.noImgIconBg}>
+              <Feather name="camera-off" size={24} color={C.muted} />
+            </View>
+            <Text style={hs.noImgTxt}>No image captured</Text>
+          </View>
         )}
 
-        <View style={hs.metaRow}>
-          {!!item.location && (
-            <View style={hs.metaItem}>
-              <Feather name="map-pin" size={12} color={C.muted} />
-              <Text style={hs.metaText}>{item.location}</Text>
-            </View>
-          )}
-          <View style={hs.metaItem}>
-            <Feather name="calendar" size={12} color={C.muted} />
-            <Text style={hs.metaText}>
-              {new Date(item.createdAt).toLocaleDateString('en-US', {
-                day: 'numeric', month: 'short', year: 'numeric',
-              })}
-            </Text>
+        {/* Content below image */}
+        <View style={hs.lesionContent}>
+          {/* Title row + badge */}
+          <View style={hs.cardTop}>
+            <Text style={hs.lesionLabel} numberOfLines={1}>{item.title || 'Untitled'}</Text>
+            <StatusBadge status={item.status} size="sm" />
           </View>
-        </View>
 
-        {/* Action buttons */}
-        <View style={hs.actions}>
-          <AppButton
-            label="Edit"
-            icon="edit-2"
-            onPress={() => onEdit(item)}
-            variant="secondary"
-            size="sm"
-            style={hs.actionBtn}
-          />
-          <AppButton
-            label="Delete"
-            icon="trash-2"
-            onPress={() => onDelete(item)}
-            variant="danger"
-            size="sm"
-            style={hs.actionBtn}
-          />
+          {!!item.description && (
+            <Text style={hs.lesionDescription} numberOfLines={2}>{item.description}</Text>
+          )}
+
+          <View style={hs.metaRow}>
+            {!!item.location && (
+              <View style={hs.metaItem}>
+                <View style={[hs.metaIconBg, { backgroundColor: C.primaryLight }]}>
+                  <Feather name="map-pin" size={10} color={C.primary} />
+                </View>
+                <Text style={hs.metaText}>{item.location}</Text>
+              </View>
+            )}
+            <View style={hs.metaItem}>
+              <View style={[hs.metaIconBg, { backgroundColor: C.surfaceAlt }]}>
+                <Feather name="calendar" size={10} color={C.textSub} />
+              </View>
+              <Text style={hs.metaText}>
+                {new Date(item.createdAt).toLocaleDateString('en-US', {
+                  day: 'numeric', month: 'short', year: 'numeric',
+                })}
+              </Text>
+            </View>
+          </View>
+
+          {/* Action buttons */}
+          <View style={hs.actions}>
+            <TouchableOpacity
+              style={hs.actionBtnEdit}
+              onPress={() => onEdit(item)}
+              activeOpacity={0.75}>
+              <Feather name="edit-2" size={13} color={C.primary} />
+              <Text style={hs.actionBtnEditTxt}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={hs.actionBtnDelete}
+              onPress={() => onDelete(item)}
+              activeOpacity={0.75}>
+              <Feather name="trash-2" size={13} color={C.urgentText} />
+              <Text style={hs.actionBtnDeleteTxt}>Delete</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </View>
@@ -237,12 +256,27 @@ export default function HistoryScreen() {
   const [statusFilter, setStatusFilter]   = useState<FilterKey>('all');
   const [editingLesion, setEditingLesion] = useState<Lesion | null>(null);
   const [saving, setSaving]               = useState(false);
+  const [unreadCount, setUnreadCount]     = useState(0);
+  const { showAlert, alertNode }          = useAppAlert();
 
   const userInitials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`.toUpperCase() || 'SH';
   const userName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
 
   useFocusEffect(
     useCallback(() => { void fetchLesions(); }, [fetchLesions]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      const upd = async () => {
+        const count = await countUnread();
+        if (alive) setUnreadCount(count);
+      };
+      void upd();
+      const unsub = subscribeInboxChange(() => void upd());
+      return () => { alive = false; unsub(); };
+    }, []),
   );
 
   const sortedAndFiltered = useMemo(() => {
@@ -260,7 +294,7 @@ export default function HistoryScreen() {
         await updateLesion(editingLesion._id, fields);
         setEditingLesion(null);
       } catch (e: any) {
-        Alert.alert('Error', e.message || 'Failed to update lesion');
+        showAlert({ title: 'Update Failed', message: e.message || 'Failed to update lesion.', variant: 'error' });
       } finally {
         setSaving(false);
       }
@@ -270,10 +304,11 @@ export default function HistoryScreen() {
 
   const handleDelete = useCallback(
     (lesion: Lesion) => {
-      Alert.alert(
-        'Delete Lesion',
-        `Delete "${lesion.title}"? This cannot be undone.`,
-        [
+      showAlert({
+        title: 'Delete Lesion',
+        message: `"${lesion.title}" will be permanently removed. This cannot be undone.`,
+        variant: 'confirm',
+        buttons: [
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Delete',
@@ -282,14 +317,14 @@ export default function HistoryScreen() {
               try {
                 await deleteLesion(lesion._id);
               } catch (e: any) {
-                Alert.alert('Error', e.message || 'Failed to delete lesion');
+                showAlert({ title: 'Delete Failed', message: e.message || 'Failed to delete lesion.', variant: 'error' });
               }
             },
           },
         ],
-      );
+      });
     },
-    [deleteLesion],
+    [deleteLesion, showAlert],
   );
 
   const handleNav = (key: NavKey) => {
@@ -302,6 +337,8 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView style={hs.safe} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
+
+      {alertNode}
 
       {/* Edit Modal */}
       {editingLesion && (
@@ -322,30 +359,41 @@ export default function HistoryScreen() {
         <PageHeader
           initials={userInitials}
           name={userName}
+          unreadCount={unreadCount}
           onBellPress={() => router.push('/notifications')}
+          onAvatarPress={() => router.push('/profile')}
         />
 
         {/* Title block */}
         <View style={hs.titleBlock}>
-          <Text style={hs.pageTitle}>Lesion History</Text>
-          <Text style={hs.pageSubtitle}>Track all your logged lesions and their status</Text>
+          <View style={hs.titleRow}>
+            <View style={hs.titleAccent} />
+            <View style={hs.titleIconBg}>
+              <Feather name="file-text" size={14} color={C.primary} />
+            </View>
+            <Text style={hs.pageTitle}>Lesion Records</Text>
+          </View>
+          <Text style={hs.pageSubtitle}>Track all your logged lesions and their clinical status</Text>
         </View>
 
-        {/* Stats row — individual small cards */}
+        {/* Stats row — coloured medical-style cards */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={hs.statsRow}
           style={hs.statsScroll}>
           {([
-            { key: 'all',    label: 'Total',  count: lesions.length,                                  color: C.primary   },
-            { key: 'Stable', label: 'Stable', count: lesions.filter(l => l.status === 'Stable').length, color: C.stableText },
-            { key: 'Check',  label: 'Check',  count: lesions.filter(l => l.status === 'Check').length,  color: C.checkText  },
-            { key: 'Urgent', label: 'Urgent', count: lesions.filter(l => l.status === 'Urgent').length, color: C.urgentText },
-          ] as const).map(s => (
-            <View key={s.key} style={hs.statCard}>
-              <Text style={[hs.statNumber, { color: s.color }]}>{s.count}</Text>
-              <Text style={hs.statLabel}>{s.label}</Text>
+            { key: 'all',    label: 'Total',  count: lesions.length,                                    icon: 'layers'      as const, color: C.primary,    bg: C.primaryLight, border: C.border      },
+            { key: 'Stable', label: 'Stable', count: lesions.filter(l => l.status === 'Stable').length, icon: 'check-circle' as const, color: C.stableText, bg: C.stableBg,    border: C.stableBorder },
+            { key: 'Check',  label: 'Check',  count: lesions.filter(l => l.status === 'Check').length,  icon: 'eye'          as const, color: C.checkText,  bg: C.checkBg,     border: C.checkBorder  },
+            { key: 'Urgent', label: 'Urgent', count: lesions.filter(l => l.status === 'Urgent').length, icon: 'alert-circle' as const, color: C.urgentText, bg: C.urgentBg,    border: C.urgentBorder },
+          ] as const).map(item => (
+            <View key={item.key} style={[hs.statCard, { backgroundColor: item.bg, borderColor: item.border }]}>
+              <View style={[hs.statIconBg, { backgroundColor: item.color + '22' }]}>
+                <Feather name={item.icon} size={14} color={item.color} />
+              </View>
+              <Text style={[hs.statNumber, { color: item.color }]}>{item.count}</Text>
+              <Text style={[hs.statLabel, { color: item.color }]}>{item.label}</Text>
             </View>
           ))}
         </ScrollView>
@@ -391,12 +439,12 @@ export default function HistoryScreen() {
         </ScrollView>
 
         {/* List content */}
-        {loading ? (
-          <EmptyState
-            icon="clock"
-            title="Loading lesions…"
-            message="Please wait while we fetch your data."
-          />
+        {loading && lesions.length === 0 ? (
+          <>
+            <SkeletonLesionRow />
+            <SkeletonLesionRow />
+            <SkeletonLesionRow />
+          </>
         ) : error ? (
           <EmptyState
             icon="alert-circle"
@@ -473,28 +521,40 @@ const em = StyleSheet.create({
 const hs = StyleSheet.create({
   safe:          { flex: 1, backgroundColor: C.bg },
   scroll:        { flex: 1 },
-  scrollContent: { paddingBottom: 100 },
+  scrollContent: { paddingBottom: 110 },
 
+  // Title block
   titleBlock: { paddingHorizontal: Space[5], paddingTop: 4, paddingBottom: Space[4] },
-  pageTitle:   { fontSize: FontSize['3xl'], fontWeight: '800', color: C.text, letterSpacing: -0.5 },
-  pageSubtitle:{ fontSize: FontSize.sm, color: C.muted, marginTop: 4 },
+  titleRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  titleAccent: { width: 4, height: 24, borderRadius: 2, backgroundColor: C.primary },
+  titleIconBg: {
+    width: 28, height: 28, borderRadius: 8,
+    backgroundColor: C.primaryLight,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pageTitle:   { fontSize: FontSize['2xl'], fontWeight: '800', color: C.text, letterSpacing: -0.5 },
+  pageSubtitle:{ fontSize: FontSize.sm, color: C.muted, marginTop: 0, marginLeft: 4 },
 
-  // Stats
+  // Stats — coloured cards with icon
   statsScroll: { marginBottom: Space[3] },
-  statsRow:    { paddingHorizontal: Space[5], gap: Space[3] },
+  statsRow:    { paddingHorizontal: Space[5], gap: Space[3], alignItems: 'center' },
   statCard: {
-    backgroundColor: C.surface,
     borderRadius: Radius.lg,
-    paddingVertical: Space[3],
-    paddingHorizontal: Space[4],
+    paddingVertical: Space[3] + 2,
+    paddingHorizontal: Space[3],
     alignItems: 'center',
-    minWidth: 72,
-    borderWidth: 1,
-    borderColor: C.border,
+    minWidth: 82,
+    borderWidth: 1.5,
+    gap: 4,
     ...Shadow.xs,
   },
+  statIconBg: {
+    width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 2,
+  },
   statNumber: { fontSize: FontSize.xl, fontWeight: '800' },
-  statLabel:  { fontSize: FontSize.xs, color: C.muted, marginTop: 3, fontWeight: '600' },
+  statLabel:  { fontSize: FontSize.xs, fontWeight: '700', marginTop: 1 },
 
   // Filter pills
   filterScroll: { marginBottom: Space[3] },
@@ -505,9 +565,9 @@ const hs = StyleSheet.create({
     borderRadius: Radius.full,
     borderWidth: 1.5,
   },
-  filterPillText: { fontSize: FontSize.sm, fontWeight: '600' },
+  filterPillText: { fontSize: FontSize.sm, fontWeight: '700' },
 
-  // Lesion card — vertical
+  // Lesion card with left accent bar
   lesionCard: {
     marginHorizontal: Space[5],
     marginBottom: Space[3],
@@ -516,19 +576,31 @@ const hs = StyleSheet.create({
     backgroundColor: C.surface,
     borderWidth: 1,
     borderColor: C.border,
+    flexDirection: 'row',
     ...Shadow.sm,
   },
+  cardAccentBar: {
+    width: 4,
+    borderTopLeftRadius: Radius.xl,
+    borderBottomLeftRadius: Radius.xl,
+  },
+  cardBody: { flex: 1 },
   lesionImage: {
     width: '100%',
-    height: 180,
+    height: 170,
     backgroundColor: C.cardGray,
   },
   lesionImagePlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 10,
   },
-  noImgTxt: { fontSize: FontSize.sm, color: C.muted },
+  noImgIconBg: {
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: C.surfaceAlt,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  noImgTxt: { fontSize: FontSize.sm, color: C.muted, fontWeight: '500' },
   lesionContent: { padding: Space[4] },
   cardTop: {
     flexDirection: 'row', justifyContent: 'space-between',
@@ -536,11 +608,27 @@ const hs = StyleSheet.create({
   },
   lesionLabel: { fontSize: FontSize.base, fontWeight: '700', color: C.text, flex: 1, marginRight: Space[2] },
   lesionDescription: { fontSize: FontSize.sm, color: C.textSub, lineHeight: 19, marginBottom: Space[2] },
-  metaRow:  { flexDirection: 'row', flexWrap: 'wrap', gap: Space[3], marginBottom: Space[3] },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  metaText: { fontSize: FontSize.xs + 1, color: C.muted },
-  actions:  { flexDirection: 'row', gap: Space[2] },
-  actionBtn:{ flex: 1 },
+  metaRow:    { flexDirection: 'row', flexWrap: 'wrap', gap: Space[2], marginBottom: Space[3] },
+  metaItem:   { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaIconBg: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  metaText:   { fontSize: FontSize.xs + 1, color: C.muted, fontWeight: '500' },
+
+  // Custom action buttons (not AppButton, so we can fully style them)
+  actions: { flexDirection: 'row', gap: Space[2] },
+  actionBtnEdit: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+    height: 36, borderRadius: Radius.md,
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1, borderColor: '#BAE6FD',
+  },
+  actionBtnEditTxt: { fontSize: FontSize.sm, fontWeight: '700', color: '#0369A1' },
+  actionBtnDelete: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+    height: 36, borderRadius: Radius.md,
+    backgroundColor: C.urgentBg,
+    borderWidth: 1, borderColor: C.urgentBorder,
+  },
+  actionBtnDeleteTxt: { fontSize: FontSize.sm, fontWeight: '700', color: C.urgentText },
 
   disclaimerWrap: { marginTop: Space[2] },
 });

@@ -10,6 +10,9 @@ import { loadStoredVitals, getLocalDateKey } from '@/lib/vitalsDailyStorage';
 const WATER_IDS = ['water-0', 'water-1', 'water-2'] as const;
 const WATER_HOURS = [9, 13, 17];
 const UV_IDS = ['uv-0', 'uv-1'] as const;
+// Remind every 2 hours during daylight (8 am → 6 pm).
+const SUN_HOURS = [8, 10, 12, 14, 16, 18];
+const SUN_IDS = SUN_HOURS.map((h, i) => `sun-${i}-${h}`);
 
 export function notificationsNativeSupported(): boolean {
   return Platform.OS === 'ios' || Platform.OS === 'android';
@@ -36,6 +39,12 @@ export async function setupAndroidChannels(): Promise<void> {
     importance: Notifications.AndroidImportance.DEFAULT,
     vibrationPattern: [0, 250],
     lightColor: '#C08010',
+  });
+  await Notifications.setNotificationChannelAsync('sun', {
+    name: 'Sun protection reminders',
+    importance: Notifications.AndroidImportance.DEFAULT,
+    vibrationPattern: [0, 250],
+    lightColor: '#D97706',
   });
   await Notifications.setNotificationChannelAsync('urgent', {
     name: 'Urgent lesion alerts',
@@ -171,6 +180,76 @@ export async function ensureUvDigestSchedule(): Promise<void> {
     });
   } catch {
     /* scheduling failed */
+  }
+}
+
+const SUN_TITLE = 'Sunscreen reapply ☀️';
+const SUN_BODY = 'It\'s been ~2 hours — reapply SPF to keep your skin protected.';
+
+async function scheduleSunReminders(): Promise<void> {
+  for (let i = 0; i < SUN_IDS.length; i++) {
+    await Notifications.scheduleNotificationAsync({
+      identifier: SUN_IDS[i],
+      content: {
+        title: SUN_TITLE,
+        body:  SUN_BODY,
+        sound: true,
+        data: { kind: 'sun' as const },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: SUN_HOURS[i],
+        minute: 0,
+        ...(Platform.OS === 'android' ? { channelId: 'sun' } : {}),
+      },
+    });
+  }
+}
+
+export async function syncSunReminders(_appliedCount: number): Promise<void> {
+  try {
+    if (!notificationsNativeSupported()) return;
+    const ok = await ensureNotificationPermissions();
+    if (!ok) return;
+    await cancelByIds(SUN_IDS);
+    await scheduleSunReminders();
+  } catch {
+    /* scheduling failed */
+  }
+}
+
+export async function ensureSunProtectionSchedule(): Promise<void> {
+  try {
+    if (!notificationsNativeSupported()) return;
+    const ok = await ensureNotificationPermissions();
+    if (!ok) return;
+    await cancelByIds(SUN_IDS);
+    await scheduleSunReminders();
+  } catch {
+    /* scheduling failed */
+  }
+}
+
+export async function syncSunInboxItems(): Promise<void> {
+  try {
+    const now = new Date();
+    const todayKey = getLocalDateKey(now);
+    const currentHour = now.getHours();
+
+    for (let i = 0; i < SUN_HOURS.length; i++) {
+      const hour = SUN_HOURS[i];
+      if (currentHour >= hour) {
+        const firedAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, 0);
+        await saveInboxItem({
+          id: `sun-inbox-${todayKey}-${hour}`,
+          title: SUN_TITLE,
+          body: SUN_BODY,
+          createdAt: firedAt.toISOString(),
+        });
+      }
+    }
+  } catch {
+    /* silently ignore */
   }
 }
 
@@ -321,11 +400,12 @@ export async function syncUrgentLesionAlerts(
   }
 }
 
-function contentKind(data: unknown): 'water' | 'uv' | 'urgent' | 'system' {
+function contentKind(data: unknown): 'water' | 'uv' | 'sun' | 'urgent' | 'system' {
   if (data && typeof data === 'object' && 'kind' in data) {
     const k = (data as { kind?: string }).kind;
     if (k === 'uv') return 'uv';
     if (k === 'water') return 'water';
+    if (k === 'sun') return 'sun';
     if (k === 'urgent') return 'urgent';
   }
   return 'system';
@@ -338,7 +418,7 @@ export function registerInboxFromNotifications(): () => void {
   // any notification the user taps when the app is in the background.
   const shouldSkip = (data: unknown): boolean => {
     const kind = contentKind(data);
-    return kind === 'water' || kind === 'urgent';
+    return kind === 'water' || kind === 'urgent' || kind === 'sun';
   };
 
   const received = Notifications.addNotificationReceivedListener(n => {

@@ -1,6 +1,8 @@
-import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, ViewStyle } from 'react-native';
+import { Pressable, Text, ActivityIndicator, StyleSheet, ViewStyle } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
 import { C } from '@/constants/theme';
+import { useReduceMotion } from '@/hooks/useReduceMotion';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
@@ -25,7 +27,6 @@ const ICON_SZ:  Record<Size, number> = { sm: 15, md: 17, lg: 18 };
 const PAD_H:    Record<Size, number> = { sm: 14, md: 20, lg: 24 };
 
 const BG:   Record<Variant, string> = { primary: C.primary, secondary: 'transparent', ghost: 'transparent', danger: C.urgentBg };
-const BG_P: Record<Variant, string> = { primary: C.primaryDark, secondary: C.primaryLight, ghost: C.surfaceAlt, danger: '#FECACA' };
 const CLR:  Record<Variant, string> = { primary: '#fff', secondary: C.primary, ghost: C.text, danger: C.urgentText };
 const BDR:  Record<Variant, string | undefined> = { primary: undefined, secondary: C.primary, ghost: 'transparent', danger: C.urgentBorder };
 
@@ -34,40 +35,58 @@ export function AppButton({
   loading = false, disabled = false, icon, iconRight = false, style,
 }: Props) {
   const isDisabled = disabled || loading;
+  const reduce = useReduceMotion();
+  const scale = useSharedValue(1);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const onIn = () => {
+    if (reduce) return;
+    scale.value = withTiming(0.96, { duration: 90 });
+  };
+  const onOut = () => {
+    if (reduce) return;
+    scale.value = withSpring(1, { damping: 12, stiffness: 220 });
+  };
+
   return (
-    <TouchableOpacity
-      style={[
-        s.base,
-        {
-          height:           HEIGHT[size],
-          borderRadius:     RADIUS[size],
-          paddingHorizontal: PAD_H[size],
-          backgroundColor:  BG[variant],
-          borderWidth:      BDR[variant] ? 1.5 : 0,
-          borderColor:      BDR[variant],
-          opacity:          isDisabled ? 0.55 : 1,
-        },
-        style,
-      ]}
-      onPress={onPress}
-      activeOpacity={0.8}
-      disabled={isDisabled}>
-      {loading ? (
-        <ActivityIndicator size="small" color={CLR[variant]} />
-      ) : (
-        <>
-          {icon && !iconRight && (
-            <Feather name={icon} size={ICON_SZ[size]} color={CLR[variant]} />
-          )}
-          <Text style={[s.label, { fontSize: FONT_SZ[size], color: CLR[variant] }]}>
-            {label}
-          </Text>
-          {icon && iconRight && (
-            <Feather name={icon} size={ICON_SZ[size]} color={CLR[variant]} />
-          )}
-        </>
-      )}
-    </TouchableOpacity>
+    <Animated.View style={[animStyle, style]}>
+      <Pressable
+        style={[
+          s.base,
+          {
+            height:           HEIGHT[size],
+            borderRadius:     RADIUS[size],
+            paddingHorizontal: PAD_H[size],
+            backgroundColor:  BG[variant],
+            borderWidth:      BDR[variant] ? 1.5 : 0,
+            borderColor:      BDR[variant],
+            opacity:          isDisabled ? 0.55 : 1,
+          },
+        ]}
+        onPress={onPress}
+        onPressIn={onIn}
+        onPressOut={onOut}
+        disabled={isDisabled}>
+        {loading ? (
+          <ActivityIndicator size="small" color={CLR[variant]} />
+        ) : (
+          <>
+            {icon && !iconRight && (
+              <Feather name={icon} size={ICON_SZ[size]} color={CLR[variant]} />
+            )}
+            <Text style={[s.label, { fontSize: FONT_SZ[size], color: CLR[variant] }]}>
+              {label}
+            </Text>
+            {icon && iconRight && (
+              <Feather name={icon} size={ICON_SZ[size]} color={CLR[variant]} />
+            )}
+          </>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
 

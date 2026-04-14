@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
-  Alert,
   Modal,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -20,6 +19,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
 import { BottomTabBar, type NavKey } from '@/components/ui/BottomTabBar';
+import { useAppAlert } from '@/components/ui/AppAlert';
 
 type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
 
@@ -35,6 +35,7 @@ export default function ProfileScreen() {
   const [confirmPassword, setConfirmPassword]       = useState('');
   const [newEmail, setNewEmail]                     = useState(user?.email || '');
   const [isLoading, setIsLoading]                   = useState(false);
+  const { showAlert, alertNode }                    = useAppAlert();
 
   const getInitials = (firstName?: string, lastName?: string) => {
     const first = firstName?.[0]?.toUpperCase() || '';
@@ -48,31 +49,36 @@ export default function ProfileScreen() {
 
   const handleChangePassword = async () => {
     if (!currentPassword.trim()) {
-      Alert.alert('Error', 'Please enter your current password');
+      showAlert({ title: 'Missing Field', message: 'Please enter your current password.', variant: 'warning' });
       return;
     }
     if (newPassword.trim().length < 6) {
-      Alert.alert('Error', 'New password must be at least 6 characters');
+      showAlert({ title: 'Password Too Short', message: 'New password must be at least 6 characters.', variant: 'warning' });
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      showAlert({ title: 'Passwords Don\'t Match', message: 'Please make sure both password fields are identical.', variant: 'error' });
       return;
     }
     try {
       setIsLoading(true);
       await new Promise((resolve) => setTimeout(resolve, 800));
-      Alert.alert('Success', 'Password changed successfully', [{
-        text: 'OK',
-        onPress: () => {
-          setShowChangePasswordModal(false);
-          setCurrentPassword('');
-          setNewPassword('');
-          setConfirmPassword('');
-        },
-      }]);
+      showAlert({
+        title: 'Password Updated',
+        message: 'Your password has been changed successfully.',
+        variant: 'success',
+        buttons: [{
+          text: 'Done',
+          onPress: () => {
+            setShowChangePasswordModal(false);
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+          },
+        }],
+      });
     } catch {
-      Alert.alert('Error', 'Failed to change password');
+      showAlert({ title: 'Update Failed', message: 'Failed to change password. Please try again.', variant: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -80,25 +86,30 @@ export default function ProfileScreen() {
 
   const handleChangeEmail = async () => {
     if (!newEmail.trim() || !newEmail.includes('@')) {
-      Alert.alert('Error', 'Please enter a valid email');
+      showAlert({ title: 'Invalid Email', message: 'Please enter a valid email address.', variant: 'warning' });
       return;
     }
     if (newEmail === user?.email) {
-      Alert.alert('Error', 'New email is the same as current email');
+      showAlert({ title: 'No Change', message: 'The new email is the same as your current one.', variant: 'info' });
       return;
     }
     try {
       setIsLoading(true);
       await new Promise((resolve) => setTimeout(resolve, 800));
-      Alert.alert('Success', 'Email change request sent.', [{
-        text: 'OK',
-        onPress: () => {
-          setShowChangeEmailModal(false);
-          setNewEmail(user?.email || '');
-        },
-      }]);
+      showAlert({
+        title: 'Request Sent',
+        message: 'An email change request has been submitted.',
+        variant: 'success',
+        buttons: [{
+          text: 'Done',
+          onPress: () => {
+            setShowChangeEmailModal(false);
+            setNewEmail(user?.email || '');
+          },
+        }],
+      });
     } catch {
-      Alert.alert('Error', 'Failed to change email');
+      showAlert({ title: 'Update Failed', message: 'Failed to change email. Please try again.', variant: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -132,17 +143,17 @@ export default function ProfileScreen() {
     {
       icon: 'bell', iconBg: C.amberLight, iconColor: C.amber,
       title: 'Notifications', subtitle: 'Manage notification preferences',
-      onPress: () => Alert.alert('Coming Soon', 'Notification settings coming in the next update'),
+      onPress: () => showAlert({ title: 'Coming Soon', message: 'Notification settings are coming in the next update.', variant: 'info' }),
     },
     {
       icon: 'shield', iconBg: C.purpleLight, iconColor: C.purple,
       title: 'Privacy & Security', subtitle: 'Manage your data and privacy',
-      onPress: () => Alert.alert('Coming Soon', 'Privacy settings coming in the next update'),
+      onPress: () => showAlert({ title: 'Coming Soon', message: 'Privacy settings are coming in the next update.', variant: 'info' }),
     },
     {
       icon: 'info', iconBg: C.surfaceAlt, iconColor: C.textSub,
       title: 'About', subtitle: 'App version and information',
-      onPress: () => Alert.alert('Skin Lesions Tracker', 'Version 1.0.0\n\nA comprehensive skin health monitoring app'),
+      onPress: () => showAlert({ title: 'XAI Skin Health', message: 'Version 1.0.0\n\nA comprehensive skin health monitoring app powered by AI.', variant: 'info' }),
     },
   ];
 
@@ -152,20 +163,35 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
+      {alertNode}
+      <StatusBar barStyle="light-content" backgroundColor={C.primary} />
 
       <ScrollView
         style={s.scroll}
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}>
 
-        {/* ── Avatar Header ── */}
-        <View style={s.avatarHeader}>
-          <View style={s.avatarCircle}>
-            <Text style={s.avatarInitials}>{getInitials(user?.firstName, user?.lastName)}</Text>
+        {/* ── Branded Hero Header ── */}
+        <View style={s.heroHeader}>
+          {/* Decorative rings */}
+          <View style={s.heroRing1} />
+          <View style={s.heroRing2} />
+
+          {/* Avatar with outer ring */}
+          <View style={s.avatarOuterRing}>
+            <View style={s.avatarCircle}>
+              <Text style={s.avatarInitials}>{getInitials(user?.firstName, user?.lastName)}</Text>
+            </View>
           </View>
+
           <Text style={s.userName}>{fullName}</Text>
           <Text style={s.userEmail}>{user?.email}</Text>
+
+          {/* Patient badge pill */}
+          <View style={s.patientBadge}>
+            <Feather name="user-check" size={11} color="rgba(255,255,255,0.9)" />
+            <Text style={s.patientBadgeTxt}>Registered Patient</Text>
+          </View>
         </View>
 
         {/* ── Quick Actions ── */}
@@ -179,7 +205,7 @@ export default function ProfileScreen() {
             style={s.quickBtn}
           />
           <AppButton
-            label="Download Data"
+            label="Export Data"
             icon="download"
             onPress={() => Alert.alert('Coming Soon', 'Data export coming soon')}
             variant="secondary"
@@ -189,7 +215,10 @@ export default function ProfileScreen() {
         </View>
 
         {/* ── Account Settings ── */}
-        <Text style={s.sectionLabel}>Account Settings</Text>
+        <View style={s.sectionLabelRow}>
+          <Feather name="settings" size={13} color={C.primary} />
+          <Text style={s.sectionLabel}>Account Settings</Text>
+        </View>
         <View style={s.settingsCard}>
           {accountSettings.map((opt, idx) => (
             <React.Fragment key={opt.title}>
@@ -200,7 +229,10 @@ export default function ProfileScreen() {
         </View>
 
         {/* ── Preferences ── */}
-        <Text style={s.sectionLabel}>Preferences</Text>
+        <View style={s.sectionLabelRow}>
+          <Feather name="sliders" size={13} color={C.primary} />
+          <Text style={s.sectionLabel}>Preferences</Text>
+        </View>
         <View style={s.settingsCard}>
           {preferences.map((opt, idx) => (
             <React.Fragment key={opt.title}>
@@ -392,28 +424,57 @@ function SettingRow({
 const s = StyleSheet.create({
   safe:        { flex: 1, backgroundColor: C.bg },
   scroll:      { flex: 1 },
-  scrollContent: { paddingBottom: 100 },
+  scrollContent: { paddingBottom: 110 },
 
-  // Avatar header
-  avatarHeader: {
+  // ── Branded hero header ──────────────────────────────────────────
+  heroHeader: {
     alignItems: 'center',
-    paddingTop: Space[6],
-    paddingBottom: Space[5],
+    paddingTop: Space[8],
+    paddingBottom: Space[6],
     paddingHorizontal: Space[5],
-    backgroundColor: C.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
+    backgroundColor: C.primary,
+    overflow: 'hidden',
+  },
+  // Decorative background rings
+  heroRing1: {
+    position: 'absolute',
+    width: 260, height: 260, borderRadius: 130,
+    borderWidth: 50, borderColor: 'rgba(255,255,255,0.06)',
+    top: -100, right: -70,
+  },
+  heroRing2: {
+    position: 'absolute',
+    width: 180, height: 180, borderRadius: 90,
+    borderWidth: 36, borderColor: 'rgba(255,255,255,0.06)',
+    bottom: -60, left: -40,
+  },
+  // Double-ring avatar
+  avatarOuterRing: {
+    width: 100, height: 100, borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.35)',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: Space[4],
   },
   avatarCircle: {
-    width: 88, height: 88, borderRadius: 44,
-    backgroundColor: C.primary,
+    width: 84, height: 84, borderRadius: 42,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)',
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: Space[3],
-    ...Shadow.md,
   },
-  avatarInitials: { fontSize: FontSize['2xl'], fontWeight: '700', color: '#fff' },
-  userName:       { fontSize: FontSize.xl, fontWeight: '700', color: C.text, marginBottom: 4 },
-  userEmail:      { fontSize: FontSize.sm, color: C.muted },
+  avatarInitials: { fontSize: FontSize['2xl'], fontWeight: '800', color: '#fff' },
+  userName:  { fontSize: FontSize.xl, fontWeight: '800', color: '#fff', marginBottom: 4, letterSpacing: -0.3 },
+  userEmail: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.75)', marginBottom: Space[3] },
+
+  // Registered patient pill badge
+  patientBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+    borderRadius: Radius.full,
+    paddingHorizontal: 12, paddingVertical: 5,
+  },
+  patientBadgeTxt: { fontSize: FontSize.xs, fontWeight: '700', color: 'rgba(255,255,255,0.92)', letterSpacing: 0.3 },
 
   // Quick actions
   quickActionsRow: {
@@ -423,16 +484,19 @@ const s = StyleSheet.create({
   },
   quickBtn: { flex: 1 },
 
-  // Section label
-  sectionLabel: {
-    fontSize: FontSize.xs,
-    fontWeight: '700',
-    color: C.muted,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+  // Section label row (icon + label)
+  sectionLabelRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
     marginHorizontal: Space[5],
     marginBottom: Space[2],
     marginTop: Space[1],
+  },
+  sectionLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: C.primary,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
 
   // Settings card
@@ -454,7 +518,7 @@ const s = StyleSheet.create({
     gap: Space[3],
   },
   settingIconBox: {
-    width: 38, height: 38, borderRadius: Radius.sm + 2,
+    width: 40, height: 40, borderRadius: Radius.md,
     alignItems: 'center', justifyContent: 'center',
   },
   settingText:    { flex: 1 },
@@ -477,8 +541,9 @@ const s = StyleSheet.create({
     ...Shadow.lg,
   },
   logoutIconCircle: {
-    width: 60, height: 60, borderRadius: 30,
+    width: 68, height: 68, borderRadius: 34,
     backgroundColor: C.urgentBg,
+    borderWidth: 2, borderColor: C.urgentBorder,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: Space[4],
   },

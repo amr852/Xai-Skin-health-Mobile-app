@@ -1,19 +1,22 @@
 import { useRef, useState } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity,
-  StatusBar, Platform, Image, ActivityIndicator,
-  ScrollView, KeyboardAvoidingView, Alert,
+  StatusBar, Platform, Image,
+  ScrollView, KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { C } from '@/constants/theme';
 import { useLesions, type LesionFields } from '@/hooks/useLesions';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { BottomTabBar, type NavKey } from '@/components/ui/BottomTabBar';
+import { useAppAlert } from '@/components/ui/AppAlert';
+import { PulseRing } from '@/components/fx/PulseRing';
 
 const STATUS_OPTIONS: LesionFields['status'][] = ['Stable', 'Check', 'Urgent'];
 
@@ -34,17 +37,21 @@ export default function CameraScreen() {
   const [form, setForm]                   = useState<LesionFields>(DEFAULT_FORM);
   const [saving, setSaving]               = useState(false);
   const [activeNav, setActiveNav]         = useState<NavKey>('scan');
+  const [pulseCount, setPulseCount]       = useState(0);
   const cameraRef = useRef<CameraView>(null);
   const router    = useRouter();
   const insets    = useSafeAreaInsets();
   const { addLesion } = useLesions();
+  const { showAlert, alertNode } = useAppAlert();
 
   const handleTakePhoto = async () => {
     if (!cameraRef.current) return;
     const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
     if (photo?.uri) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setCapturedPhoto(photo.uri);
       setForm(DEFAULT_FORM);
+      setPulseCount(c => c + 1);
     }
   };
 
@@ -52,18 +59,23 @@ export default function CameraScreen() {
 
   const handleSave = async () => {
     if (!form.title.trim()) {
-      Alert.alert('Required', 'Please enter a title for this lesion.');
+      showAlert({ title: 'Title Required', message: 'Please enter a title to identify this lesion.', variant: 'warning' });
       return;
     }
     setSaving(true);
     try {
       await addLesion({ ...form, title: form.title.trim() }, capturedPhoto ?? undefined);
-      Alert.alert('Saved', 'Lesion recorded successfully.', [
-        { text: 'View History', onPress: () => { setCapturedPhoto(null); router.push('/history'); } },
-        { text: 'Scan Another', onPress: () => { setCapturedPhoto(null); setForm(DEFAULT_FORM); } },
-      ]);
+      showAlert({
+        title: 'Lesion Recorded',
+        message: 'Your lesion has been saved successfully and added to your records.',
+        variant: 'success',
+        buttons: [
+          { text: 'View History', style: 'default', onPress: () => { setCapturedPhoto(null); router.push('/history'); } },
+          { text: 'Scan Another', style: 'cancel',  onPress: () => { setCapturedPhoto(null); setForm(DEFAULT_FORM); } },
+        ],
+      });
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to save. Please try again.');
+      showAlert({ title: 'Save Failed', message: e.message || 'Failed to save. Please try again.', variant: 'error' });
     } finally {
       setSaving(false);
     }
@@ -80,6 +92,7 @@ export default function CameraScreen() {
   if (!permission?.granted) {
     return (
       <SafeAreaView style={s.safe} edges={['top']}>
+        {alertNode}
         <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
         <View style={s.permWrap}>
           <View style={s.permIconCircle}>
@@ -98,6 +111,7 @@ export default function CameraScreen() {
   if (capturedPhoto) {
     return (
       <SafeAreaView style={[s.safe, { backgroundColor: C.bg }]} edges={['top']}>
+        {alertNode}
         <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
 
         {/* Header */}
@@ -116,8 +130,13 @@ export default function CameraScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
 
-            {/* Photo */}
-            <Image source={{ uri: capturedPhoto }} style={s.photo} resizeMode="cover" />
+            {/* Photo with scan-complete pulse */}
+            <View style={s.photoWrap}>
+              <Image source={{ uri: capturedPhoto }} style={s.photo} resizeMode="cover" />
+              <View style={s.pulseAnchor} pointerEvents="none">
+                <PulseRing size={220} color="rgba(155,48,88,0.55)" trigger={pulseCount} />
+              </View>
+            </View>
 
             {/* Form card */}
             <View style={s.formCard}>
@@ -197,6 +216,7 @@ export default function CameraScreen() {
   // ── Live camera ─────────────────────────────────────────────────────────────
   return (
     <View style={s.cameraRoot}>
+      {alertNode}
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       <CameraView
@@ -261,9 +281,18 @@ const s = StyleSheet.create({
   },
   formHeaderTitle: { fontSize: 17, fontWeight: '700', color: C.text },
   formScroll: { paddingHorizontal: 16, paddingTop: 16 },
+  photoWrap: {
+    width: '100%', height: 220, borderRadius: 16,
+    marginBottom: 16, alignItems: 'center', justifyContent: 'center',
+    overflow: 'visible',
+  },
   photo: {
     width: '100%', height: 220, borderRadius: 16,
-    backgroundColor: '#111', marginBottom: 16,
+    backgroundColor: '#111',
+  },
+  pulseAnchor: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center', justifyContent: 'center',
   },
   formCard: {
     backgroundColor: C.surface, borderRadius: 20,
