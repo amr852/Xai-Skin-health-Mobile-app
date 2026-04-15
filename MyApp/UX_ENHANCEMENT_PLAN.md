@@ -49,22 +49,8 @@ Rethink how reminders *appear* so they invite action, not dread.
 
 ---
 
-### Stream C — Body Silhouette (front/back with tappable regions)
-The star feature. Currently lesions are a flat list — giving them a spatial home elevates the whole product.
-
-- **New screen**: `/(tabs)/body` (or embed in Home). Two toggleable SVG silhouettes (front / back), simple line art in rose.
-- **Regions**: head, face, neck, chest, abdomen, left/right upper arm, left/right forearm, left/right hand, back, left/right thigh, left/right calf, left/right foot. Each `<Path>` is a tappable hit region with `onPress`.
-- **Dots**: each saved lesion renders as a colored dot (status color) at stored `{x, y, side: 'front'|'back'}`. Tapping a dot opens the lesion details sheet; tapping empty region opens "Add lesion here" flow.
-- **Dot micro-animation**: on mount, dots fade-in staggered (50ms each); urgent dots get a slow ring-pulse.
-- **Persist coordinates** on the lesion record — extend `Lesion` with optional `bodyPoint?: { x, y, side }`.
-
-**New files**
-- `components/body/BodyMap.tsx`
-- `components/body/BodySilhouetteFront.tsx` (raw SVG)
-- `components/body/BodySilhouetteBack.tsx`
-- `components/body/LesionDot.tsx`
-
-**Schema change**: add `bodyPoint` optional field to lesion create/update API + local type.
+### Stream C — (removed) Body Silhouette
+Dropped. Caused instability on device and the flat lesion list is sufficient for now.
 
 ---
 
@@ -96,20 +82,15 @@ Spinners communicate "wait". Skeletons communicate "here is what is arriving".
 
 ---
 
-### Stream F — "Delight Moments" (WOW)
+### Stream F — "Delight Moments" (scoped down)
 
-1. **Streak confetti** — when the Self-Exam streak hits 3/7/14/30 days, fire confetti (use `react-native-confetti-cannon` or a lightweight custom emoji rain of 🎉 + rose hearts) for ~1.8s. Fire at most once per milestone per day; persist `lastConfettiMilestone` in AsyncStorage.
-2. **Scan-complete pulse** — when camera finishes and result appears, a slow 600ms rose-tinted pulse blooms outward from the image center (single wave, not looping). Signals "got it".
-3. **Hydration goal reached** — ring briefly overshoots to 105% then settles to 100% with a ✨ sparkle burst on the ring.
-4. **Sun protection logged** — smile icon briefly animates (simple bounce + tiny sparkle) when logApplication is called.
-5. **Empty-state wink** — the `EmptyState` icon gently bobs every 4s (3px vertical) when visible, then stops after 3 cycles.
+Heavy particle effects (confetti, sparkle burst, pulse ring) were removed after causing render instability on real devices. Remaining delight is kept in-element and cheap:
 
-**New files**
-- `components/fx/Confetti.tsx` (lightweight, no deps if feasible — emoji particles via reanimated).
-- `components/fx/PulseRing.tsx` — reusable expanding ring.
-- `components/fx/SparkleBurst.tsx` — 6 star particles spraying out.
+1. **Capture flash** — short white-overlay flash on shutter press (implemented in `camera.tsx` with a single reanimated shared value).
+2. **Sun-protection icon bounce** — small scale pulse on the sunscreen icon when `logApplication` fires (implemented in `SunProtectionCard.tsx`, guarded by `useReduceMotion`).
+3. **Empty-state wink** — optional future addition if needed.
 
-**Guard**: all of the above check `useReduceMotion()` and degrade to a single static checkmark flash.
+**Guard**: all motion checks `useReduceMotion()` and degrades to a static state.
 
 ---
 
@@ -136,30 +117,18 @@ Phased so each shipment is a coherent UX upgrade.
 3. Micro-interaction baseline: wrap `AppButton` and chips with spring press.
 4. Transition polish in `_layout.tsx` files.
 
-### Phase 2 — Reminder & Delight
+### Phase 2 — Reminder & small delight
 5. `GentleNudge.tsx` inline pill.
-6. `PulseRing.tsx` + scan-complete pulse in camera result.
-7. Animated ring fill in `VitalRingCard` (reanimated-driven `strokeDashoffset`).
-8. Tiny icon animations (bell, droplet, moon, sun).
-
-### Phase 3 — Body Silhouette (biggest feature)
-9. Design SVG silhouettes (front/back) as component files.
-10. `BodyMap.tsx` with region hit-tests.
-11. Extend lesion type + API with `bodyPoint`.
-12. `LesionDot.tsx` with stagger + urgent pulse.
-13. New tab / home surface for BodyMap.
-
-### Phase 4 — Big Delight
-14. `Confetti.tsx` streak celebration.
-15. `SparkleBurst.tsx` on goal-reached.
-16. Sun protection logged bounce.
+6. Capture flash in camera result.
+7. Animated ring fill in `VitalRingCard` (RN `Animated` + SVG `strokeDashoffset`).
+8. Sun-icon rotation on UV card when UVI > 3.
+9. Sun-protection icon bounce on log.
 
 ---
 
 ## 4. Tech choices
 
-- **Animations**: `react-native-reanimated` (already in deps — SDK 54 supports it). Avoid new heavy deps.
-- **Confetti**: try custom reanimated emoji particles first (~80 lines); only pull in a lib if we need physics.
+- **Animations**: `react-native-reanimated` (already in deps — SDK 54 supports it). Avoid new heavy deps. Do **not** mix `react-native` `Animated` and `react-native-reanimated` `Animated` on the same view tree — pick one per component.
 - **SVG**: `react-native-svg` (already in deps for rings).
 - **Persistence**: extend existing `AsyncStorage` keys — no schema migrations needed; new keys are optional.
 - **Reduce motion**: `AccessibilityInfo.isReduceMotionEnabled()` + listener.
@@ -171,9 +140,6 @@ Phased so each shipment is a coherent UX upgrade.
 - Every tap on a counter chip feels springy.
 - Loading states never show a bare spinner on the main screens.
 - Opening History from Home feels like the card expands, not a new page.
-- First hydration goal of the day triggers sparkles + haptic.
-- 7-day streak fires confetti exactly once.
-- Body silhouette shows every recorded lesion in its anatomical position.
 - Reduce-motion users get identical information, zero animation.
 
 ---

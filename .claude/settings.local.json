@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(grep -l \"ExecutionEnvironment\" node_modules/expo-constants/build/*.d.ts)",
+      "Bash(ls components/ui/Skeleton*)",
+      "Bash(ls hooks/useReduceMotion*)",
+      "Bash(rm -f components/fx/PulseRing.tsx components/fx/SparkleBurst.tsx)",
+      "Bash(rmdir components/fx)"
     ]
   }
 }

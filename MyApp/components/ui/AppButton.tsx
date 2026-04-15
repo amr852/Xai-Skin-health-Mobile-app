@@ -1,8 +1,6 @@
-import { Pressable, Text, ActivityIndicator, StyleSheet, ViewStyle } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
+import { Pressable, Text, ActivityIndicator, StyleSheet, View, ViewStyle } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { C } from '@/constants/theme';
-import { useReduceMotion } from '@/hooks/useReduceMotion';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
@@ -35,26 +33,11 @@ export function AppButton({
   loading = false, disabled = false, icon, iconRight = false, style,
 }: Props) {
   const isDisabled = disabled || loading;
-  const reduce = useReduceMotion();
-  const scale = useSharedValue(1);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const onIn = () => {
-    if (reduce) return;
-    scale.value = withTiming(0.96, { duration: 90 });
-  };
-  const onOut = () => {
-    if (reduce) return;
-    scale.value = withSpring(1, { damping: 12, stiffness: 220 });
-  };
 
   return (
-    <Animated.View style={[animStyle, style]}>
+    <View style={style}>
       <Pressable
-        style={[
+        style={({ pressed }) => [
           s.base,
           {
             height:           HEIGHT[size],
@@ -63,12 +46,10 @@ export function AppButton({
             backgroundColor:  BG[variant],
             borderWidth:      BDR[variant] ? 1.5 : 0,
             borderColor:      BDR[variant],
-            opacity:          isDisabled ? 0.55 : 1,
+            opacity:          isDisabled ? 0.55 : pressed ? 0.85 : 1,
           },
         ]}
         onPress={onPress}
-        onPressIn={onIn}
-        onPressOut={onOut}
         disabled={isDisabled}>
         {loading ? (
           <ActivityIndicator size="small" color={CLR[variant]} />
@@ -77,7 +58,9 @@ export function AppButton({
             {icon && !iconRight && (
               <Feather name={icon} size={ICON_SZ[size]} color={CLR[variant]} />
             )}
-            <Text style={[s.label, { fontSize: FONT_SZ[size], color: CLR[variant] }]}>
+            <Text
+              numberOfLines={1}
+              style={[s.label, { fontSize: FONT_SZ[size], color: CLR[variant] }]}>
               {label}
             </Text>
             {icon && iconRight && (
@@ -86,7 +69,7 @@ export function AppButton({
           </>
         )}
       </Pressable>
-    </Animated.View>
+    </View>
   );
 }
 

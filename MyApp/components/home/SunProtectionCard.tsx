@@ -1,15 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import Animated, {
-  useSharedValue, useAnimatedStyle, withSequence, withTiming, Easing, withSpring,
-} from 'react-native-reanimated';
 import { C, FontSize, Radius, Space } from '@/constants/theme';
 import { useSunProtection } from '@/hooks/useSunProtection';
-import { SparkleBurst } from '@/components/fx/SparkleBurst';
-import { useReduceMotion } from '@/hooks/useReduceMotion';
 
-// Dermatologists recommend reapplying sunscreen every 2 hours of sun exposure.
 const REAPPLY_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
 function formatTimeAgo(iso: string | null): string {
@@ -35,12 +29,7 @@ function formatUntil(ms: number): string {
 
 export function SunProtectionCard() {
   const { lastAppliedISO, logApplication } = useSunProtection();
-  const reduce = useReduceMotion();
-  const [sparkleFire, setSparkleFire] = useState(0);
-  const iconScale = useSharedValue(1);
-  const ctaScale = useSharedValue(1);
 
-  // Tick every minute so the gauge updates smoothly.
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 60_000);
@@ -49,17 +38,7 @@ export function SunProtectionCard() {
 
   const handleLog = () => {
     logApplication();
-    setSparkleFire(x => x + 1);
-    if (!reduce) {
-      iconScale.value = withSequence(
-        withTiming(1.25, { duration: 180, easing: Easing.out(Easing.quad) }),
-        withSpring(1, { damping: 8, stiffness: 200 }),
-      );
-    }
   };
-
-  const iconStyle = useAnimatedStyle(() => ({ transform: [{ scale: iconScale.value }] }));
-  const ctaStyle  = useAnimatedStyle(() => ({ transform: [{ scale: ctaScale.value }] }));
 
   const { status, statusColor, needsReapply, gaugePct, gaugeLabel } = useMemo(() => {
     if (!lastAppliedISO) {
@@ -94,20 +73,16 @@ export function SunProtectionCard() {
 
   return (
     <View style={s.card}>
-      <View style={s.sparkleAnchor} pointerEvents="none">
-        <SparkleBurst fire={sparkleFire} size={120} color={C.amberFill} />
-      </View>
       <View style={s.headRow}>
-        <Animated.View style={[s.iconBg, iconStyle]}>
+        <View style={s.iconBg}>
           <Feather name="sun" size={18} color={C.amberFill} />
-        </Animated.View>
+        </View>
         <View style={{ flex: 1 }}>
           <Text style={s.title}>Sun Protection</Text>
           <Text style={s.sub}>{formatTimeAgo(lastAppliedISO)}</Text>
         </View>
       </View>
 
-      {/* Countdown gauge to next reapply window */}
       <View style={s.gaugeWrap}>
         <View style={s.gaugeTrack}>
           <View
@@ -129,31 +104,28 @@ export function SunProtectionCard() {
         </View>
       </View>
 
-      <Animated.View style={ctaStyle}>
-        <Pressable
+      <Pressable
+        style={({ pressed }) => [
+          s.cta,
+          needsReapply ? { backgroundColor: C.primary } : { backgroundColor: C.surfaceAlt },
+          { opacity: pressed ? 0.85 : 1 },
+        ]}
+        onPress={handleLog}
+        accessibilityRole="button"
+        accessibilityLabel="Log sunscreen application">
+        <Feather
+          name={needsReapply ? 'plus-circle' : 'check-circle'}
+          size={14}
+          color={needsReapply ? '#fff' : C.text}
+        />
+        <Text
           style={[
-            s.cta,
-            needsReapply ? { backgroundColor: C.primary } : { backgroundColor: C.surfaceAlt },
-          ]}
-          onPress={handleLog}
-          onPressIn={() => { if (!reduce) ctaScale.value = withTiming(0.96, { duration: 80 }); }}
-          onPressOut={() => { if (!reduce) ctaScale.value = withSpring(1, { damping: 12, stiffness: 220 }); }}
-          accessibilityRole="button"
-          accessibilityLabel="Log sunscreen application">
-          <Feather
-            name={needsReapply ? 'plus-circle' : 'check-circle'}
-            size={14}
-            color={needsReapply ? '#fff' : C.text}
-          />
-          <Text
-            style={[
-              s.ctaTxt,
-              { color: needsReapply ? '#fff' : C.text },
-            ]}>
-            {needsReapply ? 'Log application' : 'Log another'}
-          </Text>
-        </Pressable>
-      </Animated.View>
+            s.ctaTxt,
+            { color: needsReapply ? '#fff' : C.text },
+          ]}>
+          {needsReapply ? 'Log application' : 'Log another'}
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -168,11 +140,6 @@ const s = StyleSheet.create({
     borderColor: C.border,
     padding: Space[4],
     overflow: 'hidden',
-  },
-  sparkleAnchor: {
-    position: 'absolute',
-    top: 10, left: 24,
-    alignItems: 'center', justifyContent: 'center',
   },
   headRow: {
     flexDirection: 'row',

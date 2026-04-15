@@ -16,7 +16,6 @@ import { AppButton } from '@/components/ui/AppButton';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { BottomTabBar, type NavKey } from '@/components/ui/BottomTabBar';
 import { useAppAlert } from '@/components/ui/AppAlert';
-import { PulseRing } from '@/components/fx/PulseRing';
 
 const STATUS_OPTIONS: LesionFields['status'][] = ['Stable', 'Check', 'Urgent'];
 
@@ -37,7 +36,6 @@ export default function CameraScreen() {
   const [form, setForm]                   = useState<LesionFields>(DEFAULT_FORM);
   const [saving, setSaving]               = useState(false);
   const [activeNav, setActiveNav]         = useState<NavKey>('scan');
-  const [pulseCount, setPulseCount]       = useState(0);
   const cameraRef = useRef<CameraView>(null);
   const router    = useRouter();
   const insets    = useSafeAreaInsets();
@@ -51,7 +49,6 @@ export default function CameraScreen() {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setCapturedPhoto(photo.uri);
       setForm(DEFAULT_FORM);
-      setPulseCount(c => c + 1);
     }
   };
 
@@ -130,12 +127,9 @@ export default function CameraScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
 
-            {/* Photo with scan-complete pulse */}
+            {/* Photo preview */}
             <View style={s.photoWrap}>
               <Image source={{ uri: capturedPhoto }} style={s.photo} resizeMode="cover" />
-              <View style={s.pulseAnchor} pointerEvents="none">
-                <PulseRing size={220} color="rgba(155,48,88,0.55)" trigger={pulseCount} />
-              </View>
             </View>
 
             {/* Form card */}
@@ -289,10 +283,6 @@ const s = StyleSheet.create({
   photo: {
     width: '100%', height: 220, borderRadius: 16,
     backgroundColor: '#111',
-  },
-  pulseAnchor: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center', justifyContent: 'center',
   },
   formCard: {
     backgroundColor: C.surface, borderRadius: 20,

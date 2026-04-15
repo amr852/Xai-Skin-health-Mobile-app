@@ -1,6 +1,9 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Notifications from 'expo-notifications';
+
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 import { WATER_TARGET_L } from '@/components/vitals/vitalsFormat';
 import { saveInboxItem } from '@/lib/notificationInbox';
 import { loadStoredVitals, getLocalDateKey } from '@/lib/vitalsDailyStorage';
@@ -15,6 +18,9 @@ const SUN_HOURS = [8, 10, 12, 14, 16, 18];
 const SUN_IDS = SUN_HOURS.map((h, i) => `sun-${i}-${h}`);
 
 export function notificationsNativeSupported(): boolean {
+  // Expo Go on Android dropped notification scheduling in SDK 53.
+  // iOS local notifications still work in Expo Go, and a dev build supports both.
+  if (isExpoGo && Platform.OS === 'android') return false;
   return Platform.OS === 'ios' || Platform.OS === 'android';
 }
 

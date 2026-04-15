@@ -199,7 +199,7 @@ export default function ProfileScreen() {
           <AppButton
             label="Edit Profile"
             icon="edit-2"
-            onPress={() => Alert.alert('Coming Soon', 'Profile editing coming soon')}
+            onPress={() => showAlert({ title: 'Coming Soon', message: 'Profile editing coming soon', variant: 'info' })}
             variant="primary"
             size="md"
             style={s.quickBtn}
@@ -207,7 +207,7 @@ export default function ProfileScreen() {
           <AppButton
             label="Export Data"
             icon="download"
-            onPress={() => Alert.alert('Coming Soon', 'Data export coming soon')}
+            onPress={() => showAlert({ title: 'Coming Soon', message: 'Data export coming soon', variant: 'info' })}
             variant="secondary"
             size="md"
             style={s.quickBtn}

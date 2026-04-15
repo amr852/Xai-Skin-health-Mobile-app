@@ -1,11 +1,7 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import Animated, {
-  useSharedValue, useAnimatedStyle, withTiming, Easing,
-} from 'react-native-reanimated';
 import { C, FontSize, Radius, Space } from '@/constants/theme';
-import { useReduceMotion } from '@/hooks/useReduceMotion';
 
 type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
 
@@ -19,30 +15,13 @@ interface Props {
 }
 
 export function GentleNudge({ visible, icon = 'info', message, tone = 'info', actionLabel, onAction }: Props) {
-  const reduce = useReduceMotion();
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    if (reduce) {
-      progress.value = visible ? 1 : 0;
-      return;
-    }
-    progress.value = withTiming(visible ? 1 : 0, { duration: 260, easing: Easing.out(Easing.cubic) });
-  }, [visible, reduce, progress]);
-
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [{ translateY: (1 - progress.value) * -6 }],
-    height: progress.value === 0 ? 0 : undefined,
-  }));
-
-  if (!visible && progress.value === 0) return null;
+  if (!visible) return null;
 
   const accent = tone === 'warn' ? C.amberFill : C.primary;
   const bg     = tone === 'warn' ? C.amberLight : C.primaryLight;
 
   return (
-    <Animated.View style={[s.wrap, { backgroundColor: bg, borderColor: accent + '33' }, animStyle]}>
+    <View style={[s.wrap, { backgroundColor: bg, borderColor: accent + '33' }]}>
       <View style={[s.iconBg, { backgroundColor: accent + '22' }]}>
         <Feather name={icon} size={13} color={accent} />
       </View>
@@ -52,7 +31,7 @@ export function GentleNudge({ visible, icon = 'info', message, tone = 'info', ac
           <Text style={[s.btnTxt, { color: accent }]}>{actionLabel}</Text>
         </TouchableOpacity>
       ) : null}
-    </Animated.View>
+    </View>
   );
 }
 

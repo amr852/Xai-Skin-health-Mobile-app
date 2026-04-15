@@ -47,13 +47,24 @@ export function useLesions() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchLesions = useCallback(async () => {
+    const token = await getToken();
+    if (!token) {
+      setLesions([]);
+      setError(null);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const token = await getToken();
       const res = await fetch(`${API_URL}/lesions`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (res.status === 401) {
+        await AsyncStorage.multiRemove(['authToken', 'authUser']);
+        setLesions([]);
+        setError(null);
+        return;
+      }
       const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error || 'Failed to fetch lesions');
       if (!Array.isArray(data)) throw new Error('Unexpected response from server');

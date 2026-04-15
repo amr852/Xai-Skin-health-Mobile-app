@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,7 @@ import {
   Image,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { C, FontSize, Space, Radius, Shadow } from '@/constants/theme';
 import { useLesions, type Lesion } from '@/hooks/useLesions';
 import { syncUrgentLesionAlerts } from '@/lib/notificationScheduler';
@@ -22,9 +22,11 @@ export function MonitorLesionsSection() {
   const router = useRouter();
   const { lesions, loading, error, fetchLesions } = useLesions();
 
-  useEffect(() => {
-    void fetchLesions();
-  }, [fetchLesions]);
+  useFocusEffect(
+    useCallback(() => {
+      void fetchLesions();
+    }, [fetchLesions]),
+  );
 
   useEffect(() => {
     if (lesions.length === 0) return;
@@ -61,22 +63,6 @@ export function MonitorLesionsSection() {
       </View>
 
       <SelfExamCard />
-
-      {lesions.length > 0 && (
-        <TouchableOpacity
-          style={ls.bodyMapCta}
-          activeOpacity={0.85}
-          onPress={() => router.push('/body-map')}>
-          <View style={ls.bodyMapIcon}>
-            <Feather name="map" size={16} color={C.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={ls.bodyMapTitle}>Body Map</Text>
-            <Text style={ls.bodyMapSub}>Plot lesions on a front/back silhouette</Text>
-          </View>
-          <Feather name="chevron-right" size={18} color={C.textHint} />
-        </TouchableOpacity>
-      )}
 
       {loading && (
         <View style={ls.stateWrap}>
@@ -256,26 +242,4 @@ const ls = StyleSheet.create({
   lesMeta:    { fontSize: FontSize.xs, color: C.muted },
 
   rowDivider: { height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: Space[1] },
-
-  bodyMapCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space[3],
-    marginHorizontal: Space[5],
-    marginBottom: Space[5],
-    paddingVertical: Space[3] + 2,
-    paddingHorizontal: Space[4],
-    backgroundColor: C.surface,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: C.border,
-    ...Shadow.xs,
-  },
-  bodyMapIcon: {
-    width: 34, height: 34, borderRadius: 11,
-    backgroundColor: C.primaryLight,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  bodyMapTitle: { fontSize: FontSize.sm + 1, fontWeight: '800', color: C.text, letterSpacing: -0.2 },
-  bodyMapSub:   { fontSize: FontSize.xs, color: C.muted, marginTop: 2 },
 });

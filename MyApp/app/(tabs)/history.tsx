@@ -13,7 +13,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { SkeletonLesionRow } from '@/components/ui/Skeleton';
 import { DisclaimerBox } from '@/components/ui/DisclaimerBox';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
@@ -440,11 +439,9 @@ export default function HistoryScreen() {
 
         {/* List content */}
         {loading && lesions.length === 0 ? (
-          <>
-            <SkeletonLesionRow />
-            <SkeletonLesionRow />
-            <SkeletonLesionRow />
-          </>
+          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={C.primary} />
+          </View>
         ) : error ? (
           <EmptyState
             icon="alert-circle"

@@ -1,11 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import Animated, {
-  useSharedValue, useAnimatedStyle, withSequence, withTiming, Easing, withRepeat,
-} from 'react-native-reanimated';
 import { C } from '@/constants/theme';
-import { useReduceMotion } from '@/hooks/useReduceMotion';
 
 interface Props {
   initials: string;
@@ -23,47 +19,6 @@ function getGreeting(): string {
 }
 
 export function PageHeader({ initials, name, unreadCount = 0, onBellPress, onAvatarPress }: Props) {
-  const reduce = useReduceMotion();
-  const bellRot = useSharedValue(0);
-  const dotPulse = useSharedValue(1);
-  const lastCountRef = useRef(unreadCount);
-
-  useEffect(() => {
-    if (reduce) return;
-    // Swing once when new unread arrives
-    if (unreadCount > lastCountRef.current) {
-      bellRot.value = withSequence(
-        withTiming(-8, { duration: 90, easing: Easing.out(Easing.quad) }),
-        withTiming(8, { duration: 120 }),
-        withTiming(-5, { duration: 90 }),
-        withTiming(0, { duration: 120 }),
-      );
-    }
-    lastCountRef.current = unreadCount;
-  }, [unreadCount, reduce, bellRot]);
-
-  useEffect(() => {
-    if (reduce || unreadCount === 0) {
-      dotPulse.value = 1;
-      return;
-    }
-    dotPulse.value = withRepeat(
-      withSequence(
-        withTiming(1.25, { duration: 600, easing: Easing.inOut(Easing.quad) }),
-        withTiming(1, { duration: 600, easing: Easing.inOut(Easing.quad) }),
-      ),
-      -1,
-      false,
-    );
-  }, [unreadCount, reduce, dotPulse]);
-
-  const bellStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${bellRot.value}deg` }],
-  }));
-  const dotStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: dotPulse.value }],
-  }));
-
   return (
     <View style={s.row}>
       <View style={s.left}>
@@ -91,13 +46,11 @@ export function PageHeader({ initials, name, unreadCount = 0, onBellPress, onAva
         activeOpacity={0.75}
         accessibilityRole="button"
         accessibilityLabel="Notifications">
-        <Animated.View style={bellStyle}>
-          <Feather name="bell" size={18} color={C.primary} />
-        </Animated.View>
+        <Feather name="bell" size={18} color={C.primary} />
         {unreadCount > 0 && (
-          <Animated.View style={[s.dot, dotStyle]}>
+          <View style={s.dot}>
             <Text style={s.dotNum}>{unreadCount > 9 ? '9+' : String(unreadCount)}</Text>
-          </Animated.View>
+          </View>
         )}
       </TouchableOpacity>
     </View>

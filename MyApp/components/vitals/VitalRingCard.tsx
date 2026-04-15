@@ -1,13 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated, Easing } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import Feather from '@expo/vector-icons/Feather';
-import ReAnimated, {
-  useSharedValue as useSV, useAnimatedStyle as useAS, withSpring, withTiming as withT,
-} from 'react-native-reanimated';
 import { C, FontSize, Radius, Shadow, Space } from '@/constants/theme';
-import { SparkleBurst } from '@/components/fx/SparkleBurst';
-import { useReduceMotion } from '@/hooks/useReduceMotion';
 
 type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -34,28 +29,21 @@ const CIRC = 2 * Math.PI * R;
 function Chip({ label, onPress, active, accent, accentSoft }: {
   label: string; onPress: () => void; active?: boolean; accent: string; accentSoft: string;
 }) {
-  const reduce = useReduceMotion();
-  const scale = useSV(1);
-  const style = useAS(() => ({ transform: [{ scale: scale.value }] }));
   return (
-    <ReAnimated.View style={style}>
-      <Pressable
-        onPress={onPress}
-        onPressIn={() => { if (!reduce) scale.value = withT(0.92, { duration: 80 }); }}
-        onPressOut={() => { if (!reduce) scale.value = withSpring(1, { damping: 10, stiffness: 260 }); }}
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        s.chip,
+        { backgroundColor: active ? accent : accentSoft, opacity: pressed ? 0.75 : 1 },
+      ]}>
+      <Text
         style={[
-          s.chip,
-          { backgroundColor: active ? accent : accentSoft },
+          s.chipTxt,
+          { color: active ? '#fff' : accent },
         ]}>
-        <Text
-          style={[
-            s.chipTxt,
-            { color: active ? '#fff' : accent },
-          ]}>
-          {label}
-        </Text>
-      </Pressable>
-    </ReAnimated.View>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -67,8 +55,6 @@ export function VitalRingCard(props: VitalRingCardProps) {
   } = props;
 
   const anim = useRef(new Animated.Value(0)).current;
-  const prevPctRef = useRef(fillPct);
-  const [sparkleFire, setSparkleFire] = useState(0);
 
   useEffect(() => {
     Animated.timing(anim, {
@@ -77,12 +63,6 @@ export function VitalRingCard(props: VitalRingCardProps) {
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
-
-    // Crossed to 100% — fire sparkle burst
-    if (prevPctRef.current < 100 && fillPct >= 100) {
-      setSparkleFire(x => x + 1);
-    }
-    prevPctRef.current = fillPct;
   }, [fillPct, anim]);
 
   const strokeDashoffset = anim.interpolate({
@@ -131,7 +111,6 @@ export function VitalRingCard(props: VitalRingCardProps) {
           <Text style={s.valueTxt}>{value}</Text>
           <Text style={s.unitTxt}>{unit}</Text>
         </View>
-        <SparkleBurst fire={sparkleFire} size={SIZE + 20} color={accent} />
       </View>
 
       {targetText ? <Text style={s.target}>{targetText}</Text> : null}

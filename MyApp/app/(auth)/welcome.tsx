@@ -39,18 +39,18 @@ export default function WelcomeScreen() {
         {/* Stats bar */}
         <View style={s.heroStats}>
           <View style={s.heroStat}>
-            <Text style={s.heroStatNum}>AI</Text>
-            <Text style={s.heroStatLbl}>Powered</Text>
+            <Text style={s.heroStatNum} numberOfLines={1}>AI</Text>
+            <Text style={s.heroStatLbl} numberOfLines={1}>Powered</Text>
           </View>
           <View style={s.heroStatDivider} />
           <View style={s.heroStat}>
-            <Text style={s.heroStatNum}>24/7</Text>
-            <Text style={s.heroStatLbl}>Monitoring</Text>
+            <Text style={s.heroStatNum} numberOfLines={1}>24/7</Text>
+            <Text style={s.heroStatLbl} numberOfLines={1}>Monitoring</Text>
           </View>
           <View style={s.heroStatDivider} />
           <View style={s.heroStat}>
-            <Text style={s.heroStatNum}>UV</Text>
-            <Text style={s.heroStatLbl}>Tracking</Text>
+            <Text style={s.heroStatNum} numberOfLines={1}>UV</Text>
+            <Text style={s.heroStatLbl} numberOfLines={1}>Tracking</Text>
           </View>
         </View>
       </View>
@@ -163,17 +163,27 @@ const s = StyleSheet.create({
   // Quick stats bar inside hero
   heroStats: {
     flexDirection: 'row',
+    alignSelf: 'stretch',
     backgroundColor: 'rgba(255,255,255,0.14)',
     borderRadius: 14,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    gap: 0,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
   },
-  heroStat: { flex: 1, alignItems: 'center' },
-  heroStatNum: { fontSize: 16, fontWeight: '800', color: '#fff' },
-  heroStatLbl: { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.7)', marginTop: 2 },
-  heroStatDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.25)', marginVertical: 4 },
+  heroStat: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  heroStatNum: { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: 0.2 },
+  heroStatLbl: { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.7)', marginTop: 3 },
+  heroStatDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    marginVertical: 2,
+    marginHorizontal: 4,
+  },
 
   // ── White sheet ─────────────────────────────────────────────────
   sheet: {

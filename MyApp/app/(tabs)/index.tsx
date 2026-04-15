@@ -14,7 +14,6 @@ import { WATER_TARGET_L, SLEEP_TARGET_H, vitalsStatusFromTargetPct } from '@/com
 import { useUvIndex } from '@/hooks/useUvIndex';
 import { uviToDisplay, uviToRiskMeta } from '@/lib/uvIndexMeta';
 import { MonitorLesionsSection } from '@/components/home/MonitorLesionsSection';
-import { GentleNudge } from '@/components/home/GentleNudge';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { BottomTabBar, type NavKey } from '@/components/ui/BottomTabBar';
@@ -186,16 +185,6 @@ export default function HomeScreen() {
         <SectionHeader
           title="Daily Habits"
           subtitle="Protect, hydrate, and rest to support skin resilience"
-        />
-
-        {/* Gentle inline nudge — only after noon if still under half the water goal */}
-        <GentleNudge
-          visible={new Date().getHours() >= 12 && waterLiters < WATER_TARGET_L / 2}
-          icon="droplet"
-          tone="info"
-          message={`You're ${(WATER_TARGET_L - waterLiters).toFixed(1)} L short of today's hydration goal.`}
-          actionLabel="+250ml"
-          onAction={() => addWater(0.25)}
         />
 
         <SunProtectionCard />

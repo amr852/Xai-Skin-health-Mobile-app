@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, StatusBar, Platform,
+  StyleSheet, StatusBar, Platform, ActivityIndicator,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Feather from '@expo/vector-icons/Feather';
@@ -12,7 +12,6 @@ import {
 } from '@/lib/notificationInbox';
 import { syncWaterInboxItems } from '@/lib/notificationScheduler';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { SkeletonNotifRow } from '@/components/ui/Skeleton';
 
 type NotifType = 'uv' | 'water' | 'sun' | 'lesion' | 'urgent' | 'default';
 
@@ -154,12 +153,9 @@ export default function NotificationsScreen() {
         showsVerticalScrollIndicator={false}>
 
         {firstLoad && items.length === 0 ? (
-          <>
-            <SkeletonNotifRow />
-            <SkeletonNotifRow />
-            <SkeletonNotifRow />
-            <SkeletonNotifRow />
-          </>
+          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={C.primary} />
+          </View>
         ) : items.length === 0 ? (
           <EmptyState
             icon="bell-off"

@@ -7,7 +7,15 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { NotificationBootstrap } from '@/components/NotificationBootstrap';
 import { AuthProvider } from '@/context/AuthContext';
 import { useAuth } from '@/hooks/useAuth';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, LogBox, StyleSheet, View } from 'react-native';
+
+// Expo removed Android remote push from Expo Go in SDK 53. Local notifications
+// still work and `notificationsNativeSupported()` already gates native calls,
+// so these expected module-load warnings are safe to silence.
+LogBox.ignoreLogs([
+  'expo-notifications: Android Push notifications',
+  '`expo-notifications` functionality is not fully supported in Expo Go',
+]);
 
 function RootLayoutNav() {
   const { token, isLoading } = useAuth();
@@ -21,7 +29,6 @@ function RootLayoutNav() {
         <Stack.Screen name="(auth)" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
         <Stack.Screen name="notifications" options={{ headerShown: false, animation: 'slide_from_right' }} />
-        <Stack.Screen name="body-map" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
 

@@ -32,16 +32,14 @@ async function syncSunIfLoggedIn(): Promise<void> {
 export function NotificationBootstrap() {
   const router = useRouter();
 
-  const lastResponse = Notifications.useLastNotificationResponse();
-
   useEffect(() => {
     if (!notificationsNativeSupported()) return;
-    if (!lastResponse) return;
-    const data = lastResponse.notification.request.content.data as Record<string, unknown>;
-    if (data?.kind === 'urgent') {
-      router.push('/history');
-    }
-  }, [lastResponse, router]);
+    const sub = Notifications.addNotificationResponseReceivedListener(r => {
+      const data = r.notification.request.content.data as Record<string, unknown>;
+      if (data?.kind === 'urgent') router.push('/history');
+    });
+    return () => sub.remove();
+  }, [router]);
 
   useEffect(() => {
     setNotificationPresentationDefaults();
