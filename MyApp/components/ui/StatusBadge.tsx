@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { C } from '@/constants/theme';
+import { C, FontFamily } from '@/constants/theme';
 
 type Status = 'Stable' | 'Check' | 'Urgent';
 
@@ -28,13 +28,17 @@ export function StatusBadge({ status, size = 'md' }: Props) {
 const s = StyleSheet.create({
   badge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 5,
+    paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: 9999,
     alignSelf: 'flex-start',
   },
   badgeSm: { paddingHorizontal: 8, paddingVertical: 3 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   dotSm: { width: 5, height: 5, borderRadius: 3 },
-  txt: { fontSize: 12, fontWeight: '700' },
+  txt: {
+    fontSize: 12,
+    fontFamily: FontFamily.bodySemibold,
+    letterSpacing: 0.2,
+  },
   txtSm: { fontSize: 11 },
 });

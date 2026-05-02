@@ -1,6 +1,6 @@
-import { Pressable, Text, ActivityIndicator, StyleSheet, View, ViewStyle } from 'react-native';
+import { Pressable, Text, ActivityIndicator, StyleSheet, View, ViewStyle, Platform } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import { C } from '@/constants/theme';
+import { C, FontFamily, Shadow } from '@/constants/theme';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
@@ -18,21 +18,28 @@ interface Props {
   style?: ViewStyle;
 }
 
-const HEIGHT:   Record<Size, number> = { sm: 38, md: 48, lg: 52 };
-const RADIUS:   Record<Size, number> = { sm: 10, md: 12, lg: 14 };
-const FONT_SZ:  Record<Size, number> = { sm: 13, md: 15, lg: 16 };
-const ICON_SZ:  Record<Size, number> = { sm: 15, md: 17, lg: 18 };
-const PAD_H:    Record<Size, number> = { sm: 14, md: 20, lg: 24 };
+const HEIGHT: Record<Size, number> = { sm: 38, md: 48, lg: 54 };
+const RADIUS: Record<Size, number> = { sm: 10, md: 12, lg: 14 };
+const FONT_SZ: Record<Size, number> = { sm: 13, md: 15, lg: 16 };
+const ICON_SZ: Record<Size, number> = { sm: 15, md: 17, lg: 18 };
+const PAD_H:   Record<Size, number> = { sm: 14, md: 22, lg: 26 };
 
-const BG:   Record<Variant, string> = { primary: C.primary, secondary: 'transparent', ghost: 'transparent', danger: C.urgentBg };
-const CLR:  Record<Variant, string> = { primary: '#fff', secondary: C.primary, ghost: C.text, danger: C.urgentText };
-const BDR:  Record<Variant, string | undefined> = { primary: undefined, secondary: C.primary, ghost: 'transparent', danger: C.urgentBorder };
+const BG:  Record<Variant, string> = { primary: C.primary, secondary: 'transparent', ghost: 'transparent', danger: C.urgentBg };
+const CLR: Record<Variant, string> = { primary: '#fff',    secondary: C.primary,     ghost: C.text,       danger: C.urgentText };
+const BDR: Record<Variant, string | undefined> = {
+  primary: undefined, secondary: C.primary, ghost: 'transparent', danger: C.urgentBorder,
+};
 
+/**
+ * Calm, predictable CTA. No spring scale, no bloom. Press feedback is opacity
+ * change only — keeps layout stable, accessible.
+ */
 export function AppButton({
   label, onPress, variant = 'primary', size = 'md',
   loading = false, disabled = false, icon, iconRight = false, style,
 }: Props) {
   const isDisabled = disabled || loading;
+  const isFilled = variant === 'primary' || variant === 'danger';
 
   return (
     <View style={style}>
@@ -40,17 +47,21 @@ export function AppButton({
         style={({ pressed }) => [
           s.base,
           {
-            height:           HEIGHT[size],
-            borderRadius:     RADIUS[size],
+            height: HEIGHT[size],
+            borderRadius: RADIUS[size],
             paddingHorizontal: PAD_H[size],
-            backgroundColor:  BG[variant],
-            borderWidth:      BDR[variant] ? 1.5 : 0,
-            borderColor:      BDR[variant],
-            opacity:          isDisabled ? 0.55 : pressed ? 0.85 : 1,
+            backgroundColor: BG[variant],
+            borderWidth: BDR[variant] ? 1.5 : 0,
+            borderColor: BDR[variant],
+            opacity: isDisabled ? 0.55 : pressed ? 0.85 : 1,
           },
+          isFilled && Platform.OS === 'ios' ? Shadow.sm : null,
         ]}
         onPress={onPress}
-        disabled={isDisabled}>
+        disabled={isDisabled}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: isDisabled, busy: loading }}
+        accessibilityLabel={label}>
         {loading ? (
           <ActivityIndicator size="small" color={CLR[variant]} />
         ) : (
@@ -81,7 +92,7 @@ const s = StyleSheet.create({
     gap: 8,
   },
   label: {
-    fontWeight: '700',
-    letterSpacing: 0.2,
+    fontFamily: FontFamily.bodySemibold,
+    letterSpacing: 0.1,
   },
 });

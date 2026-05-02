@@ -1,11 +1,7 @@
 import React, { createContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
 import { clearInbox } from '@/lib/notificationInbox';
-
-const API_URL = Platform.OS === 'web'
-  ? 'http://localhost:3000'
-  : 'http://192.168.1.5:3000';
+import { apiFetch, ApiError } from '@/lib/api';
 
 type User = {
   _id: string;
@@ -17,6 +13,8 @@ type User = {
 };
 
 type AuthResult = { success: boolean; error?: string };
+
+type AuthResponse = { token: string; user: User };
 
 type AuthContextType = {
   user: User | null;
@@ -37,6 +35,13 @@ type AuthContextType = {
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
+const TOKEN_KEY = 'authToken';
+const USER_KEY  = 'authUser';
+
+export async function getStoredToken(): Promise<string | null> {
+  return AsyncStorage.getItem(TOKEN_KEY);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -44,22 +49,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const bootstrapAsync = async () => {
+    let alive = true;
+    (async () => {
       try {
-        const savedToken = await AsyncStorage.getItem('authToken');
-        const savedUser = await AsyncStorage.getItem('authUser');
-        if (savedToken && savedUser) {
+        const [savedToken, savedUser] = await Promise.all([
+          AsyncStorage.getItem(TOKEN_KEY),
+          AsyncStorage.getItem(USER_KEY),
+        ]);
+        if (alive && savedToken && savedUser) {
           setToken(savedToken);
           setUser(JSON.parse(savedUser));
         }
       } catch (e) {
-        console.log('Failed to restore token', e);
+        console.warn('[auth] failed to restore session', e);
       } finally {
-        setIsLoading(false);
+        if (alive) setIsLoading(false);
       }
-    };
-    bootstrapAsync();
+    })();
+    return () => { alive = false; };
   }, []);
+
+  const persist = async (t: string, u: User) => {
+    await AsyncStorage.multiSet([[TOKEN_KEY, t], [USER_KEY, JSON.stringify(u)]]);
+    setToken(t);
+    setUser(u);
+  };
+
+  const friendlyError = (err: unknown, fallback: string): string => {
+    if (err instanceof ApiError) {
+      if (err.status === 0) return err.message; // network/timeout
+      if (err.status === 401) return 'Invalid email or password.';
+      return err.message || fallback;
+    }
+    return (err as any)?.message || fallback;
+  };
 
   const register = useCallback(async (
     email: string,
@@ -67,73 +90,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     firstName: string,
     lastName: string,
     gender: 'male' | 'female',
-    dateOfBirth: string
+    dateOfBirth: string,
   ): Promise<AuthResult> => {
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/users/register`, {
+      const data = await apiFetch<AuthResponse>('/users/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, firstName, lastName, gender, dateOfBirth }),
+        json: { email, password, firstName, lastName, gender, dateOfBirth },
       });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Registration failed');
-
-      await AsyncStorage.setItem('authToken', data.token);
-      await AsyncStorage.setItem('authUser', JSON.stringify(data.user));
-      setToken(data.token);
-      setUser(data.user);
+      await persist(data.token, data.user);
       return { success: true };
-    } catch (err: any) {
-      const errorMessage = err.message || 'Registration failed';
-      setError(errorMessage);
-      return { success: false, error: errorMessage };
+    } catch (err) {
+      const msg = friendlyError(err, 'Registration failed.');
+      setError(msg);
+      return { success: false, error: msg };
     }
   }, []);
 
   const login = useCallback(async (
     email: string,
-    password: string
+    password: string,
   ): Promise<AuthResult> => {
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/users/login`, {
+      const data = await apiFetch<AuthResponse>('/users/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        json: { email, password },
       });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Login failed');
-
-      await AsyncStorage.setItem('authToken', data.token);
-      await AsyncStorage.setItem('authUser', JSON.stringify(data.user));
-      setToken(data.token);
-      setUser(data.user);
+      await persist(data.token, data.user);
       return { success: true };
-    } catch (err: any) {
-      const errorMessage = err.message || 'Login failed';
-      setError(errorMessage);
-      return { success: false, error: errorMessage };
+    } catch (err) {
+      const msg = friendlyError(err, 'Login failed.');
+      setError(msg);
+      return { success: false, error: msg };
     }
   }, []);
 
-// In AuthContext.tsx, inside the logout function:
-const logout = useCallback(async (): Promise<void> => {
-  try {
-    await clearInbox();
-    await AsyncStorage.removeItem('authToken');
-    await AsyncStorage.removeItem('authUser');
-    console.log('Token cleared, setting null...');
-    setToken(null);
-    setUser(null);
-    setError(null);
-    console.log('State set to null');
-  } catch (err) {
-    console.log('Logout error:', err);
-  }
-}, []);
+  const logout = useCallback(async (): Promise<void> => {
+    try {
+      await clearInbox();
+      await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
+      setToken(null);
+      setUser(null);
+      setError(null);
+    } catch (err) {
+      console.warn('[auth] logout error', err);
+    }
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, token, isLoading, error, register, login, logout }}>

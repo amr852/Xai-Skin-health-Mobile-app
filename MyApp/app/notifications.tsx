@@ -1,12 +1,14 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, StatusBar, Platform, ActivityIndicator,
+  StyleSheet, StatusBar, ActivityIndicator,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Feather from '@expo/vector-icons/Feather';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { C, FontSize, Space, Radius } from '@/constants/theme';
+import { C, FontFamily } from '@/constants/theme';
+import { Bell, Sun, Droplet, ZoomIn, AlertCircle, Shield } from 'lucide-react-native';
+import { Hairline } from '@/components/decor/Hairline';
 import {
   loadInbox, markAllInboxRead, markInboxItemRead, type InboxItem,
 } from '@/lib/notificationInbox';
@@ -91,61 +93,28 @@ export default function NotificationsScreen() {
     <SafeAreaView style={st.safe} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor={C.primary} />
 
-      {/* ── Branded header ── */}
+      {/* ── 56-px inbox header — title + Mark all read inline ── */}
       <View style={st.header}>
-        {/* Decorative rings */}
-        <View style={st.headerRing1} />
-        <View style={st.headerRing2} />
-
-        <View style={st.headerTop}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={st.backBtn}
-            hitSlop={12}
-            accessibilityLabel="Back">
-            <Feather name="arrow-left" size={20} color="#fff" />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={st.backBtn}
+          hitSlop={12}
+          accessibilityLabel="Back">
+          <Feather name="arrow-left" size={20} color={C.text} />
+        </TouchableOpacity>
+        <View style={st.headerCenter}>
+          <Text style={st.headerTitle}>Notifications</Text>
+          {unread > 0 && <Text style={st.headerSub}>{unread} unread</Text>}
+        </View>
+        {hasItems && unread > 0 ? (
+          <TouchableOpacity onPress={onReadAll} hitSlop={6} style={st.readAllBtn} accessibilityLabel="Mark all read">
+            <Text style={st.readAllTxt}>Mark all read</Text>
           </TouchableOpacity>
-
-          <View style={st.headerCenter}>
-            <View style={st.headerIconBg}>
-              <Feather name="bell" size={18} color={C.primary} />
-            </View>
-            <Text style={st.headerTitle}>Notifications</Text>
-          </View>
-
-          {hasItems ? (
-            <TouchableOpacity
-              onPress={unread > 0 ? onReadAll : undefined}
-              disabled={unread === 0}
-              hitSlop={6}
-              style={st.readAllBtn}
-              accessibilityLabel="Mark all read">
-              <Text style={[st.readAllTxt, unread === 0 && st.readAllTxtOff]}>
-                Read all
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={st.readAllBtn} />
-          )}
-        </View>
-
-        {/* Unread badge row */}
-        <View style={st.headerMeta}>
-          {unread > 0 ? (
-            <View style={st.unreadBadge}>
-              <View style={st.unreadDot} />
-              <Text style={st.unreadTxt}>
-                {unread} unread notification{unread === 1 ? '' : 's'}
-              </Text>
-            </View>
-          ) : hasItems ? (
-            <View style={st.allReadBadge}>
-              <Feather name="check-circle" size={12} color={C.stableText} />
-              <Text style={st.allReadTxt}>All caught up</Text>
-            </View>
-          ) : null}
-        </View>
+        ) : (
+          <View style={st.readAllBtn} />
+        )}
       </View>
+      <Hairline width={'100%'} fadeInset={0} />
 
       <ScrollView
         style={st.scroll}
@@ -165,11 +134,12 @@ export default function NotificationsScreen() {
         ) : (
           groups.map(group => (
             <View key={group.label}>
-              {/* Date group header */}
+              {/* Date group header — left-aligned uppercase tracked label */}
               <View style={st.groupHeader}>
-                <View style={st.groupLine} />
                 <Text style={st.groupLabel}>{group.label}</Text>
-                <View style={st.groupLine} />
+                <View style={st.groupHairline}>
+                  <Hairline width={'100%'} />
+                </View>
               </View>
 
               {/* Notification cards */}
@@ -184,21 +154,32 @@ export default function NotificationsScreen() {
                     onPress={() => onPressRow(item.id)}
                     activeOpacity={0.72}>
 
-                    {/* Type icon circle */}
+                    {/* Type icon — Lucide stroke 1.6 in tinted square */}
                     <View style={[st.iconCircle, { backgroundColor: meta.bg }]}>
-                      <Feather name={meta.icon} size={18} color={meta.color} />
-                      {isUnread && <View style={[st.unreadRing, { borderColor: meta.color }]} />}
+                      {type === 'sun' ? (
+                        <Shield size={20} color={meta.color} strokeWidth={1.7} />
+                      ) : type === 'uv' ? (
+                        <Sun size={20} color={meta.color} strokeWidth={1.7} />
+                      ) : type === 'water' ? (
+                        <Droplet size={20} color={meta.color} strokeWidth={1.7} />
+                      ) : type === 'lesion' ? (
+                        <ZoomIn size={20} color={meta.color} strokeWidth={1.7} />
+                      ) : type === 'urgent' ? (
+                        <AlertCircle size={20} color={meta.color} strokeWidth={1.7} />
+                      ) : (
+                        <Bell size={20} color={meta.color} strokeWidth={1.7} />
+                      )}
                     </View>
 
                     {/* Content */}
                     <View style={st.cardContent}>
                       <View style={st.cardTop}>
-                        <View style={[st.typePill, { backgroundColor: meta.bg }]}>
-                          <Text style={[st.typePillTxt, { color: meta.color }]}>{meta.label}</Text>
-                        </View>
-                        {isUnread && (
-                          <View style={[st.unreadDotSmall, { backgroundColor: meta.color }]} />
-                        )}
+                        <Text style={[st.typeLabel, { color: meta.color }]}>{meta.label.toUpperCase()}</Text>
+                        <Text style={st.cardTime}>
+                          {new Date(item.createdAt).toLocaleString(undefined, {
+                            hour: 'numeric', minute: '2-digit',
+                          })}
+                        </Text>
                       </View>
                       <Text
                         style={[st.cardTitle, !isUnread && st.cardTitleRead]}
@@ -206,17 +187,10 @@ export default function NotificationsScreen() {
                         {item.title}
                       </Text>
                       <Text style={st.cardBody} numberOfLines={2}>{item.body}</Text>
-                      <View style={st.cardFooter}>
-                        <Feather name="clock" size={10} color={C.muted} />
-                        <Text style={st.cardTime}>
-                          {new Date(item.createdAt).toLocaleString(undefined, {
-                            hour: 'numeric', minute: '2-digit',
-                          })}
-                        </Text>
-                      </View>
                     </View>
 
-                    <Feather name="chevron-right" size={15} color={C.border} style={st.chevron} />
+                    {/* Right-edge unread dot — single rose pip, never a ring */}
+                    {isUnread && <View style={st.unreadEdgeDot} />}
                   </TouchableOpacity>
                 );
               })}
@@ -232,129 +206,119 @@ const st = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: C.bg },
   scroll: { flex: 1 },
 
-  // ── Branded header ───────────────────────────────────────────────────────────
+  // ── 56-px inbox header — title + Mark all read inline ──────────────
   header: {
-    backgroundColor: C.primary,
-    paddingBottom: 14,
-    overflow: 'hidden',
-  },
-  headerRing1: {
-    position: 'absolute', width: 160, height: 160, borderRadius: 80,
-    borderWidth: 28, borderColor: 'rgba(255,255,255,0.07)',
-    top: -60, right: -30,
-  },
-  headerRing2: {
-    position: 'absolute', width: 100, height: 100, borderRadius: 50,
-    borderWidth: 18, borderColor: 'rgba(255,255,255,0.06)',
-    top: 10, left: -20,
-  },
-  headerTop: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4,
-    gap: 4,
+    backgroundColor: C.surface,
+    paddingHorizontal: 12, paddingVertical: 10,
+    minHeight: 56,
   },
   backBtn: {
-    width: 36, height: 36, borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)',
+    width: 38, height: 38, borderRadius: 12,
+    backgroundColor: C.surfaceAlt,
     alignItems: 'center', justifyContent: 'center',
   },
   headerCenter: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'center', gap: 8,
-  },
-  headerIconBg: {
-    width: 30, height: 30, borderRadius: 9,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    alignItems: 'center', justifyContent: 'center',
+    flex: 1,
+    paddingHorizontal: 12,
   },
   headerTitle: {
-    fontSize: FontSize.md, fontWeight: '800', color: '#fff', letterSpacing: -0.3,
+    fontSize: 16,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.text,
+    letterSpacing: -0.2,
   },
-  readAllBtn: { minWidth: 64, alignItems: 'flex-end' },
-  readAllTxt: { fontSize: FontSize.sm, fontWeight: '700', color: 'rgba(255,255,255,0.9)' },
-  readAllTxtOff: { color: 'rgba(255,255,255,0.4)' },
+  headerSub: {
+    fontSize: 11.5,
+    fontFamily: FontFamily.body,
+    color: C.textSub,
+    marginTop: 1,
+  },
+  readAllBtn: { minWidth: 90, alignItems: 'flex-end' },
+  readAllTxt: {
+    fontSize: 13,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.primary,
+    letterSpacing: 0.1,
+  },
 
-  headerMeta: { paddingHorizontal: 16, marginTop: 4 },
-  unreadBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 10, paddingVertical: 5,
-  },
-  unreadDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },
-  unreadTxt: { fontSize: FontSize.xs, fontWeight: '700', color: '#fff' },
-  allReadBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 10, paddingVertical: 5,
-  },
-  allReadTxt: { fontSize: FontSize.xs, fontWeight: '600', color: 'rgba(255,255,255,0.85)' },
-
-  // ── Date group headers ───────────────────────────────────────────────────────
+  // ── Date group headers — left-aligned tracked label + hairline ──────
   groupHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    marginTop: 16, marginBottom: 8,
+    marginTop: 18, marginBottom: 8,
+    paddingHorizontal: 4,
   },
-  groupLine: { flex: 1, height: 1, backgroundColor: C.border },
+  groupHairline: { flex: 1 },
   groupLabel: {
-    fontSize: FontSize.xs, fontWeight: '700', color: C.muted,
-    letterSpacing: 0.5, textTransform: 'uppercase',
+    fontSize: 11,
+    fontFamily: FontFamily.bodyBold,
+    color: C.textSub,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
 
-  // ── Notification card ────────────────────────────────────────────────────────
+  // ── Notification card — inbox-density row ─────────────────────────
   card: {
-    flexDirection: 'row', alignItems: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     backgroundColor: C.surface,
-    borderRadius: Radius.lg,
-    padding: 12, marginBottom: 10,
-    borderWidth: 1, borderColor: C.border,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: C.border,
     gap: 12,
-    ...(Platform.OS === 'ios'
-      ? { shadowColor: '#1E1010', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 }
-      : Platform.OS === 'android' ? { elevation: 2 } : {}),
+    position: 'relative',
   },
   cardUnread: {
-    borderColor: C.primaryLight,
-    backgroundColor: `rgba(155,48,88,0.03)`,
+    backgroundColor: '#FFFCFD',
   },
-
   iconCircle: {
-    width: 44, height: 44, borderRadius: 14,
+    width: 40, height: 40, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0, position: 'relative',
+    flexShrink: 0,
   },
-  unreadRing: {
-    position: 'absolute', top: -2, right: -2,
-    width: 10, height: 10, borderRadius: 5,
-    borderWidth: 2, borderColor: C.primary,
+  cardContent: { flex: 1, minWidth: 0 },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginBottom: 3,
+  },
+  typeLabel: {
+    fontSize: 10,
+    fontFamily: FontFamily.bodyBold,
+    letterSpacing: 1.2,
+  },
+  cardTitle: {
+    fontSize: 14.5,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.text,
+    letterSpacing: -0.1,
+    marginBottom: 2,
+  },
+  cardTitleRead: {
+    fontFamily: FontFamily.body,
+    color: C.textSub,
+  },
+  cardBody: {
+    fontSize: 12.5,
+    fontFamily: FontFamily.body,
+    color: C.textSub,
+    lineHeight: 17,
+  },
+  cardTime: {
+    fontSize: 10.5,
+    fontFamily: FontFamily.bodyMedium,
+    color: C.textHint,
+    letterSpacing: 0.2,
+  },
+  // Right-edge unread dot — single rose pip
+  unreadEdgeDot: {
+    position: 'absolute',
+    right: 12, top: 14,
+    width: 7, height: 7, borderRadius: 4,
     backgroundColor: C.primary,
   },
-
-  cardContent: { flex: 1, minWidth: 0 },
-  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-
-  typePill: {
-    paddingHorizontal: 7, paddingVertical: 2.5,
-    borderRadius: Radius.full,
-  },
-  typePillTxt: { fontSize: 10, fontWeight: '700', letterSpacing: 0.2 },
-
-  unreadDotSmall: { width: 6, height: 6, borderRadius: 3 },
-
-  cardTitle: {
-    fontSize: FontSize.base, fontWeight: '700', color: C.text,
-    letterSpacing: -0.2, marginBottom: 3,
-  },
-  cardTitleRead: { fontWeight: '500', color: C.textSub },
-  cardBody: {
-    fontSize: FontSize.sm, color: C.muted, lineHeight: 18, marginBottom: 6,
-  },
-  cardFooter: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  cardTime: { fontSize: 10, color: C.muted, fontWeight: '500' },
-
-  chevron: { alignSelf: 'center', flexShrink: 0 },
 });

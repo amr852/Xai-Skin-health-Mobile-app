@@ -1,44 +1,69 @@
 import { Platform } from 'react-native';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COLOUR PALETTE
-// Single source of truth for every colour used in the app.
+// CLINICAL DESIGN SYSTEM — Xai Skin Health
+//
+// Direction: medical-grade, calm, professional. Apple Health × One Medical ×
+// Withings. Single warm brand accent (rose) on a slate-neutral substrate.
+//
+// Decoration policy: every visual element here serves data or brand. Pure
+// ornament is forbidden. The DECORATION_BUDGET map below tracks where each
+// purposeful element is allowed to render — never more than twice.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Skin health — warm rose / skin-tone palette */
 export const C = {
   // ── Page & surface ──────────────────────────────────────────────────────────
-  bg:          '#F8F4F2',   // Warm cream page background
-  surface:     '#FFFFFF',   // Card / sheet surface
-  surfaceAlt:  '#F3EDEB',   // Subtle alternative surface (input backgrounds, dividers)
-  overlay:     'rgba(0,0,0,0.45)', // Modal scrim
+  bg:          '#F8FAFC',   // slate-50 — calm clinical background
+  surface:     '#FFFFFF',   // card / sheet surface
+  surfaceAlt:  '#F1F5F9',   // slate-100 — inputs, soft dividers
+  cream:       '#F1F5F9',   // legacy alias (kept for now, drops in P2)
+  ivory:       '#F8FAFC',
+  sand:        '#E2E8F0',
+  overlay:     'rgba(15,23,42,0.45)', // slate-900 scrim
 
   // ── Typography ──────────────────────────────────────────────────────────────
-  text:        '#1E1010',   // Primary text — deep warm almost-black
-  textSub:     '#5A3535',   // Secondary text — warm brown
-  textHint:    '#A07070',   // Placeholder / hint text
-  muted:       '#9B7878',   // Muted — labels, captions
+  text:        '#0F172A',   // slate-900 — primary
+  textSub:     '#475569',   // slate-600 — secondary
+  textHint:    '#94A3B8',   // slate-400 — placeholder/meta (passes 3:1 against bg)
+  muted:       '#64748B',   // slate-500 — labels/captions
 
-  // ── Primary brand ───────────────────────────────────────────────────────────
-  primary:     '#9B3058',   // Deep rose / cranberry — CTAs, active states
-  primaryDark: '#7A2344',   // Pressed / active shade
-  primaryMid:  '#C24570',   // Medium rose — hover tint
-  primaryLight:'#FAE8EF',   // Very light blush — tinted backgrounds
+  // ── Primary brand (rose, single accent) ─────────────────────────────────────
+  primary:     '#9B3058',   // brand rose — CTAs, active state, links
+  primaryDeep: '#5C1B36',   // pressed + gradient end-stop
+  primaryDark: '#5C1B36',   // legacy alias
+  primaryMid:  '#C24570',   // hover (rare on mobile)
+  primaryLight:'#FCE7EE',   // tinted bg, used sparingly
+  primarySoft: '#F4B8BC',   // legacy alias — phasing out
 
-  // Keep old alias so existing screens don't break before redesign
+  // ── Legacy aliases (preserved so existing screens compile during migration) ─
+  blush:       '#FCE7EE',
+  petal:       '#F4B8BC',
+  rose:        '#C24570',
+  deepRose:    '#5C1B36',
   blue:        '#9B3058',
   blueFill:    '#C24570',
-  blueLight:   '#FAE8EF',
+  blueLight:   '#FCE7EE',
   white:       '#FFFFFF',
-  cardBg:      '#FDF5F3',
-  cardGray:    '#F7F0EE',
+  cardBg:      '#FFFFFF',
+  cardGray:    '#F1F5F9',
+  // The following used to mean "sage / gold". They are now neutralized to
+  // prevent accidental reintroduction of the floral palette. Existing imports
+  // continue to compile but render in the slate-neutral system instead.
+  sage:        '#475569',
+  sageSoft:    '#F1F5F9',
+  sageDeep:    '#334155',
+  sageDark:    '#0F172A',
+  sageMid:     '#9B3058',
+  gold:        '#9B3058',
+  goldSoft:    '#FCE7EE',
 
   // ── Borders ─────────────────────────────────────────────────────────────────
-  border:      '#E8D8D5',
-  borderLight: '#F2E8E6',
-  borderFocus: '#9B3058',   // Input focus ring
+  border:      '#E2E8F0',   // slate-200
+  borderLight: '#F1F5F9',
+  borderFocus: '#9B3058',
+  borderSage:  '#E2E8F0',
 
-  // ── Status — medical traffic-light ──────────────────────────────────────────
+  // ── Status — medical traffic-light (UNCHANGED for clinical safety) ──────────
   stableText:  '#166534',
   stableBg:    '#DCFCE7',
   stableBorder:'#86EFAC',
@@ -52,45 +77,68 @@ export const C = {
   warnBg:      '#FEFCE8',
   warnBorder:  '#D97706',
 
-  // ── Accent colours ──────────────────────────────────────────────────────────
+  // ── Auxiliary palette ───────────────────────────────────────────────────────
   amber:       '#B45309',
   amberFill:   '#D97706',
   amberLight:  '#FEF3C7',
-  purple:      '#6D28D9',
+  purple:      '#7C3AED',
   purpleFill:  '#8B5CF6',
   purpleLight: '#EDE9FE',
-  sage:        '#FAE8EF',
-  sageDark:    '#9B3058',
-  sageMid:     '#C24570',
 
   // ── Navigation (bottom tab bar) ─────────────────────────────────────────────
   navPillBg:          '#FFFFFF',
-  navCircleInactive:  '#F8F4F2',
+  navCircleInactive:  '#F1F5F9',
   navCircleActive:    '#9B3058',
-  navIconInactive:    '#9B7878',
+  navIconInactive:    '#64748B',
   navIconActive:      '#FFFFFF',
 
   // ── Header chrome ────────────────────────────────────────────────────────────
   headerAvatarRing:   '#9B3058',
-  bellBg:             '#FAE8EF',
-  bellBadge:          '#DC2626',
+  bellBg:             '#FCE7EE',
+  bellBadge:          '#9B3058',
 
   // ── Vital-card tints ─────────────────────────────────────────────────────────
-  diagBlue:        '#FDE8EF',
-  diagPeach:       '#FDEDE5',
+  diagBlue:        '#FCE7EE',
+  diagPeach:       '#FEF3C7',
   diagYellow:      '#FEF3C7',
-  diagYellowDeep:  '#B84A3A',
-  diagYellowPale:  '#FDEAE6',
-  diagPurpleTint:  '#F0E8F8',
+  diagYellowDeep:  '#B45309',
+  diagYellowPale:  '#FEF3C7',
+  diagPurpleTint:  '#EDE9FE',
   diagPurpleRing:  '#DDD6FE',
-  diagLine:        '#2B1A1A',
-  diagPanelBorder: '#EDD9D5',
-  lesCardBorder:   '#EEDBD8',
+  diagLine:        '#0F172A',
+  diagPanelBorder: '#E2E8F0',
+  lesCardBorder:   '#E2E8F0',
+} as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GRADIENT TOKENS — the only allowed gradient in the system
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const Gradient = {
+  hero:        ['#9B3058', '#5C1B36'] as const,
+  heroAngle:   16, // degrees
+  surfaceTint: ['#FFFFFF', '#F8FAFC'] as const, // for stat-card inner highlight
+} as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DECORATION BUDGET
+//
+// Hard rule: each decorative element appears in at most TWO places across the
+// app. New screens cannot exceed this without revising the system.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const DECORATION_BUDGET = {
+  GradientHero:   ['auth.welcome', 'home.greetingStrip'],
+  Crest:          ['auth.welcome',  'auth.login'],
+  PulseLine:      ['home.greetingStrip', 'home.uvCard'],
+  GridBackplate:  ['home.uvCard',  'vitals.ringCard'],
+  StatusArc:      ['history.row',  'home.sunCard'],
+  Hairline:       ['profile.section', 'history.filterBar'],
+  ItalicAccent:   ['auth.welcome.tagline', 'history.empty'],
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPOGRAPHY SCALE
-// Use these everywhere instead of hardcoded fontSize values.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const FontSize = {
@@ -103,6 +151,7 @@ export const FontSize = {
   '2xl': 24,
   '3xl': 28,
   '4xl': 32,
+  '5xl': 40,
 } as const;
 
 export const FontWeight = {
@@ -114,14 +163,55 @@ export const FontWeight = {
 } as const;
 
 export const LineHeight = {
-  tight:   1.2,  // multiply by fontSize
+  tight:   1.2,
   snug:    1.35,
   normal:  1.5,
   relaxed: 1.65,
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SPACING SCALE  (4 pt grid)
+// FONT FAMILIES
+// Inter — every UI text (numbers, labels, body, headings).
+// Source Serif 4 italic — exactly one tagline per screen, max two screens.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const FontFamily = {
+  display:        'Inter_600SemiBold',
+  displayBold:    'Inter_700Bold',
+  // displayItalic kept as a token name but resolves to Source Serif 4 italic.
+  // Use sparingly — see DECORATION_BUDGET.ItalicAccent.
+  displayItalic:  'SourceSerif4_400Italic',
+  displayLight:   'Inter_400Regular',
+  body:           'Inter_400Regular',
+  bodyMedium:     'Inter_500Medium',
+  bodySemibold:   'Inter_600SemiBold',
+  bodyBold:       'Inter_700Bold',
+  bodyExtrabold:  'Inter_800ExtraBold',
+} as const;
+
+export const Fonts = Platform.select({
+  ios: {
+    sans:    'Inter_400Regular',
+    serif:   'SourceSerif4_400Italic',
+    rounded: 'Inter_400Regular',
+    mono:    'ui-monospace',
+  },
+  default: {
+    sans:    'Inter_400Regular',
+    serif:   'SourceSerif4_400Italic',
+    rounded: 'Inter_400Regular',
+    mono:    'monospace',
+  },
+  web: {
+    sans:    "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    serif:   "'Source Serif 4', Georgia, 'Times New Roman', serif",
+    rounded: "Inter, system-ui, sans-serif",
+    mono:    "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+  },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SPACING SCALE (4 pt grid)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const Space = {
@@ -150,19 +240,21 @@ export const Radius = {
   xl:   20,
   '2xl': 24,
   '3xl': 32,
+  petal: 24,    // legacy alias (no longer petal-shaped)
   full: 9999,
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHADOW / ELEVATION TOKENS
-// Each token includes iOS shadow props + Android elevation.
+// Restrained slate shadows — no brand tint. Medical-quiet.
 // ─────────────────────────────────────────────────────────────────────────────
 
+const SHADOW_COLOR = '#0F172A'; // slate-900
+
 export const Shadow = {
-  /** Very subtle — list rows, inner panels */
   xs: Platform.select({
     ios: {
-      shadowColor: '#1E1010',
+      shadowColor: SHADOW_COLOR,
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.04,
       shadowRadius: 3,
@@ -170,45 +262,41 @@ export const Shadow = {
     android: { elevation: 1 },
     default: {},
   }),
-  /** Standard card shadow */
   sm: Platform.select({
     ios: {
-      shadowColor: '#1E1010',
+      shadowColor: SHADOW_COLOR,
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.07,
-      shadowRadius: 6,
+      shadowOpacity: 0.06,
+      shadowRadius: 8,
     },
     android: { elevation: 3 },
     default: {},
   }),
-  /** Elevated card, modal sheet */
   md: Platform.select({
     ios: {
-      shadowColor: '#1E1010',
+      shadowColor: SHADOW_COLOR,
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.10,
+      shadowOpacity: 0.08,
       shadowRadius: 12,
     },
     android: { elevation: 6 },
     default: {},
   }),
-  /** Full modal, floating button */
   lg: Platform.select({
     ios: {
-      shadowColor: '#1E1010',
+      shadowColor: SHADOW_COLOR,
       shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.14,
+      shadowOpacity: 0.10,
       shadowRadius: 20,
     },
     android: { elevation: 12 },
     default: {},
   }),
-  /** Bottom sheet, prominent overlay */
   xl: Platform.select({
     ios: {
-      shadowColor: '#1E1010',
+      shadowColor: SHADOW_COLOR,
       shadowOffset: { width: 0, height: 16 },
-      shadowOpacity: 0.18,
+      shadowOpacity: 0.14,
       shadowRadius: 32,
     },
     android: { elevation: 20 },
@@ -218,37 +306,33 @@ export const Shadow = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENT TOKENS
-// Shared sizing and style rules for individual UI components.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const Button = {
-  /** Height of each button size */
-  height: { sm: 36, md: 44, lg: 52 },
-  /** Horizontal padding inside button */
-  paddingH: { sm: 14, md: 20, lg: 28 },
-  radius: Radius.md,
+  height: { sm: 36, md: 46, lg: 52 },
+  paddingH: { sm: 14, md: 22, lg: 30 },
+  radius: 14,
   fontSize: { sm: FontSize.sm, md: FontSize.base, lg: FontSize.md },
-  fontWeight: FontWeight.bold,
-  /** Gap between icon and label text */
+  fontWeight: FontWeight.semibold,
   iconGap: 8,
 } as const;
 
 export const Input = {
   height: 48,
-  heightMulti: 96,         // multiline textarea
+  heightMulti: 100,
   paddingH: Space[4],
   paddingV: Space[3],
-  borderWidth: 1.5,
-  radius: Radius.md,
+  borderWidth: 1.25,
+  radius: 12,
   fontSize: FontSize.base,
   labelSize: FontSize.sm,
   labelWeight: FontWeight.semibold,
-  labelGap: 6,             // space between label and input box
-  gap: Space[4],           // space between consecutive fields
+  labelGap: 6,
+  gap: Space[4],
 } as const;
 
 export const Card = {
-  radius: Radius.lg,
+  radius: 20,
   padding: Space[4],
   paddingLg: Space[5],
   borderWidth: 1,
@@ -259,8 +343,8 @@ export const Badge = {
   paddingV: 4,
   radius: Radius.full,
   fontSize: FontSize.xs,
-  fontWeight: FontWeight.bold,
-  dotSize: 7,
+  fontWeight: FontWeight.semibold,
+  dotSize: 6,
 } as const;
 
 export const Avatar = {
@@ -268,7 +352,7 @@ export const Avatar = {
   md:  40,
   lg:  56,
   xl:  88,
-  borderWidth: 2.5,
+  borderWidth: 2,
 } as const;
 
 export const IconSize = {
@@ -282,37 +366,33 @@ export const IconSize = {
 
 export const Divider = {
   thickness: 1,
-  color: '#E8D8D5',       // same as C.border
+  color: '#E2E8F0',
   gapV: Space[4],
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FONT FAMILIES  (kept from original)
+// LEGACY: Floral / wellness tokens — kept as no-ops so existing imports
+// continue to compile during the migration. Do NOT introduce new uses.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const Fonts = Platform.select({
-  ios: {
-    sans:    'system-ui',
-    serif:   'ui-serif',
-    rounded: 'ui-rounded',
-    mono:    'ui-monospace',
-  },
-  default: {
-    sans:    'normal',
-    serif:   'serif',
-    rounded: 'normal',
-    mono:    'monospace',
-  },
-  web: {
-    sans:    "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    serif:   "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
-    mono:    "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-  },
-});
+export const Floral = {
+  decorOpacity: 0,
+  bloomCenter:  '#9B3058',
+  leafLight:    '#94A3B8',
+  leafDark:     '#475569',
+  petalLight:   '#FCE7EE',
+  petalDark:    '#9B3058',
+  bloomCore:    '#F4B8BC',
+  sway:         { duration: 4000, angleDeg: 0 },
+  bloomIn:      { duration: 220, fromScale: 1 },
+  press:        { duration: 150, scale: 0.97 },
+} as const;
 
-// Kept for any file that still imports Colors directly
+// ─────────────────────────────────────────────────────────────────────────────
+// LEGACY EXPORT (do not remove — external imports still rely on it)
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const Colors = {
-  light: { text: '#11181C', background: '#fff', tint: C.primary, icon: '#687076', tabIconDefault: '#687076', tabIconSelected: C.primary },
+  light: { text: C.text, background: C.bg, tint: C.primary, icon: C.muted, tabIconDefault: C.muted, tabIconSelected: C.primary },
   dark:  { text: '#ECEDEE', background: '#151718', tint: '#fff',  icon: '#9BA1A6', tabIconDefault: '#9BA1A6', tabIconSelected: '#fff' },
 };

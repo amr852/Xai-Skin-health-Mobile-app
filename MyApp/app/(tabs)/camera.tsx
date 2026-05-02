@@ -9,7 +9,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { C } from '@/constants/theme';
+import { C, FontFamily, Shadow } from '@/constants/theme';
 import { useLesions, type LesionFields } from '@/hooks/useLesions';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
@@ -138,7 +138,7 @@ export default function CameraScreen() {
                 label="Title" required
                 value={form.title}
                 onChangeText={v => setForm(f => ({ ...f, title: v }))}
-                placeholder="e.g. Mole on left arm"
+                placeholder="Petite mole near left elbow"
                 editable={!saving}
                 returnKeyType="next"
               />
@@ -146,14 +146,14 @@ export default function CameraScreen() {
                 label="Description"
                 value={form.description}
                 onChangeText={v => setForm(f => ({ ...f, description: v }))}
-                placeholder="Size, colour, texture…"
+                placeholder="A few words on size, colour, edges, texture…"
                 multiline editable={!saving}
               />
               <AppInput
                 label="Body Location"
                 value={form.location}
                 onChangeText={v => setForm(f => ({ ...f, location: v }))}
-                placeholder="e.g. Left forearm"
+                placeholder="Inner left forearm"
                 editable={!saving} returnKeyType="next"
               />
 
@@ -183,7 +183,7 @@ export default function CameraScreen() {
                 label="Notes" optional
                 value={form.notes}
                 onChangeText={v => setForm(f => ({ ...f, notes: v }))}
-                placeholder="Any additional notes…"
+                placeholder="Tenderness, sun exposure that day, anything to remember…"
                 multiline editable={!saving}
               />
             </View>
@@ -234,10 +234,22 @@ export default function CameraScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Overlay: capture bar */}
+      {/* Overlay: capture bar — clinical crosshair viewfinder, no halo */}
       <View style={[s.camBottomBar, { paddingBottom: insets.bottom + 24 }]}>
         <View style={s.camShutter}>
-          <TouchableOpacity style={s.camShutterBtn} onPress={handleTakePhoto} activeOpacity={0.85}>
+          {/* Outer crosshair frame: thin ring + 4 corner ticks */}
+          <View pointerEvents="none" style={s.crosshairRing} />
+          <View pointerEvents="none" style={[s.crosshairTick, s.tickTop]} />
+          <View pointerEvents="none" style={[s.crosshairTick, s.tickRight]} />
+          <View pointerEvents="none" style={[s.crosshairTick, s.tickBottom]} />
+          <View pointerEvents="none" style={[s.crosshairTick, s.tickLeft]} />
+          <TouchableOpacity
+            style={s.camShutterBtn}
+            onPress={handleTakePhoto}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Capture photo"
+            hitSlop={12}>
             <View style={s.camShutterInner} />
           </TouchableOpacity>
         </View>
@@ -257,50 +269,85 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginBottom: 20,
   },
-  permTitle: { fontSize: 22, fontWeight: '800', color: C.text, textAlign: 'center', marginBottom: 10 },
-  permMsg:   { fontSize: 14, color: C.textHint, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
+  permTitle: {
+    fontSize: 24,
+    fontFamily: FontFamily.displayBold,
+    color: C.text,
+    textAlign: 'center',
+    marginBottom: 10,
+    letterSpacing: -0.4,
+  },
+  permMsg: {
+    fontSize: 14,
+    fontFamily: FontFamily.body,
+    color: C.textHint,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 28,
+  },
   permBtn:   { width: '100%' },
 
   // Form
   formHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
+    paddingHorizontal: 16, paddingVertical: 14,
     backgroundColor: C.surface,
-    borderBottomWidth: 1, borderBottomColor: C.border,
+    borderBottomWidth: 1, borderBottomColor: C.borderLight,
   },
   formBack: {
-    width: 40, height: 40, borderRadius: 12,
+    width: 40, height: 40, borderRadius: 14,
     backgroundColor: C.surfaceAlt,
     alignItems: 'center', justifyContent: 'center',
   },
-  formHeaderTitle: { fontSize: 17, fontWeight: '700', color: C.text },
+  formHeaderTitle: {
+    fontSize: 17,
+    fontFamily: FontFamily.displayBold,
+    color: C.text,
+    letterSpacing: -0.3,
+  },
   formScroll: { paddingHorizontal: 16, paddingTop: 16 },
   photoWrap: {
-    width: '100%', height: 220, borderRadius: 16,
+    width: '100%', height: 220, borderRadius: 22,
     marginBottom: 16, alignItems: 'center', justifyContent: 'center',
     overflow: 'visible',
   },
   photo: {
-    width: '100%', height: 220, borderRadius: 16,
+    width: '100%', height: 220, borderRadius: 22,
     backgroundColor: '#111',
   },
   formCard: {
-    backgroundColor: C.surface, borderRadius: 20,
+    backgroundColor: C.surface, borderRadius: 22,
     padding: 18, borderWidth: 1, borderColor: C.border,
     marginBottom: 16,
+    ...(Platform.OS === 'ios' ? Shadow.xs : {}),
   },
-  statusLabel: { fontSize: 13, fontWeight: '600', color: C.text, marginBottom: 8 },
+  statusLabel: {
+    fontSize: 13,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.text,
+    marginBottom: 8,
+    letterSpacing: 0.1,
+  },
   statusRow:   { flexDirection: 'row', gap: 10, marginBottom: 16 },
   statusChip: {
-    flex: 1, height: 44, borderRadius: 12,
+    flex: 1, height: 46, borderRadius: 14,
     borderWidth: 1.5, borderColor: C.border,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: C.surface,
   },
-  statusChipTxt: { fontSize: 13, fontWeight: '600', color: C.textHint },
+  statusChipTxt: {
+    fontSize: 13,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.textHint,
+  },
   saveBtn:    { marginBottom: 14 },
   disclaimer: {
-    fontSize: 12, color: C.textHint, textAlign: 'center', lineHeight: 18, marginBottom: 8,
+    fontSize: 12,
+    fontFamily: FontFamily.body,
+    color: C.textHint,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 8,
   },
 
   // Camera
@@ -322,19 +369,45 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9999,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
   },
-  camHintTxt: { fontSize: 12, color: 'rgba(255,255,255,0.9)', fontWeight: '500' },
+  camHintTxt: {
+    fontSize: 12,
+    fontFamily: FontFamily.bodyMedium,
+    color: 'rgba(255,255,255,0.92)',
+    letterSpacing: 0.3,
+  },
   camBottomBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.3)',
     paddingTop: 20,
   },
-  camShutter: { alignItems: 'center' },
+  camShutter: {
+    alignItems: 'center', justifyContent: 'center',
+    width: 124, height: 124,
+  },
+  // Outer crosshair ring — thin, calm, medical-imaging cue
+  crosshairRing: {
+    position: 'absolute',
+    width: 116, height: 116, borderRadius: 58,
+    borderWidth: 1.25,
+    borderColor: 'rgba(255,255,255,0.55)',
+  },
+  // Crosshair ticks — small caps at 12/3/6/9 o'clock
+  crosshairTick: {
+    position: 'absolute',
+    width: 1.5, height: 12,
+    backgroundColor: '#fff',
+    borderRadius: 1,
+  },
+  tickTop:    { top: -2 },
+  tickBottom: { bottom: -2 },
+  tickLeft:   { left: -2,  width: 12, height: 1.5 },
+  tickRight:  { right: -2, width: 12, height: 1.5 },
   camShutterBtn: {
-    width: 78, height: 78, borderRadius: 39,
-    borderWidth: 4, borderColor: '#fff',
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 70, height: 70, borderRadius: 35,
+    borderWidth: 3, borderColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.10)',
     alignItems: 'center', justifyContent: 'center',
   },
-  camShutterInner: { width: 62, height: 62, borderRadius: 31, backgroundColor: '#fff' },
+  camShutterInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff' },
 });

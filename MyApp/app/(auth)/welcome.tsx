@@ -1,59 +1,52 @@
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, StatusBar, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { C } from '@/constants/theme';
-import Feather from '@expo/vector-icons/Feather';
+import { ArrowRight, ArrowUpRight, Camera, Eye, ShieldCheck, Sun } from 'lucide-react-native';
+import { C, FontFamily, Shadow } from '@/constants/theme';
+import { GradientHero } from '@/components/decor/GradientHero';
+import { Crest } from '@/components/decor/Crest';
+import { Hairline } from '@/components/decor/Hairline';
+import { Petal } from '@/components/decor/Petal';
 
-type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
+interface Feature {
+  Icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  title: string;
+  desc: string;
+}
 
-const FEATURES: { icon: FeatherIconName; title: string; desc: string; color: string; bg: string }[] = [
-  { icon: 'zoom-in',    title: 'Examine & Log',   desc: 'Photograph skin lesions and track changes with clinical precision',       color: C.primary,  bg: C.primaryLight  },
-  { icon: 'activity',   title: 'AI Analysis',     desc: 'AI-powered pattern recognition assesses lesion changes over time',        color: '#6D28D9',  bg: '#EDE9FE'        },
-  { icon: 'bell',       title: 'Smart Alerts',    desc: 'Instant notifications when a lesion warrants clinical attention',         color: '#B45309',  bg: '#FEF3C7'        },
-  { icon: 'shield',     title: 'UV Protection',   desc: 'Real-time UV index with personalised sun-exposure guidance',              color: '#0369A1',  bg: '#E0F2FE'        },
+const FEATURES: Feature[] = [
+  { Icon: Camera,      title: 'Examine & Log',  desc: 'Capture each lesion with consistent, time-stamped photos.' },
+  { Icon: Eye,         title: 'Track Changes',  desc: 'Compare entries over time. Status: Stable, Check, or Urgent.' },
+  { Icon: Sun,         title: 'UV-Aware',       desc: 'Live UV index with personalized exposure guidance.' },
+  { Icon: ShieldCheck, title: 'Private & Secure', desc: 'Your records are stored with your account and never shared.' },
 ];
 
 export default function WelcomeScreen() {
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor={C.primary} />
+      <StatusBar barStyle="light-content" backgroundColor={C.primaryDeep} />
 
-      {/* ── Hero ── */}
-      <View style={s.hero}>
-        {/* Decorative background rings for depth */}
-        <View style={s.decorRing1} />
-        <View style={s.decorRing2} />
-
-        {/* Medical cross accent dots */}
-        <View style={s.decorDot1} />
-        <View style={s.decorDot2} />
-
-        <View style={s.heroLogoRing}>
-          <View style={s.heroLogo}>
-            <Feather name="heart" size={30} color="#fff" />
-          </View>
+      {/* ── Editorial-split hero ── */}
+      <GradientHero style={s.hero}>
+        {/* Two diagonal corner petals — never overlap the crest or text */}
+        <View style={s.heroPetalTL} pointerEvents="none">
+          <Petal size={150} color="rgba(255,255,255,0.55)" opacity={0.32} animate />
         </View>
-        <Text style={s.heroTitle}>XAI Skin Health</Text>
-        <Text style={s.heroTagline}>Clinical-grade dermatology monitoring{'\n'}powered by AI analysis</Text>
-
-        {/* Stats bar */}
-        <View style={s.heroStats}>
-          <View style={s.heroStat}>
-            <Text style={s.heroStatNum} numberOfLines={1}>AI</Text>
-            <Text style={s.heroStatLbl} numberOfLines={1}>Powered</Text>
-          </View>
-          <View style={s.heroStatDivider} />
-          <View style={s.heroStat}>
-            <Text style={s.heroStatNum} numberOfLines={1}>24/7</Text>
-            <Text style={s.heroStatLbl} numberOfLines={1}>Monitoring</Text>
-          </View>
-          <View style={s.heroStatDivider} />
-          <View style={s.heroStat}>
-            <Text style={s.heroStatNum} numberOfLines={1}>UV</Text>
-            <Text style={s.heroStatLbl} numberOfLines={1}>Tracking</Text>
-          </View>
+        <View style={s.heroPetalBR} pointerEvents="none">
+          <Petal size={130} color="rgba(255,255,255,0.55)" opacity={0.28} animate />
         </View>
-      </View>
+        {/* Asymmetric mark, top-left — clean, no petal behind */}
+        <View style={s.heroMark}>
+          <Crest size={72} />
+        </View>
+        <View style={s.heroBody}>
+          <Text style={s.heroEyebrow}>XAI · DERMATOLOGY</Text>
+          <Text style={s.heroTitle}>Skin Health,{'\n'}observed with care.</Text>
+          <Text style={s.heroTagline}>
+            <Text style={s.heroTaglineItalic}>Clinical-grade tracking</Text>{' '}for moles, lesions, and daily exposure.
+          </Text>
+        </View>
+      </GradientHero>
 
       {/* ── White sheet ── */}
       <View style={s.sheet}>
@@ -61,40 +54,45 @@ export default function WelcomeScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={s.sheetContent}>
 
-          <Text style={s.sheetHeading}>Your personal{'\n'}dermatology companion</Text>
-
-          <View style={s.featureGrid}>
-            {FEATURES.map(f => (
-              <View key={f.title} style={[s.featureCard, { borderTopColor: f.color }]}>
-                <View style={[s.featureIconWrap, { backgroundColor: f.bg }]}>
-                  <Feather name={f.icon} size={20} color={f.color} />
+          {/* Stacked feature list — vertical, 32-px gutters */}
+          <View style={s.featureList}>
+            {FEATURES.map((f, i) => (
+              <View key={f.title}>
+                <View style={s.featureRow}>
+                  <View style={s.featureIcon}>
+                    <f.Icon size={20} color={C.primary} strokeWidth={1.6} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.featureTitle}>{f.title}</Text>
+                    <Text style={s.featureDesc}>{f.desc}</Text>
+                  </View>
                 </View>
-                <Text style={s.featureTitle}>{f.title}</Text>
-                <Text style={s.featureDesc}>{f.desc}</Text>
+                {i < FEATURES.length - 1 && <Hairline width={'100%'} fadeInset={0} style={{ marginVertical: 18 }} />}
               </View>
             ))}
           </View>
 
-          {/* ── Actions ── */}
-          <TouchableOpacity
-            style={s.primaryBtn}
+          {/* Actions */}
+          <Pressable
+            style={({ pressed }) => [s.primaryBtn, pressed && { opacity: 0.9 }]}
             onPress={() => router.push('/(auth)/register')}
-            activeOpacity={0.85}>
-            <Feather name="user-plus" size={18} color="#fff" />
-            <Text style={s.primaryBtnTxt}>Get Started Free</Text>
-            <Feather name="arrow-right" size={18} color="rgba(255,255,255,0.7)" />
-          </TouchableOpacity>
+            accessibilityRole="button"
+            accessibilityLabel="Get started — create account">
+            <Text style={s.primaryBtnTxt}>Get Started</Text>
+            <ArrowRight size={18} color="#fff" strokeWidth={2} />
+          </Pressable>
 
-          <TouchableOpacity
-            style={s.secondaryBtn}
+          <Pressable
+            style={({ pressed }) => [s.secondaryBtn, pressed && { opacity: 0.7 }]}
             onPress={() => router.push('/(auth)/login')}
-            activeOpacity={0.8}>
-            <Feather name="log-in" size={16} color={C.primary} />
-            <Text style={s.secondaryBtnTxt}>Sign in to your account</Text>
-          </TouchableOpacity>
+            accessibilityRole="button"
+            accessibilityLabel="Sign in to existing account">
+            <Text style={s.secondaryBtnTxt}>I already have an account</Text>
+            <ArrowUpRight size={16} color={C.primary} strokeWidth={2} />
+          </Pressable>
 
           <Text style={s.disclaimer}>
-            Not a substitute for professional medical advice.{'\n'}Always consult a qualified dermatologist.
+            For tracking only. Not a substitute for professional medical advice.
           </Text>
         </ScrollView>
       </View>
@@ -103,155 +101,137 @@ export default function WelcomeScreen() {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.primary },
+  safe: { flex: 1, backgroundColor: C.primaryDeep },
 
-  // ── Hero ────────────────────────────────────────────────────────
+  // Hero — editorial-split, asymmetric
   hero: {
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 28,
-    overflow: 'hidden',
+    paddingHorizontal: 28,
+    paddingTop: 22,
+    paddingBottom: 36,
+    minHeight: 280,
+    justifyContent: 'space-between',
   },
-  // Decorative background rings
-  decorRing1: {
+  // Two corner petals — placed off-edge so only their *outer* halo is visible.
+  // Top-left peeks above the crest area; bottom-right balances near the pulse line.
+  heroPetalTL: {
     position: 'absolute',
-    width: 240, height: 240, borderRadius: 120,
-    borderWidth: 40, borderColor: 'rgba(255,255,255,0.05)',
-    top: -80, left: -60,
+    top: -55, left: -55,
   },
-  decorRing2: {
+  heroPetalBR: {
     position: 'absolute',
-    width: 160, height: 160, borderRadius: 80,
-    borderWidth: 30, borderColor: 'rgba(255,255,255,0.05)',
-    top: -20, right: -40,
+    bottom: -45, right: -45,
   },
-  decorDot1: {
-    position: 'absolute',
-    width: 8, height: 8, borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    top: 30, right: 60,
-  },
-  decorDot2: {
-    position: 'absolute',
-    width: 5, height: 5, borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    top: 60, left: 50,
-  },
-  // Logo with outer glow ring
-  heroLogoRing: {
-    width: 88, height: 88, borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 16,
-  },
-  heroLogo: {
-    width: 68, height: 68, borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)',
-    alignItems: 'center', justifyContent: 'center',
+  heroMark: { alignSelf: 'flex-start' },
+  heroBody: { marginTop: 36 },
+  heroEyebrow: {
+    fontSize: 11,
+    fontFamily: FontFamily.bodyBold,
+    color: 'rgba(255,255,255,0.7)',
+    letterSpacing: 1.6,
+    marginBottom: 12,
   },
   heroTitle: {
-    fontSize: 30, fontWeight: '800', color: '#fff',
-    letterSpacing: -0.5, marginBottom: 8,
+    fontSize: 30,
+    fontFamily: FontFamily.bodyBold,
+    color: '#fff',
+    letterSpacing: -0.8,
+    lineHeight: 36,
+    marginBottom: 12,
   },
   heroTagline: {
-    fontSize: 14, color: 'rgba(255,255,255,0.78)',
-    textAlign: 'center', lineHeight: 22, marginBottom: 20,
+    fontSize: 14,
+    fontFamily: FontFamily.body,
+    color: 'rgba(255,255,255,0.82)',
+    lineHeight: 20,
+    maxWidth: 320,
   },
-  // Quick stats bar inside hero
-  heroStats: {
-    flexDirection: 'row',
-    alignSelf: 'stretch',
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    borderRadius: 14,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-  },
-  heroStat: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  heroStatNum: { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: 0.2 },
-  heroStatLbl: { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.7)', marginTop: 3 },
-  heroStatDivider: {
-    width: 1,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    marginVertical: 2,
-    marginHorizontal: 4,
+  heroTaglineItalic: {
+    fontFamily: FontFamily.displayItalic,
+    color: '#fff',
   },
 
-  // ── White sheet ─────────────────────────────────────────────────
+  // White sheet
   sheet: {
     flex: 1,
     backgroundColor: C.bg,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     overflow: 'hidden',
+    marginTop: -18,
   },
   sheetContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingTop: 28,
-    paddingBottom: 32,
-  },
-  sheetHeading: {
-    fontSize: 22, fontWeight: '800', color: C.text,
-    letterSpacing: -0.4, marginBottom: 20,
+    paddingBottom: 36,
   },
 
-  // ── Feature 2×2 grid ────────────────────────────────────────────
-  featureGrid: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    gap: 12, marginBottom: 28,
+  // Feature list
+  featureList: { marginBottom: 28 },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
   },
-  featureCard: {
-    width: '47.5%',
-    backgroundColor: C.surface,
-    borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: C.border,
-    borderTopWidth: 3,
-    ...(Platform.OS === 'ios'
-      ? { shadowColor: '#1E1010', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6 }
-      : Platform.OS === 'android' ? { elevation: 2 } : {}),
-  },
-  featureIconWrap: {
-    width: 42, height: 42, borderRadius: 12,
+  featureIcon: {
+    width: 40, height: 40, borderRadius: 10,
+    backgroundColor: C.primaryLight,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 10,
+    marginTop: 2,
   },
   featureTitle: {
-    fontSize: 14, fontWeight: '700', color: C.text, marginBottom: 4,
+    fontSize: 15,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.text,
+    letterSpacing: -0.2,
+    marginBottom: 3,
   },
   featureDesc: {
-    fontSize: 12, color: C.textHint, lineHeight: 17,
+    fontSize: 13,
+    fontFamily: FontFamily.body,
+    color: C.textSub,
+    lineHeight: 18,
   },
 
-  // ── Buttons ─────────────────────────────────────────────────────
+  // Buttons
   primaryBtn: {
-    height: 54, borderRadius: 14,
+    height: 54,
+    borderRadius: 14,
     backgroundColor: C.primary,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, marginBottom: 12,
-    ...(Platform.OS === 'ios'
-      ? { shadowColor: C.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10 }
-      : Platform.OS === 'android' ? { elevation: 4 } : {}),
-  },
-  primaryBtnTxt: { fontSize: 16, fontWeight: '700', color: '#fff' },
-  secondaryBtn: {
-    height: 52, borderRadius: 14,
-    borderWidth: 1.5, borderColor: C.border,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    marginBottom: 24, backgroundColor: C.surface,
+    marginBottom: 12,
+    ...(Platform.OS === 'ios' ? Shadow.sm : Platform.OS === 'android' ? { elevation: 4 } : {}),
   },
-  secondaryBtnTxt: { fontSize: 15, fontWeight: '600', color: C.primary },
+  primaryBtnTxt: {
+    fontSize: 16,
+    fontFamily: FontFamily.bodySemibold,
+    color: '#fff',
+    letterSpacing: 0.2,
+  },
+  secondaryBtn: {
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 22,
+  },
+  secondaryBtnTxt: {
+    fontSize: 14,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.primary,
+    letterSpacing: 0.1,
+  },
 
   disclaimer: {
-    fontSize: 11, color: C.textHint,
-    textAlign: 'center', lineHeight: 17,
+    fontSize: 11.5,
+    fontFamily: FontFamily.body,
+    color: C.textHint,
+    textAlign: 'center',
+    lineHeight: 17,
   },
 });

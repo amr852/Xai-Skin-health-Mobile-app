@@ -1,32 +1,35 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Feather from '@expo/vector-icons/Feather';
-import { C } from '@/constants/theme';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { ChevronRight } from 'lucide-react-native';
+import { C, FontFamily } from '@/constants/theme';
 
 interface Props {
   title: string;
   subtitle?: string;
   linkLabel?: string;
   onLinkPress?: () => void;
+  /** When true, renders as a small uppercase label (used inside dashboards). */
+  tracked?: boolean;
 }
 
-export function SectionHeader({ title, subtitle, linkLabel, onLinkPress }: Props) {
+/**
+ * Section heading. No floral underline; either a standard sentence-case heading
+ * or a small uppercase tracked label for dashboards.
+ */
+export function SectionHeader({ title, subtitle, linkLabel, onLinkPress, tracked }: Props) {
   return (
     <View style={s.wrap}>
       <View style={s.textCol}>
-        {/* Title row with left accent dot */}
-        <View style={s.titleRow}>
-          <View style={s.accentDot} />
-          <Text style={s.title}>{title}</Text>
-        </View>
+        <Text style={[s.title, tracked && s.titleTracked]}>{title}</Text>
         {subtitle ? <Text style={s.subtitle}>{subtitle}</Text> : null}
       </View>
       {linkLabel && onLinkPress ? (
-        <TouchableOpacity style={s.link} onPress={onLinkPress} activeOpacity={0.7}>
+        <Pressable
+          style={({ pressed }) => [s.link, pressed && { opacity: 0.7 }]}
+          onPress={onLinkPress}
+          hitSlop={6}>
           <Text style={s.linkTxt}>{linkLabel}</Text>
-          <View style={s.linkArrow}>
-            <Feather name="chevron-right" size={12} color={C.primary} />
-          </View>
-        </TouchableOpacity>
+          <ChevronRight size={14} color={C.primary} strokeWidth={2} />
+        </Pressable>
       ) : null}
     </View>
   );
@@ -35,31 +38,38 @@ export function SectionHeader({ title, subtitle, linkLabel, onLinkPress }: Props
 const s = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     marginBottom: 12,
   },
   textCol: { flex: 1 },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  title: {
+    fontSize: 17,
+    fontFamily: FontFamily.bodyBold,
+    color: C.text,
+    letterSpacing: -0.3,
   },
-  accentDot: {
-    width: 4, height: 18,
-    borderRadius: 2,
-    backgroundColor: C.primary,
+  titleTracked: {
+    fontSize: 11,
+    fontFamily: FontFamily.bodyBold,
+    color: C.textSub,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
-  title: { fontSize: 17, fontWeight: '700', color: C.text, letterSpacing: -0.2 },
-  subtitle: { fontSize: 12, color: C.textHint, marginTop: 4, marginLeft: 12 },
+  subtitle: {
+    fontSize: 12.5,
+    fontFamily: FontFamily.body,
+    color: C.textSub,
+    marginTop: 4,
+    lineHeight: 17,
+  },
   link: {
-    flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 2,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
   },
-  linkTxt: { fontSize: 12, fontWeight: '600', color: C.primary },
-  linkArrow: {
-    width: 18, height: 18, borderRadius: 9,
-    backgroundColor: C.primaryLight,
-    alignItems: 'center', justifyContent: 'center',
+  linkTxt: {
+    fontSize: 13,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.primary,
   },
 });

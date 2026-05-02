@@ -1,10 +1,8 @@
 import { useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-
-const API_URL = Platform.OS === 'web'
-  ? 'http://localhost:3000'
-  : 'http://192.168.1.5:3000';
+import { apiFetch, ApiError, API_URL } from '@/lib/api';
+import { getStoredToken } from '@/context/AuthContext';
 
 export type Lesion = {
   _id: string;
@@ -25,20 +23,8 @@ export type LesionFields = {
   notes: string;
 };
 
-// Moved outside hook so it is stable and reusable
-async function safeJson(res: Response): Promise<any> {
-  const text = await res.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(
-      `Server error (${res.status}): ${text.slice(0, 120) || res.statusText}`,
-    );
-  }
-}
-
-async function getToken(): Promise<string | null> {
-  return AsyncStorage.getItem('authToken');
+async function clearAuthOnUnauthorized() {
+  await AsyncStorage.multiRemove(['authToken', 'authUser']);
 }
 
 export function useLesions() {
@@ -47,37 +33,30 @@ export function useLesions() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchLesions = useCallback(async () => {
-    const token = await getToken();
-    if (!token) {
-      setLesions([]);
-      setError(null);
-      return;
-    }
+    const token = await getStoredToken();
+    if (!token) { setLesions([]); setError(null); return; }
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/lesions`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.status === 401) {
-        await AsyncStorage.multiRemove(['authToken', 'authUser']);
+      const data = await apiFetch<Lesion[]>('/lesions', { token });
+      if (!Array.isArray(data)) throw new ApiError(500, 'Unexpected response from server');
+      setLesions(data);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) {
+        await clearAuthOnUnauthorized();
         setLesions([]);
         setError(null);
-        return;
+      } else {
+        setError((e as Error).message);
       }
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data.error || 'Failed to fetch lesions');
-      if (!Array.isArray(data)) throw new Error('Unexpected response from server');
-      setLesions(data);
-    } catch (e: any) {
-      setError(e.message);
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // Image upload uses raw FormData so multipart is preserved — done via fetch directly.
   const uploadImage = useCallback(async (uri: string): Promise<string> => {
-    const token = await getToken();
+    const token = await getStoredToken();
     const formData = new FormData();
     formData.append('image', {
       uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
@@ -89,9 +68,11 @@ export function useLesions() {
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
     });
-    const data = await safeJson(res);
-    if (!res.ok) throw new Error(data.error || 'Image upload failed');
-    return data.url as string;
+    const text = await res.text();
+    let body: any;
+    try { body = text ? JSON.parse(text) : {}; } catch { body = {}; }
+    if (!res.ok) throw new ApiError(res.status, body?.error || 'Image upload failed', body);
+    return body.url as string;
   }, []);
 
   const addLesion = useCallback(
@@ -99,20 +80,18 @@ export function useLesions() {
       setLoading(true);
       setError(null);
       try {
-        const token = await getToken();
+        const token = await getStoredToken();
         let imageUrl: string | undefined;
         if (imageUri) {
-          try { imageUrl = await uploadImage(imageUri); } catch { /* non-fatal */ }
+          try { imageUrl = await uploadImage(imageUri); } catch { /* non-fatal — save record without image */ }
         }
-        const res = await fetch(`${API_URL}/lesions`, {
+        await apiFetch<Lesion>('/lesions', {
           method: 'POST',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...fields, imageUrl }),
+          token,
+          json: { ...fields, imageUrl },
         });
-        const data = await safeJson(res);
-        if (!res.ok) throw new Error(data.error || 'Failed to save lesion');
-      } catch (e: any) {
-        setError(e.message);
+      } catch (e) {
+        setError((e as Error).message);
         throw e;
       } finally {
         setLoading(false);
@@ -126,24 +105,21 @@ export function useLesions() {
       setLoading(true);
       setError(null);
       try {
-        const token = await getToken();
+        const token = await getStoredToken();
         let imageUrl: string | undefined;
         if (imageUri) {
           try { imageUrl = await uploadImage(imageUri); } catch { /* non-fatal */ }
         }
-        const res = await fetch(`${API_URL}/lesions/${id}`, {
+        await apiFetch(`/lesions/${id}`, {
           method: 'PUT',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...fields, ...(imageUrl ? { imageUrl } : {}) }),
+          token,
+          json: { ...fields, ...(imageUrl ? { imageUrl } : {}) },
         });
-        const data = await safeJson(res);
-        if (!res.ok) throw new Error(data.error || 'Failed to update lesion');
-        // Update local state immediately
         setLesions(prev =>
           prev.map(l => (l._id === id ? { ...l, ...fields, ...(imageUrl ? { imageUrl } : {}) } : l)),
         );
-      } catch (e: any) {
-        setError(e.message);
+      } catch (e) {
+        setError((e as Error).message);
         throw e;
       } finally {
         setLoading(false);
@@ -156,16 +132,11 @@ export function useLesions() {
     setLoading(true);
     setError(null);
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_URL}/lesions/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data.error || 'Failed to delete lesion');
+      const token = await getStoredToken();
+      await apiFetch(`/lesions/${id}`, { method: 'DELETE', token });
       setLesions(prev => prev.filter(l => l._id !== id));
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError((e as Error).message);
       throw e;
     } finally {
       setLoading(false);

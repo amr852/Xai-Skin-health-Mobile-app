@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Feather from '@expo/vector-icons/Feather';
-import { C } from '@/constants/theme';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Bell } from 'lucide-react-native';
+import { C, FontFamily } from '@/constants/theme';
 
 interface Props {
   initials: string;
@@ -18,41 +18,42 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
+/**
+ * Top-of-screen greeting + avatar + bell. No decorative SVGs — the
+ * `onAvatarPress` is wired into the global UiOverlayContext from each screen.
+ */
 export function PageHeader({ initials, name, unreadCount = 0, onBellPress, onAvatarPress }: Props) {
   return (
     <View style={s.row}>
       <View style={s.left}>
-        <TouchableOpacity
-          style={s.avatarRing}
+        <Pressable
           onPress={onAvatarPress}
-          activeOpacity={onAvatarPress ? 0.7 : 1}
+          hitSlop={4}
           disabled={!onAvatarPress}
+          style={({ pressed }) => [s.avatar, pressed && { opacity: 0.85 }]}
           accessibilityRole="button"
-          accessibilityLabel="Go to profile">
-          <View style={s.avatar}>
-            <Text style={s.avatarTxt}>{initials}</Text>
-          </View>
-          {onAvatarPress && <View style={s.avatarEditDot}><Feather name="user" size={8} color="#fff" /></View>}
-        </TouchableOpacity>
-        <View>
-          <Text style={s.greeting}>{getGreeting()},</Text>
+          accessibilityLabel="Open profile menu">
+          <Text style={s.avatarTxt}>{initials}</Text>
+        </Pressable>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={s.greeting}>{getGreeting()}</Text>
           <Text style={s.name} numberOfLines={1}>{name}</Text>
         </View>
       </View>
 
-      <TouchableOpacity
-        style={s.bell}
+      <Pressable
         onPress={onBellPress}
-        activeOpacity={0.75}
+        hitSlop={6}
+        style={({ pressed }) => [s.bell, pressed && { opacity: 0.85 }]}
         accessibilityRole="button"
         accessibilityLabel="Notifications">
-        <Feather name="bell" size={18} color={C.primary} />
+        <Bell size={20} strokeWidth={1.6} color={C.text} />
         {unreadCount > 0 && (
           <View style={s.dot}>
             <Text style={s.dotNum}>{unreadCount > 9 ? '9+' : String(unreadCount)}</Text>
           </View>
         )}
-      </TouchableOpacity>
+      </Pressable>
     </View>
   );
 }
@@ -66,42 +67,49 @@ const s = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 8,
   },
-  left: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatarRing: {
-    width: 52, height: 52, borderRadius: 26,
-    backgroundColor: C.primaryLight,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: C.border,
-  },
+  left: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   avatar: {
-    width: 42, height: 42, borderRadius: 21,
+    width: 44, height: 44, borderRadius: 22,
     backgroundColor: C.primary,
     alignItems: 'center', justifyContent: 'center',
   },
-  avatarTxt: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  avatarEditDot: {
-    position: 'absolute', bottom: 1, right: 1,
-    width: 16, height: 16, borderRadius: 8,
-    backgroundColor: C.primary,
-    borderWidth: 2, borderColor: '#fff',
-    alignItems: 'center', justifyContent: 'center',
+  avatarTxt: {
+    fontSize: 14,
+    fontFamily: FontFamily.bodyExtrabold,
+    color: '#fff',
+    letterSpacing: 0.2,
   },
-  greeting: { fontSize: 11, color: C.textHint, fontWeight: '500', letterSpacing: 0.2 },
-  name: { fontSize: 16, fontWeight: '700', color: C.text, maxWidth: 180 },
-
+  greeting: {
+    fontSize: 12,
+    fontFamily: FontFamily.body,
+    color: C.textSub,
+    letterSpacing: 0.1,
+    marginBottom: 1,
+  },
+  name: {
+    fontSize: 18,
+    fontFamily: FontFamily.bodyBold,
+    color: C.text,
+    letterSpacing: -0.3,
+    maxWidth: 220,
+  },
   bell: {
-    width: 46, height: 46, borderRadius: 15,
-    backgroundColor: C.primaryLight,
-    borderWidth: 1, borderColor: C.border,
+    width: 42, height: 42, borderRadius: 14,
+    backgroundColor: C.surfaceAlt,
     alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: C.borderLight,
   },
   dot: {
     minWidth: 16, height: 16, borderRadius: 8,
-    backgroundColor: '#DC2626',
-    position: 'absolute', top: 7, right: 7,
-    borderWidth: 1.5, borderColor: C.bg,
+    backgroundColor: C.primary,
+    position: 'absolute', top: 4, right: 4,
+    borderWidth: 1.5, borderColor: C.surface,
     alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 3,
   },
-  dotNum: { fontSize: 8, fontWeight: '800', color: '#fff' },
+  dotNum: {
+    fontSize: 8,
+    fontFamily: FontFamily.bodyExtrabold,
+    color: '#fff',
+  },
 });

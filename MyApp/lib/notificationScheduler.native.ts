@@ -189,7 +189,7 @@ export async function ensureUvDigestSchedule(): Promise<void> {
   }
 }
 
-const SUN_TITLE = 'Sunscreen reapply ☀️';
+const SUN_TITLE = 'Sun protection reminder';
 const SUN_BODY = 'It\'s been ~2 hours — reapply SPF to keep your skin protected.';
 
 async function scheduleSunReminders(): Promise<void> {
@@ -287,7 +287,7 @@ export async function syncWaterInboxItems(): Promise<void> {
         const firedAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, 0);
         await saveInboxItem({
           id: `water-inbox-${todayKey}-${hour}`,
-          title: 'Time to hydrate 💧',
+          title: 'Hydration reminder',
           body: "You haven't reached today's water goal yet — grab a glass of water.",
           createdAt: firedAt.toISOString(),
         });

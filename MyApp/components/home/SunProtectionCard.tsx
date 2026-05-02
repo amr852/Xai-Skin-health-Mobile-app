@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import { C, FontSize, Radius, Space } from '@/constants/theme';
+import { C, FontFamily, FontSize, Radius, Space, Shadow } from '@/constants/theme';
 import { useSunProtection } from '@/hooks/useSunProtection';
+import { SprayCan } from 'lucide-react-native';
+import { StatusArc } from '@/components/decor/StatusArc';
 
 const REAPPLY_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
@@ -40,13 +42,15 @@ export function SunProtectionCard() {
     logApplication();
   };
 
+  // Status colors are slate-ink, NOT traffic-light. We removed the green "protected"
+  // bar entirely — the medical context already conveys urgency via the action label.
   const { status, statusColor, needsReapply, gaugePct, gaugeLabel } = useMemo(() => {
     if (!lastAppliedISO) {
       return {
         status: 'Unprotected',
-        statusColor: C.urgentText,
+        statusColor: C.urgentText, // urgent stays red — this is a *medical* alert
         needsReapply: true,
-        gaugePct: 100,
+        gaugePct: 0,
         gaugeLabel: 'Apply sunscreen to start',
       };
     }
@@ -56,7 +60,7 @@ export function SunProtectionCard() {
     if (remaining <= 0) {
       return {
         status: 'Time to reapply',
-        statusColor: C.checkText,
+        statusColor: C.checkText, // amber — soft prompt
         needsReapply: true,
         gaugePct: 100,
         gaugeLabel: 'Reapply now',
@@ -64,18 +68,24 @@ export function SunProtectionCard() {
     }
     return {
       status: 'Protected',
-      statusColor: C.stableText,
+      statusColor: C.text, // *slate-ink, not green* — quiet confirmation
       needsReapply: false,
       gaugePct: pct,
       gaugeLabel: formatUntil(remaining),
     };
   }, [lastAppliedISO]);
 
+  // The green "Stable" status arc was the source of the unwanted green bar — show
+  // the arc ONLY when there's an actual alert state (needsReapply). Protected = quiet.
+  const showArc = needsReapply;
+  const arcStatus = lastAppliedISO ? 'Check' : 'Urgent';
+
   return (
     <View style={s.card}>
+      {showArc && <StatusArc status={arcStatus} edge="top" />}
       <View style={s.headRow}>
         <View style={s.iconBg}>
-          <Feather name="sun" size={18} color={C.amberFill} />
+          <SprayCan size={22} color={C.amberFill} strokeWidth={1.6} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={s.title}>Sun Protection</Text>
@@ -83,21 +93,31 @@ export function SunProtectionCard() {
         </View>
       </View>
 
+      {/* Minimal dose-progress: thin slate track + rose progress + travelling dot. */}
+      {/* Replaces the prominent green/amber bar with something quieter and more clinical. */}
       <View style={s.gaugeWrap}>
-        <View style={s.gaugeTrack}>
+        <View style={s.minimalTrack}>
           <View
             style={[
-              s.gaugeFill,
+              s.minimalFill,
               {
                 width: `${gaugePct}%`,
-                backgroundColor: needsReapply ? C.amberFill : C.stableText,
+                backgroundColor: needsReapply ? C.checkText : C.primary,
+              },
+            ]}
+          />
+          <View
+            style={[
+              s.minimalDot,
+              {
+                left: `${Math.min(100, Math.max(0, gaugePct))}%`,
+                backgroundColor: needsReapply ? C.checkText : C.primary,
               },
             ]}
           />
         </View>
         <View style={s.gaugeLabelRow}>
           <View style={s.statusRow}>
-            <View style={[s.dot, { backgroundColor: statusColor }]} />
             <Text style={[s.statusTxt, { color: statusColor }]}>{status}</Text>
           </View>
           <Text style={s.gaugeLabel}>{gaugeLabel}</Text>
@@ -140,6 +160,7 @@ const s = StyleSheet.create({
     borderColor: C.border,
     padding: Space[4],
     overflow: 'hidden',
+    ...Shadow.xs,
   },
   headRow: {
     flexDirection: 'row',
@@ -148,15 +169,47 @@ const s = StyleSheet.create({
     marginBottom: Space[3],
   },
   iconBg: {
-    width: 34, height: 34, borderRadius: 11,
+    width: 38, height: 38, borderRadius: 13,
     backgroundColor: C.amberLight,
     alignItems: 'center', justifyContent: 'center',
   },
   title: {
-    fontSize: FontSize.base, fontWeight: '800', color: C.text, letterSpacing: -0.2,
+    fontSize: FontSize.md,
+    fontFamily: FontFamily.displayBold,
+    color: C.text,
+    letterSpacing: -0.3,
   },
-  sub: { fontSize: FontSize.xs + 1, color: C.muted, marginTop: 1 },
+  sub: {
+    fontSize: FontSize.xs + 1,
+    fontFamily: FontFamily.body,
+    color: C.muted,
+    marginTop: 2,
+  },
   gaugeWrap: { marginBottom: Space[3] },
+  // Minimal track — 3 px hairline, no green
+  minimalTrack: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: C.surfaceAlt,
+    position: 'relative',
+    marginVertical: 6,
+  },
+  minimalFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  // Travelling dot — sits at the leading edge of the fill
+  minimalDot: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    top: -3.5,
+    marginLeft: -5,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  // (Legacy keys kept so other selectors don't break — unused now)
   gaugeTrack: {
     height: 8,
     borderRadius: 99,
@@ -174,17 +227,29 @@ const s = StyleSheet.create({
     marginTop: 6,
   },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  dot: { width: 5, height: 5, borderRadius: 3 },
-  statusTxt: { fontSize: FontSize.xs, fontWeight: '700' },
-  gaugeLabel: { fontSize: FontSize.xs, color: C.muted, fontWeight: '600' },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  statusTxt: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.bodyBold,
+    letterSpacing: 0.2,
+  },
+  gaugeLabel: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.muted,
+  },
 
   cta: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: Radius.full,
   },
-  ctaTxt: { fontSize: FontSize.xs + 2, fontWeight: '700' },
+  ctaTxt: {
+    fontSize: FontSize.xs + 2,
+    fontFamily: FontFamily.bodyBold,
+    letterSpacing: 0.3,
+  },
 });

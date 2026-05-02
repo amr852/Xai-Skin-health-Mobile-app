@@ -1,6 +1,6 @@
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import { C } from '@/constants/theme';
+import { C, FontFamily } from '@/constants/theme';
 import { AppButton } from './AppButton';
 
 type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
@@ -12,20 +12,25 @@ interface Props {
   actionLabel?: string;
   onAction?: () => void;
   variant?: 'default' | 'error';
+  /** When true, the title renders in italic Source Serif 4 (use sparingly — only on history empty state). */
+  italicTitle?: boolean;
 }
 
-export function EmptyState({ icon, title, message, actionLabel, onAction, variant = 'default' }: Props) {
+/**
+ * Calm empty state — soft tinted square holds the icon, no wreath/flower.
+ * The italicTitle flag is the single sanctioned location for serif italic.
+ */
+export function EmptyState({ icon, title, message, actionLabel, onAction, variant = 'default', italicTitle }: Props) {
   const isErr = variant === 'error';
-  const iconColor = isErr ? C.urgentText : C.primary;
+  const tint = isErr ? C.urgentText : C.primary;
+  const tintBg = isErr ? C.urgentBg : C.primaryLight;
+
   return (
     <View style={s.wrap}>
-      {/* Outer ring + inner circle for a medical-badge feel */}
-      <View style={[s.iconRing, isErr && s.iconRingErr]}>
-        <View style={[s.iconCircle, isErr && s.iconCircleErr]}>
-          <Feather name={icon} size={28} color={iconColor} />
-        </View>
+      <View style={[s.iconTile, { backgroundColor: tintBg }]}>
+        <Feather name={icon} size={26} color={tint} />
       </View>
-      <Text style={s.title}>{title}</Text>
+      <Text style={[s.title, italicTitle && s.titleItalic]}>{title}</Text>
       {message ? <Text style={s.msg}>{message}</Text> : null}
       {actionLabel && onAction ? (
         <AppButton
@@ -43,37 +48,35 @@ export function EmptyState({ icon, title, message, actionLabel, onAction, varian
 const s = StyleSheet.create({
   wrap: {
     alignItems: 'center',
-    paddingVertical: 44,
+    paddingVertical: 36,
     paddingHorizontal: 32,
   },
-  iconRing: {
-    width: 84, height: 84, borderRadius: 42,
-    backgroundColor: C.primaryLight,
+  iconTile: {
+    width: 72, height: 72, borderRadius: 20,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 16,
-    borderWidth: 1.5, borderColor: C.border,
-    ...(Platform.OS === 'ios'
-      ? { shadowColor: C.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10 }
-      : Platform.OS === 'android' ? { elevation: 2 } : {}),
+    marginBottom: 14,
   },
-  iconRingErr: {
-    backgroundColor: C.urgentBg,
-    borderColor: C.urgentBorder,
-  },
-  iconCircle: {
-    width: 62, height: 62, borderRadius: 31,
-    backgroundColor: C.surface,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  iconCircleErr: { backgroundColor: '#FFF1F1' },
   title: {
-    fontSize: 17, fontWeight: '700', color: C.text,
-    textAlign: 'center', marginBottom: 8, letterSpacing: -0.2,
+    fontSize: 18,
+    fontFamily: FontFamily.bodyBold,
+    color: C.text,
+    textAlign: 'center',
+    marginBottom: 8,
+    letterSpacing: -0.3,
+  },
+  titleItalic: {
+    fontSize: 19,
+    fontFamily: FontFamily.displayItalic,
+    letterSpacing: -0.2,
   },
   msg: {
-    fontSize: 13, color: C.textHint,
-    textAlign: 'center', lineHeight: 20,
+    fontSize: 13.5,
+    fontFamily: FontFamily.body,
+    color: C.textSub,
+    textAlign: 'center',
+    lineHeight: 20,
     marginBottom: 20,
+    maxWidth: 300,
   },
-  btn: { minWidth: 140 },
+  btn: { minWidth: 160 },
 });

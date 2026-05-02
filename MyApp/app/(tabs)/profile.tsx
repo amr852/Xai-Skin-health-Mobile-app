@@ -7,14 +7,13 @@ import {
   StyleSheet,
   StatusBar,
   Modal,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { C, FontSize, Space, Radius, Shadow } from '@/constants/theme';
+import { C, FontFamily, FontSize, Space, Radius, Shadow } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
@@ -171,14 +170,9 @@ export default function ProfileScreen() {
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}>
 
-        {/* ── Branded Hero Header ── */}
-        <View style={s.heroHeader}>
-          {/* Decorative rings */}
-          <View style={s.heroRing1} />
-          <View style={s.heroRing2} />
-
-          {/* Avatar with outer ring */}
-          <View style={s.avatarOuterRing}>
+        {/* ── Calm avatar block, no hero strip ── */}
+        <View style={s.heroBlock}>
+          <View style={s.avatarRing}>
             <View style={s.avatarCircle}>
               <Text style={s.avatarInitials}>{getInitials(user?.firstName, user?.lastName)}</Text>
             </View>
@@ -187,10 +181,9 @@ export default function ProfileScreen() {
           <Text style={s.userName}>{fullName}</Text>
           <Text style={s.userEmail}>{user?.email}</Text>
 
-          {/* Patient badge pill */}
           <View style={s.patientBadge}>
-            <Feather name="user-check" size={11} color="rgba(255,255,255,0.9)" />
-            <Text style={s.patientBadgeTxt}>Registered Patient</Text>
+            <Feather name="user-check" size={11} color={C.textSub} />
+            <Text style={s.patientBadgeTxt}>Registered patient</Text>
           </View>
         </View>
 
@@ -314,7 +307,7 @@ export default function ProfileScreen() {
               secureEntry
               value={currentPassword}
               onChangeText={setCurrentPassword}
-              placeholder="Enter current password"
+              placeholder="Your current passphrase"
               editable={!isLoading}
             />
             <AppInput
@@ -322,7 +315,7 @@ export default function ProfileScreen() {
               secureEntry
               value={newPassword}
               onChangeText={setNewPassword}
-              placeholder="Enter new password"
+              placeholder="At least 6 characters"
               editable={!isLoading}
             />
             <AppInput
@@ -330,7 +323,7 @@ export default function ProfileScreen() {
               secureEntry
               value={confirmPassword}
               onChangeText={setConfirmPassword}
-              placeholder="Confirm new password"
+              placeholder="Repeat new passphrase"
               editable={!isLoading}
             />
             <AppButton
@@ -363,7 +356,7 @@ export default function ProfileScreen() {
             <View style={s.infoBanner}>
               <Feather name="info" size={15} color={C.primary} />
               <Text style={s.infoBannerText}>
-                We'll send a verification link to your new email address
+                {`We'll send a verification link to your new email address`}
               </Text>
             </View>
             {/* Current email (read-only) */}
@@ -375,7 +368,7 @@ export default function ProfileScreen() {
               label="New Email"
               value={newEmail}
               onChangeText={setNewEmail}
-              placeholder="Enter new email"
+              placeholder="petal.bloom@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
               editable={!isLoading}
@@ -426,55 +419,58 @@ const s = StyleSheet.create({
   scroll:      { flex: 1 },
   scrollContent: { paddingBottom: 110 },
 
-  // ── Branded hero header ──────────────────────────────────────────
-  heroHeader: {
+  // ── Calm avatar block ───────────────────────────────────────────
+  heroBlock: {
     alignItems: 'center',
-    paddingTop: Space[8],
-    paddingBottom: Space[6],
+    paddingTop: Space[6],
+    paddingBottom: Space[5],
     paddingHorizontal: Space[5],
-    backgroundColor: C.primary,
-    overflow: 'hidden',
+    backgroundColor: C.bg,
   },
-  // Decorative background rings
-  heroRing1: {
-    position: 'absolute',
-    width: 260, height: 260, borderRadius: 130,
-    borderWidth: 50, borderColor: 'rgba(255,255,255,0.06)',
-    top: -100, right: -70,
-  },
-  heroRing2: {
-    position: 'absolute',
-    width: 180, height: 180, borderRadius: 90,
-    borderWidth: 36, borderColor: 'rgba(255,255,255,0.06)',
-    bottom: -60, left: -40,
-  },
-  // Double-ring avatar
-  avatarOuterRing: {
-    width: 100, height: 100, borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.35)',
+  avatarRing: {
+    width: 96, height: 96, borderRadius: 48,
+    backgroundColor: C.surface,
+    borderWidth: 1, borderColor: C.border,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: Space[4],
+    marginBottom: 12,
   },
   avatarCircle: {
-    width: 84, height: 84, borderRadius: 42,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)',
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: C.primary,
     alignItems: 'center', justifyContent: 'center',
   },
-  avatarInitials: { fontSize: FontSize['2xl'], fontWeight: '800', color: '#fff' },
-  userName:  { fontSize: FontSize.xl, fontWeight: '800', color: '#fff', marginBottom: 4, letterSpacing: -0.3 },
-  userEmail: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.75)', marginBottom: Space[3] },
-
-  // Registered patient pill badge
+  avatarInitials: {
+    fontSize: FontSize['2xl'],
+    fontFamily: FontFamily.bodyBold,
+    color: '#fff',
+    letterSpacing: -0.3,
+  },
+  userName: {
+    fontSize: FontSize.xl,
+    fontFamily: FontFamily.bodyBold,
+    color: C.text,
+    marginBottom: 2,
+    letterSpacing: -0.4,
+  },
+  userEmail: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.body,
+    color: C.textSub,
+    marginBottom: Space[3],
+  },
   patientBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: C.surfaceAlt,
+    borderWidth: 1, borderColor: C.border,
     borderRadius: Radius.full,
-    paddingHorizontal: 12, paddingVertical: 5,
+    paddingHorizontal: 10, paddingVertical: 4,
   },
-  patientBadgeTxt: { fontSize: FontSize.xs, fontWeight: '700', color: 'rgba(255,255,255,0.92)', letterSpacing: 0.3 },
+  patientBadgeTxt: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.textSub,
+    letterSpacing: 0.3,
+  },
 
   // Quick actions
   quickActionsRow: {
@@ -493,9 +489,9 @@ const s = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: FontSize.xs,
-    fontWeight: '700',
+    fontFamily: FontFamily.bodyBold,
     color: C.primary,
-    letterSpacing: 0.8,
+    letterSpacing: 1,
     textTransform: 'uppercase',
   },
 
@@ -522,8 +518,18 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   settingText:    { flex: 1 },
-  settingTitle:   { fontSize: FontSize.base - 1, fontWeight: '600', color: C.text, marginBottom: 2 },
-  settingSubtitle:{ fontSize: FontSize.xs + 1, color: C.muted },
+  settingTitle: {
+    fontSize: FontSize.base - 1,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.text,
+    marginBottom: 2,
+    letterSpacing: 0.1,
+  },
+  settingSubtitle: {
+    fontSize: FontSize.xs + 1,
+    fontFamily: FontFamily.body,
+    color: C.muted,
+  },
   divider:        { height: StyleSheet.hairlineWidth, backgroundColor: C.borderLight, marginLeft: Space[5] + 38 + Space[3] },
 
   // Logout
@@ -547,8 +553,22 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginBottom: Space[4],
   },
-  modalTitle:   { fontSize: FontSize.lg, fontWeight: '700', color: C.text, marginBottom: Space[2], textAlign: 'center' },
-  modalMessage: { fontSize: FontSize.sm + 1, color: C.muted, textAlign: 'center', lineHeight: 21, marginBottom: Space[5] },
+  modalTitle: {
+    fontSize: FontSize.lg,
+    fontFamily: FontFamily.displayBold,
+    color: C.text,
+    marginBottom: Space[2],
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  modalMessage: {
+    fontSize: FontSize.sm + 1,
+    fontFamily: FontFamily.body,
+    color: C.muted,
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: Space[5],
+  },
   modalFullBtn: { width: '100%', marginTop: Space[2] },
 
   // Bottom sheet modals
@@ -584,15 +604,31 @@ const s = StyleSheet.create({
     paddingVertical: Space[3] - 2,
     marginBottom: Space[4],
   },
-  infoBannerText: { flex: 1, fontSize: FontSize.xs + 1, color: C.primary, lineHeight: 18 },
+  infoBannerText: {
+    flex: 1,
+    fontSize: FontSize.xs + 1,
+    fontFamily: FontFamily.bodyMedium,
+    color: C.primary,
+    lineHeight: 18,
+  },
 
   // Read-only email display
-  inputLabel:    { fontSize: FontSize.sm, fontWeight: '600', color: C.text, marginBottom: 7 },
+  inputLabel: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.text,
+    marginBottom: 7,
+    letterSpacing: 0.1,
+  },
   readonlyInput: {
-    backgroundColor: C.surfaceAlt, borderRadius: Radius.md,
+    backgroundColor: C.surfaceAlt, borderRadius: 16,
     paddingHorizontal: Space[4], paddingVertical: Space[3],
     borderWidth: 1, borderColor: C.border,
     marginBottom: Space[4],
   },
-  readonlyText: { fontSize: FontSize.base, color: C.muted },
+  readonlyText: {
+    fontSize: FontSize.base,
+    fontFamily: FontFamily.body,
+    color: C.muted,
+  },
 });
