@@ -5,9 +5,10 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from PIL import Image
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras.applications.resnet50 import ResNet50, preprocess_input, decode_predictions
-from tensorflow.keras.models import load_model
+import torch
+import torch.nn as nn
+from torchvision import models, transforms
+from torchvision.models.feature_extraction import create_feature_extractor
 
 app = Flask(__name__)
 CORS(app)
@@ -16,40 +17,110 @@ MODEL_PATH = os.environ.get('MODEL_PATH')
 CLASS_NAMES = [name.strip() for name in os.environ.get('CLASS_NAMES', 'benign,malignant').split(',') if name.strip()]
 IMG_SIZE = int(os.environ.get('IMG_SIZE', 224))
 
+# Set device
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def find_target_conv_layer(model):
-    for layer in reversed(model.layers):
-        output_shape = None
+# Define preprocessing transforms
+transform = transforms.Compose([
+    transforms.Resize((IMG_SIZE, IMG_SIZE)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+])
+
+def load_pytorch_model():
+    """Load PyTorch ResNet50 model from .pth file"""
+    global CLASS_NAMES
+    
+    # Try to load resnet50_best.pth first
+    pth_model_path = 'resnet50_best.pth'
+    if os.path.exists(pth_model_path):
+        print(f"Loading PyTorch model from {pth_model_path}")
         try:
-            output_shape = layer.output_shape
-        except AttributeError:
-            output_shape = getattr(getattr(layer, 'output', None), 'shape', None)
-
-        if output_shape is not None and len(output_shape) == 4:
-            return layer.name
-    raise ValueError('No convolutional layer found in the model.')
-
+            # First, load the checkpoint to determine the correct output size
+            checkpoint = torch.load(pth_model_path, map_location=DEVICE, weights_only=False)
+            
+            # Determine the number of classes from the checkpoint
+            if isinstance(checkpoint, dict):
+                if 'model_state_dict' in checkpoint:
+                    state_dict = checkpoint['model_state_dict']
+                elif 'state_dict' in checkpoint:
+                    state_dict = checkpoint['state_dict']
+                else:
+                    state_dict = checkpoint
+            else:
+                state_dict = checkpoint
+            
+            # Extract number of classes from fc layer
+            fc_weight_shape = state_dict.get('fc.weight', None)
+            if fc_weight_shape is not None:
+                num_classes = fc_weight_shape.shape[0]
+            else:
+                num_classes = len(CLASS_NAMES) if CLASS_NAMES else 2
+            
+            print(f"Detected {num_classes} output classes from checkpoint")
+            
+            # Create model with correct output size
+            model = models.resnet50(weights=None)
+            model.fc = nn.Linear(model.fc.in_features, num_classes)
+            
+            # Load the state dict
+            if isinstance(checkpoint, dict):
+                if 'model_state_dict' in checkpoint:
+                    model.load_state_dict(checkpoint['model_state_dict'])
+                elif 'state_dict' in checkpoint:
+                    model.load_state_dict(checkpoint['state_dict'])
+                else:
+                    model.load_state_dict(checkpoint)
+            else:
+                model.load_state_dict(checkpoint)
+            
+            model = model.to(DEVICE)
+            model.eval()
+            
+            # Update CLASS_NAMES if needed
+            if not CLASS_NAMES or len(CLASS_NAMES) != num_classes:
+                CLASS_NAMES = [f'class_{i}' for i in range(num_classes)]
+                print(f"Updated CLASS_NAMES to {len(CLASS_NAMES)} classes")
+            
+            return model, 'resnet50-best', True
+        except Exception as e:
+            print(f"Error loading PyTorch model: {e}")
+            raise
 
 def load_prediction_model():
-    if MODEL_PATH and os.path.exists(MODEL_PATH):
-        model = load_model(MODEL_PATH)
-        return model, os.path.basename(MODEL_PATH)
-    return ResNet50(weights='imagenet'), 'resnet50-imagenet'
+    """Load model - tries PyTorch first, then falls back to TensorFlow"""
+    try:
+        model, model_name, is_pytorch = load_pytorch_model()
+        return model, model_name, is_pytorch
+    except Exception as e:
+        print(f"Failed to load PyTorch model: {e}")
+        print("Model loading failed. Please ensure resnet50_best.pth is valid.")
+        raise
 
-model, MODEL_NAME = load_prediction_model()
-TARGET_LAYER_NAME = find_target_conv_layer(model)
+model, MODEL_NAME, IS_PYTORCH = load_prediction_model()
 
+# For PyTorch models, get feature extractor for GradCAM
+if IS_PYTORCH:
+    try:
+        feature_extractor = create_feature_extractor(
+            model, return_nodes={'layer4': 'features'}
+        )
+        forward_pass = create_feature_extractor(
+            model, return_nodes={'layer4': 'features', 'avgpool': 'pool'}
+        )
+    except Exception as e:
+        print(f"Warning: Could not create feature extractor: {e}")
+        feature_extractor = None
 
-def prepare_image(image: Image.Image) -> np.ndarray:
+def prepare_image(image: Image.Image) -> torch.Tensor:
+    """Prepare image for PyTorch model"""
     if image.mode != 'RGB':
         image = image.convert('RGB')
-    image = image.resize((IMG_SIZE, IMG_SIZE))
-    array = np.asarray(image, dtype=np.float32)
-    array = np.expand_dims(array, axis=0)
-    return preprocess_input(array)
-
+    tensor = transform(image)
+    return tensor.unsqueeze(0).to(DEVICE)
 
 def make_cam_image(original: Image.Image, heatmap: np.ndarray) -> str:
+    """Create Grad-CAM visualization"""
     heat = Image.fromarray(np.uint8(255 * heatmap)).resize(original.size)
     heat = heat.convert('RGB')
     heat = Image.blend(original.convert('RGB'), heat, alpha=0.4)
@@ -58,56 +129,79 @@ def make_cam_image(original: Image.Image, heatmap: np.ndarray) -> str:
     buffer.seek(0)
     return base64.b64encode(buffer.read()).decode('utf-8')
 
+def compute_gradcam(image_tensor: torch.Tensor, target_class: int) -> np.ndarray:
+    """Compute Grad-CAM heatmap for PyTorch model"""
+    image_tensor.requires_grad = True
+    
+    # Forward pass to get features
+    with torch.enable_grad():
+        # Get activations from the last convolutional layer
+        activations = feature_extractor(image_tensor)['features']
+        
+        # Get logits
+        logits = model(image_tensor)
+        target_score = logits[0, target_class]
+        
+        # Compute gradients
+        grads = torch.autograd.grad(
+            target_score, 
+            activations, 
+            create_graph=True, 
+            allow_unused=True
+        )[0]
+    
+    # Compute CAM
+    if grads is not None:
+        pooled_grads = torch.mean(grads, dim=(0, 2, 3))
+        activations = activations.detach()
+        for i in range(activations.shape[1]):
+            activations[:, i, :, :] *= pooled_grads[i]
+        heatmap = torch.mean(activations, dim=1).squeeze(0).detach().cpu().numpy()
+    else:
+        # Fallback: just use activations mean
+        heatmap = torch.mean(activations.detach(), dim=1).squeeze(0).cpu().numpy()
+    
+    # Normalize heatmap
+    heatmap = np.maximum(heatmap, 0)
+    if heatmap.max() > 0:
+        heatmap = heatmap / heatmap.max()
+    
+    return heatmap
 
-def compute_gradcam(image_array: np.ndarray, prediction_index: int) -> np.ndarray:
-    grad_model = tf.keras.models.Model(
-        inputs=[model.inputs],
-        outputs=[model.get_layer(TARGET_LAYER_NAME).output, model.output],
-    )
-    with tf.GradientTape() as tape:
-        conv_outputs, predictions = grad_model(image_array)
-        loss = predictions[:, prediction_index]
-
-    grads = tape.gradient(loss, conv_outputs)
-    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
-    conv_outputs = conv_outputs[0]
-    heatmap = tf.reduce_mean(tf.multiply(pooled_grads, conv_outputs), axis=-1)
-    heatmap = tf.maximum(heatmap, 0) / (tf.reduce_max(heatmap) + 1e-9)
-    return heatmap.numpy()
-
-
-def decode_prediction(preds: np.ndarray):
-    if MODEL_NAME == 'resnet50-imagenet':
-        decoded = decode_predictions(preds, top=1)[0][0]
-        return decoded[1], float(decoded[2])
-
-    logits = preds[0]
-    if logits.ndim == 0 or logits.shape[-1] == 1:
-        score = float(tf.sigmoid(logits).numpy().reshape(-1)[0])
-        label = CLASS_NAMES[0] if score >= 0.5 else (CLASS_NAMES[1] if len(CLASS_NAMES) > 1 else 'positive')
-        return label, score
-
-    probs = tf.nn.softmax(logits).numpy()
-    index = int(np.argmax(probs))
-    score = float(probs[index])
-    label = CLASS_NAMES[index] if index < len(CLASS_NAMES) else str(index)
-    return label, score
-
+def decode_prediction(logits: torch.Tensor) -> tuple:
+    """Decode model predictions"""
+    probs = torch.nn.functional.softmax(logits, dim=1)
+    score, class_idx = torch.max(probs, 1)
+    
+    class_idx = class_idx.item()
+    score = score.item()
+    
+    label = CLASS_NAMES[class_idx] if class_idx < len(CLASS_NAMES) else str(class_idx)
+    return label, score, class_idx
 
 def analyze_image(image: Image.Image):
-    image_array = prepare_image(image)
-    preds = model.predict(image_array)
-    label, score = decode_prediction(preds)
-    target_index = int(np.argmax(preds[0])) if preds.ndim > 1 else 0
-    heatmap = compute_gradcam(image_array, target_index)
-    cam_image = make_cam_image(image, heatmap)
+    """Analyze image and return prediction with CAM"""
+    image_tensor = prepare_image(image)
+    
+    with torch.no_grad():
+        logits = model(image_tensor)
+    
+    label, score, class_idx = decode_prediction(logits)
+    
+    # Compute Grad-CAM
+    try:
+        heatmap = compute_gradcam(image_tensor, class_idx)
+        cam_image = make_cam_image(image, heatmap)
+    except Exception as e:
+        print(f"Warning: Could not compute Grad-CAM: {e}")
+        cam_image = ""
+    
     return {
         'label': label,
         'score': score,
         'modelName': MODEL_NAME,
         'cam': cam_image,
     }
-
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -127,4 +221,12 @@ def predict():
         return jsonify({'error': str(exc)}), 500
 
 
-@app.route('/', methods=['GET
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({'status': 'ok', 'model': MODEL_NAME, 'device': str(DEVICE)})
+
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
+
