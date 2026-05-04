@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
-import { C, FontFamily, Shadow } from '@/constants/theme';
+import { C, FontFamily, FontSize, Radius, Shadow, Space } from '@/constants/theme';
 import Feather from '@expo/vector-icons/Feather';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,6 +14,7 @@ import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { Crest } from '@/components/decor/Crest';
 import { ArrowLeft, AlertCircle } from 'lucide-react-native';
+import { validateEmail, validateName, validatePassword } from '@/lib/validators';
 
 type Gender = 'male' | 'female' | null;
 
@@ -60,13 +61,37 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     setError('');
-    if (!email.trim() || !password.trim() || !confirmPassword.trim() || !firstName.trim() || !lastName.trim() || !gender || !selectedDate) {
-      setError('Please fill in all fields.'); return;
-    }
-    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
-    if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
 
-    const result = await register(email.trim(), password, firstName, lastName, gender, selectedDate.toISOString());
+    // Required-field gate first — gives a clearer error than letting the
+    // per-field validators flag whichever happens to be checked first.
+    if (!gender || !selectedDate) {
+      setError('Please fill in all fields.');
+      return;
+    }
+
+    // Per-field validation in display order so the user reads the same
+    // sequence on screen and in the error message.
+    const firstCheck = validateName(firstName, 'First name');
+    if (!firstCheck.ok) { setError(firstCheck.error); return; }
+    const lastCheck = validateName(lastName, 'Last name');
+    if (!lastCheck.ok) { setError(lastCheck.error); return; }
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.ok) { setError(emailCheck.error); return; }
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.ok) { setError(passwordCheck.error); return; }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    const result = await register(
+      emailCheck.value,
+      passwordCheck.value,
+      firstCheck.value,
+      lastCheck.value,
+      gender,
+      selectedDate.toISOString(),
+    );
     if (result.success) {
       router.replace('/(tabs)');
     } else {
@@ -328,23 +353,23 @@ const s = StyleSheet.create({
   scroll: { paddingHorizontal: 20, paddingBottom: 40 },
 
   // ── Heading block ───────────────────────────────────────────────
-  headingBlock: { alignItems: 'flex-start', paddingTop: 8, paddingBottom: 22 },
+  headingBlock: { alignItems: 'flex-start', paddingTop: Space[2], paddingBottom: Space[5] + 2 },
   eyebrow: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontFamily: FontFamily.bodyBold,
     color: C.primary,
     letterSpacing: 1.6,
-    marginBottom: 8,
+    marginBottom: Space[2],
   },
   heading: {
-    fontSize: 28,
+    fontSize: FontSize['3xl'],
     fontFamily: FontFamily.bodyBold,
     color: C.text,
     letterSpacing: -0.6,
-    marginBottom: 8,
+    marginBottom: Space[2],
   },
   subheading: {
-    fontSize: 14,
+    fontSize: FontSize.sm + 1, // 14
     fontFamily: FontFamily.body,
     color: C.textSub,
     lineHeight: 20,
@@ -354,9 +379,13 @@ const s = StyleSheet.create({
   // ── Form card ───────────────────────────────────────────────────
   card: {
     backgroundColor: C.surface,
-    borderRadius: 22, padding: 22,
+    // Radius.xl (20) — single source of truth, replacing the prior 22 to align
+    // with login.tsx and the system token. Visual delta is 2px, well below
+    // the perceptual threshold for corner radius on a card this size.
+    borderRadius: Radius.xl,
+    padding: Space[6] - 2, // 22 — generous interior to breathe with a long form
     borderWidth: 1, borderColor: C.border,
-    marginBottom: 24,
+    marginBottom: Space[6],
     ...(Platform.OS === 'ios' ? Shadow.sm : Platform.OS === 'android' ? { elevation: 3 } : {}),
   },
 

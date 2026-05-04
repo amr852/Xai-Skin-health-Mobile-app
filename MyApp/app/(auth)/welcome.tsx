@@ -2,7 +2,7 @@ import { View, Text, Pressable, StyleSheet, StatusBar, ScrollView, Platform } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ArrowRight, ArrowUpRight, Camera, Eye, ShieldCheck, Sun } from 'lucide-react-native';
-import { C, FontFamily, Shadow } from '@/constants/theme';
+import { C, FontFamily, FontSize, Overlay, Radius, Shadow, Space } from '@/constants/theme';
 import { GradientHero } from '@/components/decor/GradientHero';
 import { Crest } from '@/components/decor/Crest';
 import { Hairline } from '@/components/decor/Hairline';
@@ -28,12 +28,20 @@ export default function WelcomeScreen() {
 
       {/* ── Editorial-split hero ── */}
       <GradientHero style={s.hero}>
-        {/* Two diagonal corner petals — never overlap the crest or text */}
-        <View style={s.heroPetalTL} pointerEvents="none">
-          <Petal size={150} color="rgba(255,255,255,0.55)" opacity={0.32} animate />
+        {/* Two diagonal corner petals — decorative; hidden from screen readers. */}
+        <View
+          style={s.heroPetalTL}
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants">
+          <Petal size={150} color={Overlay.whiteMuted} opacity={0.32} animate />
         </View>
-        <View style={s.heroPetalBR} pointerEvents="none">
-          <Petal size={130} color="rgba(255,255,255,0.55)" opacity={0.28} animate />
+        <View
+          style={s.heroPetalBR}
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants">
+          <Petal size={130} color={Overlay.whiteMuted} opacity={0.28} animate />
         </View>
         {/* Asymmetric mark, top-left — clean, no petal behind */}
         <View style={s.heroMark}>
@@ -122,92 +130,96 @@ const s = StyleSheet.create({
     bottom: -45, right: -45,
   },
   heroMark: { alignSelf: 'flex-start' },
-  heroBody: { marginTop: 36 },
+  heroBody: { marginTop: Space[8] + 4 }, // 36
   heroEyebrow: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontFamily: FontFamily.bodyBold,
-    color: 'rgba(255,255,255,0.7)',
+    color: Overlay.whiteHigh,
     letterSpacing: 1.6,
-    marginBottom: 12,
+    marginBottom: Space[3],
   },
   heroTitle: {
+    // 30 is intentionally larger than the system FontSize.3xl (28) — this is
+    // the brand title on the welcome hero and gets one-step extra prominence.
+    // Kept inline (not promoted to a token) because no other screen uses it.
     fontSize: 30,
     fontFamily: FontFamily.bodyBold,
-    color: '#fff',
+    color: C.surface,
     letterSpacing: -0.8,
     lineHeight: 36,
-    marginBottom: 12,
+    marginBottom: Space[3],
   },
   heroTagline: {
-    fontSize: 14,
+    fontSize: FontSize.sm + 1, // 14
     fontFamily: FontFamily.body,
-    color: 'rgba(255,255,255,0.82)',
+    color: 'rgba(255,255,255,0.82)', // bespoke tagline alpha — between high (.78) and almost (.92)
     lineHeight: 20,
     maxWidth: 320,
   },
   heroTaglineItalic: {
     fontFamily: FontFamily.displayItalic,
-    color: '#fff',
+    color: C.surface,
   },
 
-  // White sheet
+  // White sheet — uses 3xl radius for the editorial split, slightly larger
+  // than card-level radii to read as a true page surface, not a card.
   sheet: {
     flex: 1,
     backgroundColor: C.bg,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: Radius['3xl'] - 4, // 28
+    borderTopRightRadius: Radius['3xl'] - 4,
     overflow: 'hidden',
     marginTop: -18,
   },
   sheetContent: {
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 36,
+    paddingHorizontal: Space[6],
+    paddingTop: Space[6] + 4,
+    paddingBottom: Space[8] + 4,
   },
 
   // Feature list
-  featureList: { marginBottom: 28 },
+  featureList: { marginBottom: Space[6] + 4 },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 14,
+    gap: Space[3] + 2, // 14
   },
   featureIcon: {
-    width: 40, height: 40, borderRadius: 10,
+    width: 40, height: 40, borderRadius: Radius.sm + 2, // 10
     backgroundColor: C.primaryLight,
     alignItems: 'center', justifyContent: 'center',
     marginTop: 2,
   },
   featureTitle: {
-    fontSize: 15,
+    fontSize: FontSize.base, // 15
     fontFamily: FontFamily.bodySemibold,
     color: C.text,
     letterSpacing: -0.2,
     marginBottom: 3,
   },
   featureDesc: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontFamily: FontFamily.body,
     color: C.textSub,
     lineHeight: 18,
   },
 
-  // Buttons
+  // Buttons — primary uses Button radius (14) + lg height (54)
   primaryBtn: {
     height: 54,
-    borderRadius: 14,
+    borderRadius: 14, // matches Button.radius token
     backgroundColor: C.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginBottom: 12,
+    gap: Space[2],
+    marginBottom: Space[3],
     ...(Platform.OS === 'ios' ? Shadow.sm : Platform.OS === 'android' ? { elevation: 4 } : {}),
   },
   primaryBtnTxt: {
-    fontSize: 16,
+    fontSize: FontSize.md, // 16
     fontFamily: FontFamily.bodySemibold,
-    color: '#fff',
+    color: C.surface,
     letterSpacing: 0.2,
   },
   secondaryBtn: {
@@ -218,20 +230,23 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginBottom: 22,
+    marginBottom: Space[5] + 2, // 22
   },
   secondaryBtnTxt: {
-    fontSize: 14,
+    fontSize: FontSize.sm + 1, // 14
     fontFamily: FontFamily.bodySemibold,
     color: C.primary,
     letterSpacing: 0.1,
   },
 
+  // Disclaimer — bumped from 11.5 to FontSize.sm (13) so it stays readable
+  // for users with the smallest accessibility text size enabled. Legal copy
+  // never has any business hiding under 12px.
   disclaimer: {
-    fontSize: 11.5,
+    fontSize: FontSize.sm,
     fontFamily: FontFamily.body,
     color: C.textHint,
     textAlign: 'center',
-    lineHeight: 17,
+    lineHeight: 18,
   },
 });

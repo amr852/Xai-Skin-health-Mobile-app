@@ -4,7 +4,6 @@ import Feather from '@expo/vector-icons/Feather';
 import { C, FontFamily, FontSize, Radius, Space, Shadow } from '@/constants/theme';
 import { useSunProtection } from '@/hooks/useSunProtection';
 import { SprayCan } from 'lucide-react-native';
-import { StatusArc } from '@/components/decor/StatusArc';
 
 const REAPPLY_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
@@ -75,14 +74,8 @@ export function SunProtectionCard() {
     };
   }, [lastAppliedISO]);
 
-  // The green "Stable" status arc was the source of the unwanted green bar — show
-  // the arc ONLY when there's an actual alert state (needsReapply). Protected = quiet.
-  const showArc = needsReapply;
-  const arcStatus = lastAppliedISO ? 'Check' : 'Urgent';
-
   return (
     <View style={s.card}>
-      {showArc && <StatusArc status={arcStatus} edge="top" />}
       <View style={s.headRow}>
         <View style={s.iconBg}>
           <SprayCan size={22} color={C.amberFill} strokeWidth={1.6} />

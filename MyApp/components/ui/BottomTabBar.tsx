@@ -59,6 +59,9 @@ const s = StyleSheet.create({
   bar: {
     position: 'absolute',
     left: 14, right: 14, bottom: 10,
+    // Explicit stacking — sits above page content but below modals (which use
+    // RN <Modal> with their own native overlay) and AppAlert (zIndex >= 100).
+    zIndex: 30,
     flexDirection: 'row',
     backgroundColor: C.surface,
     borderRadius: 22,

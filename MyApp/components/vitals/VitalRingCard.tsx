@@ -129,7 +129,10 @@ export function VitalRingCard(props: VitalRingCardProps) {
             ]}
             numberOfLines={1}
             adjustsFontSizeToFit
-            minimumFontScale={0.55}>
+            // 0.75 keeps the floor at ~24px (32 * 0.75) for the primary value
+            // and ~16.5px for the compact form — both safely above the 16px
+            // accessibility floor for primary numeric data.
+            minimumFontScale={0.75}>
             {value}
           </Text>
           {/* Hide the unit row entirely when the value already carries its unit — */}

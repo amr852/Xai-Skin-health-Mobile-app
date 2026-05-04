@@ -269,9 +269,20 @@ const st = StyleSheet.create({
     borderColor: C.border,
     gap: 12,
     position: 'relative',
+    // Pad the left edge so the unread accent rule has space without
+    // shifting the icon when the read/unread state flips.
+    paddingLeft: 14,
   },
+  // Unread state — three layered cues so it can't be missed:
+  //   1. left-edge rose accent (3px) — primary signal, scannable from afar
+  //   2. tinted surface (primaryLight at low alpha) — secondary signal
+  //   3. tinted border on the rose side — anchors the accent
   cardUnread: {
-    backgroundColor: '#FFFCFD',
+    backgroundColor: C.primaryLight,
+    borderColor: C.primaryLight,
+    borderLeftWidth: 3,
+    borderLeftColor: C.primary,
+    paddingLeft: 11, // -3 to compensate for the thicker left border
   },
   iconCircle: {
     width: 40, height: 40, borderRadius: 10,

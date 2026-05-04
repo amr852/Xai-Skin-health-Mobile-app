@@ -121,6 +121,28 @@ export const Gradient = {
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// OVERLAY TOKENS — translucent layers used over the gradient hero, camera
+// preview, scrim'd modals, etc. Centralized here so a brand opacity tweak is
+// one edit, not fifteen rgba() literals.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const Overlay = {
+  // White-on-color (used over the gradient hero — petals, hairlines, chip text)
+  whiteFaint:    'rgba(255,255,255,0.18)',  // chip backgrounds
+  whiteSoft:     'rgba(255,255,255,0.28)',  // chip border, secondary stroke
+  whiteSubtle:   'rgba(255,255,255,0.32)',  // primary petal opacity
+  whiteMuted:    'rgba(255,255,255,0.55)',  // petal core color
+  whiteHigh:     'rgba(255,255,255,0.78)',  // body text on hero
+  whiteHigher:   'rgba(255,255,255,0.85)',  // pulse line stroke
+  whiteAlmost:   'rgba(255,255,255,0.92)',  // chip text
+  // Dark scrims (used over photos / modals)
+  scrimSoft:     'rgba(15,23,42,0.20)',     // light dim
+  scrimMedium:   'rgba(15,23,42,0.45)',     // standard modal scrim (alias of C.overlay)
+  scrimStrong:   'rgba(0,0,0,0.50)',        // photo capture scrim
+  scrimBlack:    'rgba(0,0,0,0.65)',        // full-photo viewer
+} as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DECORATION BUDGET
 //
 // Hard rule: each decorative element appears in at most TWO places across the

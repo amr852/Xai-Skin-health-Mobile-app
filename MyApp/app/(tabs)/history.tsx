@@ -204,20 +204,26 @@ function LesionCard({
             </Text>
           </View>
 
-          {/* Action buttons */}
+          {/* Action buttons — 40pt height + 6pt hitSlop = 52pt effective target */}
           <View style={hs.actions}>
             <TouchableOpacity
               style={hs.actionBtnEdit}
               onPress={() => onEdit(item)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={`Edit ${item.title || 'lesion'}`}
               activeOpacity={0.75}>
-              <Feather name="edit-2" size={13} color={C.primary} />
+              <Feather name="edit-2" size={14} color={C.primary} />
               <Text style={hs.actionBtnEditTxt}>Edit</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={hs.actionBtnDelete}
               onPress={() => onDelete(item)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={`Delete ${item.title || 'lesion'}`}
               activeOpacity={0.75}>
-              <Feather name="trash-2" size={13} color={C.urgentText} />
+              <Feather name="trash-2" size={14} color={C.urgentText} />
               <Text style={hs.actionBtnDeleteTxt}>Delete</Text>
             </TouchableOpacity>
           </View>
@@ -558,28 +564,28 @@ const hs = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // Inline action buttons — small, neutral
-  actions: { flexDirection: 'row', gap: 8, marginTop: 2 },
+  // Inline action buttons — 40pt height for WCAG 2.5.5 (with 6pt hitSlop = 52pt target)
+  actions: { flexDirection: 'row', gap: Space[2], marginTop: 2 },
   actionBtnEdit: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    height: 30, paddingHorizontal: 12, borderRadius: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    height: 40, paddingHorizontal: 14, borderRadius: Radius.sm + 2,
     backgroundColor: C.surfaceAlt,
     borderWidth: 1, borderColor: C.borderLight,
   },
   actionBtnEditTxt: {
-    fontSize: 12,
+    fontSize: FontSize.sm,
     fontFamily: FontFamily.bodySemibold,
     color: C.text,
     letterSpacing: 0.1,
   },
   actionBtnDelete: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    height: 30, paddingHorizontal: 12, borderRadius: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    height: 40, paddingHorizontal: 14, borderRadius: Radius.sm + 2,
     backgroundColor: 'transparent',
     borderWidth: 1, borderColor: C.urgentBorder,
   },
   actionBtnDeleteTxt: {
-    fontSize: 12,
+    fontSize: FontSize.sm,
     fontFamily: FontFamily.bodySemibold,
     color: C.urgentText,
     letterSpacing: 0.1,

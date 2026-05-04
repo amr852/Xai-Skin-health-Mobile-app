@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, RefreshControl, ActivityIndicator } from 'react
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Sun } from 'lucide-react-native';
 
-import { C, FontFamily, Shadow } from '@/constants/theme';
+import { C, FontFamily, FontSize, Overlay, Radius, Shadow, Space } from '@/constants/theme';
 import { Screen } from '@/components/ui/Screen';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SectionHeader } from '@/components/ui/SectionHeader';
@@ -12,7 +12,6 @@ import { VitalRingCard } from '@/components/vitals/VitalRingCard';
 import { SunProtectionCard } from '@/components/home/SunProtectionCard';
 import { MonitorLesionsSection } from '@/components/home/MonitorLesionsSection';
 import { GradientHero } from '@/components/decor/GradientHero';
-import { PulseLine } from '@/components/decor/PulseLine';
 import { GridBackplate } from '@/components/decor/GridBackplate';
 import { Petal } from '@/components/decor/Petal';
 
@@ -104,12 +103,20 @@ export default function HomeScreen() {
       {/* ── Gradient greeting strip — bento element 1 ────────────────── */}
       <View style={s.greetingWrap}>
         <GradientHero style={s.gradient}>
-          {/* Two diagonal petal hints — same vocabulary as welcome, but very subtle */}
-          <View style={s.greetingPetalTR} pointerEvents="none">
-            <Petal size={150} color="rgba(255,255,255,0.55)" opacity={0.32} />
+          {/* Two diagonal petal hints — decorative; hidden from screen readers. */}
+          <View
+            style={s.greetingPetalTR}
+            pointerEvents="none"
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants">
+            <Petal size={150} color={Overlay.whiteMuted} opacity={0.32} />
           </View>
-          <View style={s.greetingPetalBL} pointerEvents="none">
-            <Petal size={110} color="rgba(255,255,255,0.55)" opacity={0.22} />
+          <View
+            style={s.greetingPetalBL}
+            pointerEvents="none"
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants">
+            <Petal size={110} color={Overlay.whiteMuted} opacity={0.22} />
           </View>
           <View style={s.gradientInner}>
             <View style={s.gradientHeader}>
@@ -122,9 +129,6 @@ export default function HomeScreen() {
             </View>
             <Text style={s.gradientHello}>Hello, {userName}.</Text>
             <Text style={s.gradientLine}>Your skin care snapshot for today.</Text>
-            <View style={s.gradientPulse}>
-              <PulseLine width={120} height={14} color="rgba(255,255,255,0.85)" strokeWidth={1.4} />
-            </View>
           </View>
         </GradientHero>
       </View>
@@ -132,7 +136,11 @@ export default function HomeScreen() {
       {/* ── UV bento tile (full width) ───────────────────────────────── */}
       <View style={s.bentoBlock}>
         <View style={s.uvCard}>
-          <View pointerEvents="none" style={s.uvGridBackplate}>
+          <View
+            pointerEvents="none"
+            style={s.uvGridBackplate}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants">
             <GridBackplate width={320} height={140} pitch={28} opacity={0.25} />
           </View>
           <View style={s.uvHead}>
@@ -159,7 +167,15 @@ export default function HomeScreen() {
             </View>
             <View style={s.uvGauge}>
               {[1, 2, 3, 4, 5].map(i => {
-                const isActive = uvi != null && i <= Math.ceil(uvi / 2.2);
+                // Clamp UV index to [0, 11+] before deriving the lit-bar count so
+                // bad data (NaN, negative, runaway values) never paints a broken gauge.
+                const safeUvi = uvi != null && Number.isFinite(uvi)
+                  ? Math.max(0, Math.min(uvi, 11))
+                  : null;
+                const litBars = safeUvi != null
+                  ? Math.max(0, Math.min(5, Math.ceil(safeUvi / 2.2)))
+                  : 0;
+                const isActive = i <= litBars;
                 const heights = [16, 22, 28, 22, 16];
                 return (
                   <View
@@ -242,12 +258,12 @@ export default function HomeScreen() {
 const s = StyleSheet.create({
   // ── Gradient greeting ──────────────────────────────────────
   greetingWrap: {
-    paddingHorizontal: 20,
-    marginTop: 4,
-    marginBottom: 16,
+    paddingHorizontal: Space[5],
+    marginTop: Space[1],
+    marginBottom: Space[4],
   },
   gradient: {
-    borderRadius: 22,
+    borderRadius: Radius.xl + 2, // 22 — slight nudge over xl(20) keeps the hero distinctive
     minHeight: 116,
     ...Shadow.sm,
   },
@@ -260,8 +276,8 @@ const s = StyleSheet.create({
     bottom: -34, left: -34,
   },
   gradientInner: {
-    paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingHorizontal: Space[5],
+    paddingVertical: Space[4] + 2,
   },
   gradientHeader: {
     flexDirection: 'row',
@@ -274,57 +290,54 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: Overlay.whiteFaint,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
+    borderColor: Overlay.whiteSoft,
     paddingHorizontal: 9,
     paddingVertical: 3,
-    borderRadius: 9999,
+    borderRadius: Radius.full,
   },
   insightDot: {
     width: 6, height: 6, borderRadius: 3,
-    backgroundColor: '#9EE6B0', // soft mint — distinct from medical green; just a brand glow
+    backgroundColor: '#9EE6B0', // soft mint — distinct from medical green; brand glow
   },
   insightTxt: {
-    fontSize: 9.5,
+    fontSize: FontSize.xs - 1.5, // 9.5 — sub-caption, kept as-is for chip density
     fontFamily: FontFamily.bodyBold,
-    color: 'rgba(255,255,255,0.92)',
+    color: Overlay.whiteAlmost,
     letterSpacing: 1.2,
   },
   gradientDate: {
-    fontSize: 10,
+    fontSize: FontSize.xs - 1, // 10
     fontFamily: FontFamily.bodyBold,
-    color: 'rgba(255,255,255,0.78)',
+    color: Overlay.whiteHigh,
     letterSpacing: 1.4,
   },
   gradientHello: {
-    fontSize: 24,
+    fontSize: FontSize['2xl'],
     fontFamily: FontFamily.bodyBold,
-    color: '#fff',
+    color: C.surface,
     letterSpacing: -0.5,
     marginTop: 4,
     marginBottom: 4,
   },
   gradientLine: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontFamily: FontFamily.body,
-    color: 'rgba(255,255,255,0.78)',
-  },
-  gradientPulse: {
-    marginTop: 12,
+    color: Overlay.whiteHigh,
   },
 
   // ── UV bento tile ──────────────────────────────────────────
   bentoBlock: {
-    paddingHorizontal: 20,
-    marginBottom: 16,
+    paddingHorizontal: Space[5],
+    marginBottom: Space[4],
   },
   uvCard: {
     backgroundColor: C.surface,
-    borderRadius: 22,
+    borderRadius: Radius.xl + 2, // 22 — matches greeting hero for visual cohesion
     borderWidth: 1,
     borderColor: C.border,
-    padding: 18,
+    padding: Space[4] + 2, // 18 — slight breathing room over Space[4] for the larger UV value
     overflow: 'hidden',
     ...Shadow.xs,
   },
@@ -393,8 +406,8 @@ const s = StyleSheet.create({
   sectionMargin: { marginTop: 4 },
   vitalsGrid: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-    gap: 12,
+    paddingHorizontal: Space[5],
+    marginBottom: Space[5],
+    gap: Space[3],
   },
 });

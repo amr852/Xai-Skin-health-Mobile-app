@@ -3,11 +3,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import { ArrowLeft, AlertCircle } from 'lucide-react-native';
-import { C, FontFamily, Shadow } from '@/constants/theme';
+import { C, FontFamily, FontSize, Radius, Shadow, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { Crest } from '@/components/decor/Crest';
+import { validateEmail, validatePassword } from '@/lib/validators';
 
 export default function LoginScreen() {
   const [email, setEmail]       = useState('');
@@ -17,11 +18,16 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     setError('');
-    if (!email.trim() || !password.trim()) {
-      setError('Please enter both email and password.');
-      return;
-    }
-    const result = await login(email.trim(), password.trim());
+
+    // Validate both fields before any network call. The validators normalise
+    // (trim/lowercase email) and enforce length caps, so we pass the validated
+    // values to the auth context — never the raw user input.
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.ok) { setError(emailCheck.error); return; }
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.ok) { setError(passwordCheck.error); return; }
+
+    const result = await login(emailCheck.value, passwordCheck.value);
     if (result.success) {
       router.replace('/(tabs)');
     } else {
@@ -119,35 +125,37 @@ const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
 
   topBar: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: Space[3],
+    paddingVertical: Space[2],
   },
   backBtn: {
-    width: 40, height: 40, borderRadius: 12,
+    width: 40, height: 40, borderRadius: Radius.md,
     backgroundColor: C.surfaceAlt,
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: C.borderLight,
   },
 
-  scroll: { paddingHorizontal: 24, paddingBottom: 40 },
+  scroll: { paddingHorizontal: Space[6], paddingBottom: Space[10] },
 
-  headingBlock: { alignItems: 'flex-start', paddingTop: 8, paddingBottom: 28 },
+  headingBlock: { alignItems: 'flex-start', paddingTop: Space[2], paddingBottom: Space[6] + 4 },
   eyebrow: {
-    fontSize: 11,
+    fontSize: FontSize.xs,
     fontFamily: FontFamily.bodyBold,
     color: C.primary,
     letterSpacing: 1.6,
-    marginBottom: 8,
+    marginBottom: Space[2],
   },
   heading: {
-    fontSize: 30,
+    // FontSize.3xl (28) — matches register.tsx heading and the design system token,
+    // resolving the prior 30 vs 28 inconsistency between the two auth screens.
+    fontSize: FontSize['3xl'],
     fontFamily: FontFamily.bodyBold,
     color: C.text,
-    letterSpacing: -0.7,
-    marginBottom: 8,
+    letterSpacing: -0.6,
+    marginBottom: Space[2],
   },
   subheading: {
-    fontSize: 14,
+    fontSize: FontSize.sm + 1, // 14 — body sub-text, one notch under base
     fontFamily: FontFamily.body,
     color: C.textSub,
     lineHeight: 20,
@@ -156,44 +164,44 @@ const s = StyleSheet.create({
 
   card: {
     backgroundColor: C.surface,
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: Radius.xl, // 20 — system token, was hardcoded 18
+    padding: Space[5] - 2, // 18 — internal field gap rhythm
     borderWidth: 1, borderColor: C.border,
-    marginBottom: 24,
+    marginBottom: Space[6],
     ...(Platform.OS === 'ios' ? Shadow.xs : {}),
   },
 
   errorBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: C.urgentBg, borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 10,
+    flexDirection: 'row', alignItems: 'center', gap: Space[2],
+    backgroundColor: C.urgentBg, borderRadius: Radius.sm + 2, // 10
+    paddingHorizontal: Space[3], paddingVertical: Space[3] - 2,
     borderLeftWidth: 3, borderLeftColor: C.urgentText,
-    marginBottom: 14,
+    marginBottom: Space[3] + 2,
   },
   errorTxt: {
     flex: 1,
     color: C.urgentText,
-    fontSize: 12.5,
+    fontSize: FontSize.sm,
     fontFamily: FontFamily.bodyMedium,
-    lineHeight: 17,
+    lineHeight: 18,
   },
 
-  signInBtn: { marginTop: 4 },
+  signInBtn: { marginTop: Space[1] },
 
   footRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'baseline',
     gap: 6,
-    marginTop: 8,
+    marginTop: Space[2],
   },
   footTxt: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontFamily: FontFamily.body,
     color: C.textSub,
   },
   footLink: {
-    fontSize: 13,
+    fontSize: FontSize.sm,
     fontFamily: FontFamily.bodySemibold,
     color: C.primary,
     letterSpacing: 0.1,
