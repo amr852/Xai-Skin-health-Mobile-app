@@ -192,6 +192,12 @@ function LesionCard({
             <Text style={hs.lesionDescription} numberOfLines={1}>{item.description}</Text>
           )}
 
+          {!!item.analysis?.label && (
+            <Text style={hs.analysisText} numberOfLines={1}>
+              {item.analysis.label} · {(item.analysis.score * 100).toFixed(1)}%
+            </Text>
+          )}
+
           <View style={hs.metaRow}>
             {!!item.location && (
               <Text style={hs.metaText}>{item.location}</Text>
@@ -551,6 +557,12 @@ const hs = StyleSheet.create({
     fontFamily: FontFamily.body,
     color: C.textSub,
     lineHeight: 18,
+    marginBottom: 6,
+  },
+  analysisText: {
+    fontSize: 12,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.primary,
     marginBottom: 6,
   },
   metaRow: {

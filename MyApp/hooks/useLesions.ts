@@ -4,6 +4,14 @@ import { Platform } from 'react-native';
 import { apiFetch, ApiError, API_URL } from '@/lib/api';
 import { getStoredToken } from '@/context/AuthContext';
 
+export type LesionAnalysis = {
+  label: string;
+  score: number;
+  camImageUrl: string;
+  imageUrl: string;
+  modelName?: string;
+};
+
 export type Lesion = {
   _id: string;
   title: string;
@@ -13,6 +21,7 @@ export type Lesion = {
   status: 'Stable' | 'Check' | 'Urgent';
   imageUrl?: string;
   notes?: string;
+  analysis?: Omit<LesionAnalysis, 'imageUrl'>;
 };
 
 export type LesionFields = {
@@ -75,20 +84,51 @@ export function useLesions() {
     return body.url as string;
   }, []);
 
+  const analyzeImage = useCallback(async (uri: string): Promise<LesionAnalysis> => {
+    const token = await getStoredToken();
+    const formData = new FormData();
+    formData.append('image', {
+      uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
+      type: 'image/jpeg',
+      name: 'lesion.jpg',
+    } as any);
+
+    const res = await fetch(`${API_URL}/lesions/analyze`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+
+    const text = await res.text();
+    let body: any;
+    try { body = text ? JSON.parse(text) : {}; } catch { body = {}; }
+    if (!res.ok) throw new ApiError(res.status, body?.error || 'Analysis failed', body);
+
+    if (!body.imageUrl || !body.analysis) {
+      throw new ApiError(500, 'Unexpected analysis response');
+    }
+
+    return {
+      ...body.analysis,
+      imageUrl: body.imageUrl,
+    } as LesionAnalysis;
+  }, []);
+
   const addLesion = useCallback(
-    async (fields: LesionFields, imageUri?: string): Promise<void> => {
+    async (fields: LesionFields, imageUri?: string, analysis?: LesionAnalysis): Promise<void> => {
       setLoading(true);
       setError(null);
       try {
         const token = await getStoredToken();
-        let imageUrl: string | undefined;
-        if (imageUri) {
+        let imageUrl: string | undefined = analysis?.imageUrl;
+        if (imageUri && !imageUrl) {
           try { imageUrl = await uploadImage(imageUri); } catch { /* non-fatal — save record without image */ }
         }
+
         await apiFetch<Lesion>('/lesions', {
           method: 'POST',
           token,
-          json: { ...fields, imageUrl },
+          json: { ...fields, imageUrl, analysis },
         });
       } catch (e) {
         setError((e as Error).message);
@@ -143,5 +183,5 @@ export function useLesions() {
     }
   }, []);
 
-  return { lesions, loading, error, fetchLesions, addLesion, updateLesion, deleteLesion };
+  return { lesions, loading, error, fetchLesions, addLesion, analyzeImage, updateLesion, deleteLesion };
 }

@@ -10,7 +10,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { C, FontFamily, Shadow } from '@/constants/theme';
-import { useLesions, type LesionFields } from '@/hooks/useLesions';
+import { useLesions, type LesionFields, type LesionAnalysis } from '@/hooks/useLesions';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -34,12 +34,15 @@ export default function CameraScreen() {
   const [isFacingFront, setIsFacingFront] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [form, setForm]                   = useState<LesionFields>(DEFAULT_FORM);
+  const [analysis, setAnalysis]           = useState<LesionAnalysis | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [saving, setSaving]               = useState(false);
   const [activeNav, setActiveNav]         = useState<NavKey>('scan');
   const cameraRef = useRef<CameraView>(null);
   const router    = useRouter();
   const insets    = useSafeAreaInsets();
-  const { addLesion } = useLesions();
+  const { addLesion, analyzeImage } = useLesions();
   const { showAlert, alertNode } = useAppAlert();
 
   const handleTakePhoto = async () => {
@@ -52,23 +55,48 @@ export default function CameraScreen() {
     }
   };
 
-  const handleRetake = () => { setCapturedPhoto(null); setForm(DEFAULT_FORM); };
+  const handleRetake = () => {
+    setCapturedPhoto(null);
+    setForm(DEFAULT_FORM);
+    setAnalysis(null);
+    setUploadedImageUrl(null);
+  };
+
+  const handleAnalyze = async () => {
+    if (!capturedPhoto) return;
+    setAnalysisLoading(true);
+    try {
+      const result = await analyzeImage(capturedPhoto);
+      setAnalysis(result);
+      setUploadedImageUrl(result.imageUrl);
+    } catch (e: any) {
+      showAlert({ title: 'Analysis Failed', message: e.message || 'Unable to analyze the image. Try again.', variant: 'error' });
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!form.title.trim()) {
       showAlert({ title: 'Title Required', message: 'Please enter a title to identify this lesion.', variant: 'warning' });
       return;
     }
+
+    if (!analysis) {
+      showAlert({ title: 'Analyze First', message: 'Please analyze the photo first to get the model prediction and CAM.', variant: 'warning' });
+      return;
+    }
+
     setSaving(true);
     try {
-      await addLesion({ ...form, title: form.title.trim() }, capturedPhoto ?? undefined);
+      await addLesion({ ...form, title: form.title.trim() }, uploadedImageUrl ?? capturedPhoto ?? undefined, analysis);
       showAlert({
         title: 'Lesion Recorded',
         message: 'Your lesion has been saved successfully and added to your records.',
         variant: 'success',
         buttons: [
           { text: 'View History', style: 'default', onPress: () => { setCapturedPhoto(null); router.push('/history'); } },
-          { text: 'Scan Another', style: 'cancel',  onPress: () => { setCapturedPhoto(null); setForm(DEFAULT_FORM); } },
+          { text: 'Scan Another', style: 'cancel',  onPress: () => { setCapturedPhoto(null); handleRetake(); } },
         ],
       });
     } catch (e: any) {
@@ -188,11 +216,34 @@ export default function CameraScreen() {
               />
             </View>
 
+            <View style={s.analysisCard}>
+              <Text style={s.analysisTitle}>Model analysis</Text>
+              {!analysis ? (
+                <AppButton
+                  label="Analyze Photo"
+                  onPress={handleAnalyze}
+                  loading={analysisLoading}
+                  disabled={saving || analysisLoading}
+                  size="lg"
+                  style={s.analysisBtn}
+                />
+              ) : (
+                <View style={s.analysisSummary}>
+                  <Text style={s.analysisLabel}>Prediction</Text>
+                  <Text style={s.analysisValue}>{analysis.label}</Text>
+                  <Text style={s.analysisSubtext}>Confidence: {(analysis.score * 100).toFixed(1)}%</Text>
+                  {analysis.camImageUrl ? (
+                    <Image source={{ uri: analysis.camImageUrl }} style={s.analysisImage} resizeMode="cover" />
+                  ) : null}
+                </View>
+              )}
+            </View>
+
             <AppButton
               label="Save Lesion"
               onPress={handleSave}
               loading={saving}
-              disabled={saving}
+              disabled={saving || !analysis}
               icon="save"
               size="lg"
               style={s.saveBtn}
@@ -339,6 +390,45 @@ const s = StyleSheet.create({
     fontSize: 13,
     fontFamily: FontFamily.bodySemibold,
     color: C.textHint,
+  },
+  analysisCard: {
+    backgroundColor: C.surface, borderRadius: 22,
+    borderWidth: 1, borderColor: C.border,
+    padding: 18, marginBottom: 16,
+  },
+  analysisTitle: {
+    fontSize: 15,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.text,
+    marginBottom: 12,
+  },
+  analysisBtn: {
+    marginTop: 4,
+  },
+  analysisSummary: {
+    gap: 12,
+  },
+  analysisLabel: {
+    fontSize: 12,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.textHint,
+  },
+  analysisValue: {
+    fontSize: 18,
+    fontFamily: FontFamily.displayBold,
+    color: C.text,
+  },
+  analysisSubtext: {
+    fontSize: 13,
+    fontFamily: FontFamily.body,
+    color: C.textHint,
+  },
+  analysisImage: {
+    width: '100%',
+    height: 170,
+    borderRadius: 18,
+    marginTop: 8,
+    backgroundColor: C.surfaceAlt,
   },
   saveBtn:    { marginBottom: 14 },
   disclaimer: {

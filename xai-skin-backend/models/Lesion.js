@@ -16,6 +16,12 @@ const lesionSchema = new mongoose.Schema({
   },
   imageUrl: String,
   notes: String,
+  analysis: {
+    label: String,
+    score: Number,
+    camImageUrl: String,
+    modelName: String,
+  },
   createdAt: {
     type: Date,
     default: Date.now

@@ -4,7 +4,11 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const axios = require('axios');
+const FormData = require('form-data');
 const Lesion = require('../models/Lesion');
+
+const MODEL_SERVER_URL = process.env.MODEL_SERVER_URL || 'http://localhost:5000';
 
 // ── Image upload setup ──────────────────────────────────────────────────────
 const uploadsDir = path.join(__dirname, '../public/uploads');
@@ -47,6 +51,59 @@ router.post('/upload-image', verifyToken, (req, res) => {
   });
 });
 
+async function saveCamImage(base64Data) {
+  const cleanBase64 = base64Data.replace(/^data:image\/png;base64,/, '');
+  const filename = `cam-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
+  const filePath = path.join(uploadsDir, filename);
+  await fs.promises.writeFile(filePath, Buffer.from(cleanBase64, 'base64'));
+  return filename;
+}
+
+async function callModelServer(filePath) {
+  const form = new FormData();
+  form.append('image', fs.createReadStream(filePath));
+
+  const response = await axios.post(`${MODEL_SERVER_URL}/predict`, form, {
+    headers: {
+      ...form.getHeaders(),
+    },
+    timeout: 120000,
+  });
+
+  return response.data;
+}
+
+// Analyze a lesion image and return prediction + CAM overlay
+router.post('/analyze', verifyToken, (req, res) => {
+  upload.single('image')(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'Upload failed' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    try {
+      const analysis = await callModelServer(req.file.path);
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      let camUrl;
+      if (analysis?.cam) {
+        const camFilename = await saveCamImage(analysis.cam);
+        camUrl = `${baseUrl}/uploads/${camFilename}`;
+      }
+
+      return res.status(200).json({
+        imageUrl: `${baseUrl}/uploads/${req.file.filename}`,
+        analysis: {
+          label: analysis.label,
+          score: analysis.score,
+          camImageUrl: camUrl,
+          modelName: analysis.modelName,
+        },
+      });
+    } catch (error) {
+      console.error('Analyze lesion error:', error?.message || error);
+      return res.status(500).json({ error: 'Failed to analyze image' });
+    }
+  });
+});
+
 // Get all lesions for current user
 router.get('/', verifyToken, async (req, res) => {
   try {
@@ -75,7 +132,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 // Create new lesion
 router.post('/', verifyToken, async (req, res) => {
   try {
-    const { title, description, location, status, imageUrl, notes } = req.body;
+    const { title, description, location, status, imageUrl, notes, analysis } = req.body;
 
     const lesion = new Lesion({
       userId: req.userId,
@@ -85,6 +142,12 @@ router.post('/', verifyToken, async (req, res) => {
       status,
       imageUrl,
       notes,
+      analysis: analysis ? {
+        label: analysis.label,
+        score: analysis.score,
+        camImageUrl: analysis.camImageUrl,
+        modelName: analysis.modelName,
+      } : undefined,
     });
     
     await lesion.save();
