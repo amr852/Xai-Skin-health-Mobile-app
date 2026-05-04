@@ -59,11 +59,14 @@ async function saveCamImage(base64Data) {
   return filename;
 }
 
-async function callModelServer(filePath) {
+async function callModelServer(filePath, userId) {
   const form = new FormData();
   form.append('image', fs.createReadStream(filePath));
+  if (userId) {
+    form.append('userId', String(userId));
+  }
 
-  const response = await axios.post(`${MODEL_SERVER_URL}/predict`, form, {
+  const response = await axios.post(`${MODEL_SERVER_URL}/scan`, form, {
     headers: {
       ...form.getHeaders(),
     },
@@ -80,21 +83,26 @@ router.post('/analyze', verifyToken, (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     try {
-      const analysis = await callModelServer(req.file.path);
+      const raw = await callModelServer(req.file.path, req.userId);
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       let camUrl;
-      if (analysis?.cam) {
-        const camFilename = await saveCamImage(analysis.cam);
+      if (raw?.cam_base64) {
+        const camFilename = await saveCamImage(raw.cam_base64);
         camUrl = `${baseUrl}/uploads/${camFilename}`;
       }
 
       return res.status(200).json({
         imageUrl: `${baseUrl}/uploads/${req.file.filename}`,
         analysis: {
-          label: analysis.label,
-          score: analysis.score,
+          label: raw.prediction,
+          score: typeof raw.score === 'number' ? raw.score : 0,
           camImageUrl: camUrl,
-          modelName: analysis.modelName,
+          modelName: raw.model_name ? `${raw.model_name} (${raw.xai_method || 'XAI'})` : 'resnet50 (Score-CAM)',
+          predictionIndex: raw.prediction_index,
+          xaiMethod: raw.xai_method,
+          enhancementsApplied: Array.isArray(raw.enhancements_applied) ? raw.enhancements_applied : [],
+          topPredictions: Array.isArray(raw.top_predictions) ? raw.top_predictions : [],
+          recordId: raw.record_id,
         },
       });
     } catch (error) {
@@ -147,6 +155,11 @@ router.post('/', verifyToken, async (req, res) => {
         score: analysis.score,
         camImageUrl: analysis.camImageUrl,
         modelName: analysis.modelName,
+        predictionIndex: analysis.predictionIndex,
+        xaiMethod: analysis.xaiMethod,
+        enhancementsApplied: analysis.enhancementsApplied,
+        topPredictions: analysis.topPredictions,
+        recordId: analysis.recordId,
       } : undefined,
     });
     

@@ -4,12 +4,19 @@ import { Platform } from 'react-native';
 import { apiFetch, ApiError, API_URL } from '@/lib/api';
 import { getStoredToken } from '@/context/AuthContext';
 
+export type TopPrediction = { label: string; score: number };
+
 export type LesionAnalysis = {
   label: string;
   score: number;
-  camImageUrl: string;
+  camImageUrl?: string;
   imageUrl: string;
   modelName?: string;
+  predictionIndex?: number;
+  xaiMethod?: string;
+  enhancementsApplied?: string[];
+  topPredictions?: TopPrediction[];
+  recordId?: string | null;
 };
 
 export type Lesion = {
@@ -21,7 +28,7 @@ export type Lesion = {
   status: 'Stable' | 'Check' | 'Urgent';
   imageUrl?: string;
   notes?: string;
-  analysis?: Omit<LesionAnalysis, 'imageUrl'>;
+  analysis?: Omit<LesionAnalysis, 'imageUrl'> & { camImageUrl?: string };
 };
 
 export type LesionFields = {

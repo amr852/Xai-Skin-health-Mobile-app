@@ -9,11 +9,12 @@ from datetime import datetime, timezone
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pymongo import MongoClient
-from bson import ObjectId
 import torch
 import torch.nn as nn
 from torchvision import models, transforms
 from torchvision.models.feature_extraction import create_feature_extractor
+from pytorch_grad_cam import ScoreCAM
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
 from image_quality import (
     is_blurry, is_low_light,
@@ -180,6 +181,85 @@ def _serialize_doc(doc: dict) -> dict:
     return doc
 
 
+def _save_enhanced_pair_from_upload(file_storage, id_prefix: str) -> dict:
+    """
+    Save upload to temp path, run blur/low-light enhancement, persist original + enhanced.
+
+    id_prefix is used in filenames (Mongo user id or 'anon' when unauthenticated).
+
+    Returns:
+      original_image_name, enhanced_image_name, enhancements_applied, img_pil (RGB enhanced)
+    Raises ValueError on unreadable image.
+    """
+    ext = os.path.splitext(file_storage.filename)[1] or '.jpg'
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+        file_storage.save(tmp.name)
+        tmp_path = tmp.name
+
+    try:
+        image = cv2.imread(tmp_path)
+        if image is None:
+            raise ValueError('Could not read image')
+
+        enhancements_applied = []
+
+        if is_blurry(tmp_path):
+            print('Image is blurry – enhancing …')
+            image = enhance_blurry_image(image)
+            enhancements_applied.append('sharpening')
+
+        if is_low_light(tmp_path):
+            print('Image is too dark – enhancing …')
+            image = enhance_low_light_image(image)
+            enhancements_applied.append('brightness')
+
+        timestamp     = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')
+        original_name = f'orig_{id_prefix}_{timestamp}{ext}'
+        enhanced_name = f'enh_{id_prefix}_{timestamp}{ext}'
+
+        orig_bgr = cv2.imread(tmp_path)
+        cv2.imwrite(os.path.join(UPLOAD_FOLDER, original_name), orig_bgr)
+        cv2.imwrite(os.path.join(UPLOAD_FOLDER, enhanced_name), image)
+
+        img_pil = Image.open(os.path.join(UPLOAD_FOLDER, enhanced_name)).convert('RGB')
+        return {
+            'original_image_name':  original_name,
+            'enhanced_image_name':  enhanced_name,
+            'enhancements_applied': enhancements_applied,
+            'img_pil':              img_pil,
+        }
+    finally:
+        os.unlink(tmp_path)
+
+
+def _scorecam_heatmap(img_pil: Image.Image, tensor: torch.Tensor, pred_idx: int) -> np.ndarray:
+    """Return a normalised H×W float32 heatmap in [0, 1] using Score-CAM."""
+    tensor_in = tensor.clone().detach()
+    with ScoreCAM(model=model, target_layers=[target_layer]) as cam:
+        grayscale_cam = cam(
+            input_tensor=tensor_in,
+            targets=[ClassifierOutputTarget(pred_idx)],
+        )[0, :]
+
+    g = np.asarray(grayscale_cam, dtype=np.float32)
+    g = np.maximum(g, 0)
+    if g.max() > g.min():
+        g = (g - g.min()) / (g.max() - g.min() + 1e-8)
+    return g
+
+
+def _top_k_predictions(logits: torch.Tensor, k: int = 3) -> list:
+    """Return [{label, score}, ...] sorted by softmax probability."""
+    probs = torch.softmax(logits, dim=1)[0]
+    k = min(k, probs.numel())
+    vals, idxs = torch.topk(probs, k=k)
+    out = []
+    for v, i in zip(vals.tolist(), idxs.tolist()):
+        label = CLASS_NAMES[i] if i < len(CLASS_NAMES) else str(i)
+        out.append({'label': label, 'score': float(v)})
+    return out
+
+
 # ─────────────────────────────────────────────
 # 📸 Analyze image quality & enhance
 # ─────────────────────────────────────────────
@@ -202,63 +282,110 @@ def analyze_image():
         return jsonify({'error': 'userId is required'}), 400
 
     file = request.files['image']
-    ext  = os.path.splitext(file.filename)[1] or '.jpg'
-
-    # ── Save original to a temp file for quality checks ──────────────────
-    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-        file.save(tmp.name)
-        tmp_path = tmp.name
 
     try:
-        image = cv2.imread(tmp_path)
-        if image is None:
-            return jsonify({'error': 'Could not read image'}), 400
+        saved = _save_enhanced_pair_from_upload(file, user_id)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
 
-        # 🔍 Quality checks & enhancement
-        enhancements_applied = []
+    record = {
+        'userId':               user_id,
+        'original_image_name':  saved['original_image_name'],
+        'enhanced_image_name':  saved['enhanced_image_name'],
+        'enhancements_applied': saved['enhancements_applied'],
+        'prediction':           None,
+        'cam_image_name':       None,
+        'xai_method':           None,
+        'created_at':           datetime.now(timezone.utc),
+    }
+    insert_result = results_col.insert_one(record)
 
-        if is_blurry(tmp_path):
-            print("Image is blurry – enhancing …")
-            image = enhance_blurry_image(image)
-            enhancements_applied.append('sharpening')
+    return jsonify({
+        'status':               'Image processed and enhanced',
+        'record_id':            str(insert_result.inserted_id),
+        'original_image_name':  saved['original_image_name'],
+        'enhanced_image_name':  saved['enhanced_image_name'],
+        'enhancements_applied': saved['enhancements_applied'],
+        'userId':               user_id,
+    }), 200
 
-        if is_low_light(tmp_path):
-            print("Image is too dark – enhancing …")
-            image = enhance_low_light_image(image)
-            enhancements_applied.append('brightness')
 
-        # ── Persist both copies ──────────────────────────────────────────
-        timestamp       = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')
-        original_name   = f"orig_{user_id}_{timestamp}{ext}"
-        enhanced_name   = f"enh_{user_id}_{timestamp}{ext}"
+# ─────────────────────────────────────────────
+# 🔬 Full scan: preprocess + predict + Score-CAM (multipart, for Node proxy)
+# ─────────────────────────────────────────────
+@app.route('/scan', methods=['POST'])
+def scan_lesion():
+    """
+    One-shot pipeline for the mobile app proxy: preprocess, classify, Score-CAM.
 
-        cv2.imwrite(os.path.join(UPLOAD_FOLDER, original_name),
-                    cv2.imread(tmp_path))          # save untouched original
-        cv2.imwrite(os.path.join(UPLOAD_FOLDER, enhanced_name), image)
+    Form fields:
+      image  — required multipart file
+      userId — optional; when present, inserts skin_analysis_results with full outcome.
+               When omitted, skips Mongo insert (anonymous scan).
 
-        # ── MongoDB record ───────────────────────────────────────────────
+    Response JSON includes prediction, softmax score, top_predictions, cam_base64, etc.
+    """
+    if 'image' not in request.files:
+        return jsonify({'error': 'Missing image file'}), 400
+
+    user_id = request.form.get('userId')  # optional
+    id_prefix = user_id if user_id else 'anon'
+    file = request.files['image']
+
+    try:
+        saved = _save_enhanced_pair_from_upload(file, id_prefix)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    img_pil = saved['img_pil']
+    tensor  = transform(img_pil).unsqueeze(0).to(DEVICE)
+
+    with torch.no_grad():
+        logits = model(tensor)
+    pred_idx   = logits.argmax(dim=1).item()
+    probs      = torch.softmax(logits, dim=1)[0]
+    pred_score = float(probs[pred_idx].item())
+    class_name = CLASS_NAMES[pred_idx] if pred_idx < len(CLASS_NAMES) else str(pred_idx)
+    top_preds  = _top_k_predictions(logits, k=3)
+
+    try:
+        heatmap = _scorecam_heatmap(img_pil, tensor, pred_idx)
+        overlay = _overlay_cam(img_pil, heatmap)
+        base    = os.path.splitext(saved['enhanced_image_name'])[0]
+        cam_name = f'cam_{base}.png'
+        cam_path = _save_image(overlay, cam_name)
+        cam_b64  = _to_base64(cam_path)
+    except Exception as e:
+        print('Score-CAM failed:', e)
+        return jsonify({'error': f'XAI generation failed: {e}'}), 500
+
+    record_id = None
+    if user_id:
         record = {
             'userId':               user_id,
-            'original_image_name':  original_name,
-            'enhanced_image_name':  enhanced_name,
-            'enhancements_applied': enhancements_applied,
-            'prediction':           None,
-            'cam_image_name':       None,
+            'original_image_name':  saved['original_image_name'],
+            'enhanced_image_name':  saved['enhanced_image_name'],
+            'enhancements_applied': saved['enhancements_applied'],
+            'prediction':           class_name,
+            'cam_image_name':       cam_name,
+            'xai_method':           'Score-CAM',
             'created_at':           datetime.now(timezone.utc),
         }
         insert_result = results_col.insert_one(record)
+        record_id = str(insert_result.inserted_id)
 
-        return jsonify({
-            'status':               'Image processed and enhanced',
-            'record_id':            str(insert_result.inserted_id),
-            'original_image_name':  original_name,
-            'enhanced_image_name':  enhanced_name,
-            'enhancements_applied': enhancements_applied,
-            'userId':               user_id,
-        }), 200
-
-    finally:
-        os.unlink(tmp_path)
+    return jsonify({
+        'prediction':            class_name,
+        'prediction_index':      pred_idx,
+        'score':                 pred_score,
+        'top_predictions':       top_preds,
+        'enhancements_applied':  saved['enhancements_applied'],
+        'xai_method':            'Score-CAM',
+        'model_name':            'resnet50',
+        'cam_base64':            cam_b64,
+        'record_id':             record_id,
+        'enhanced_image_name':   saved['enhanced_image_name'],
+    }), 200
 
 
 # ─────────────────────────────────────────────
@@ -376,6 +503,7 @@ def predict_with_xai():
             {'$set': {
                 'prediction':     class_name,
                 'cam_image_name': cam_name,
+                'xai_method':     'Grad-CAM',
             }},
         )
 

@@ -232,6 +232,24 @@ export default function CameraScreen() {
                   <Text style={s.analysisLabel}>Prediction</Text>
                   <Text style={s.analysisValue}>{analysis.label}</Text>
                   <Text style={s.analysisSubtext}>Confidence: {(analysis.score * 100).toFixed(1)}%</Text>
+                  <Text style={s.analysisSubtext}>
+                    Explainability: {analysis.xaiMethod ?? 'Score-CAM'} heatmap
+                  </Text>
+                  {analysis.enhancementsApplied && analysis.enhancementsApplied.length > 0 ? (
+                    <Text style={s.analysisEnhance}>
+                      Enhanced: {analysis.enhancementsApplied.join(', ')}
+                    </Text>
+                  ) : null}
+                  {analysis.topPredictions && analysis.topPredictions.length > 0 ? (
+                    <View style={s.topPredBlock}>
+                      <Text style={s.analysisLabel}>Top classes</Text>
+                      {analysis.topPredictions.map((row, i) => (
+                        <Text key={`${row.label}-${i}`} style={s.topPredRow}>
+                          {row.label}: {(row.score * 100).toFixed(1)}%
+                        </Text>
+                      ))}
+                    </View>
+                  ) : null}
                   {analysis.camImageUrl ? (
                     <Image source={{ uri: analysis.camImageUrl }} style={s.analysisImage} resizeMode="cover" />
                   ) : null}
@@ -420,6 +438,21 @@ const s = StyleSheet.create({
   },
   analysisSubtext: {
     fontSize: 13,
+    fontFamily: FontFamily.body,
+    color: C.textHint,
+  },
+  analysisEnhance: {
+    fontSize: 12,
+    fontFamily: FontFamily.bodyMedium,
+    color: C.text,
+    marginTop: 2,
+  },
+  topPredBlock: {
+    marginTop: 4,
+    gap: 4,
+  },
+  topPredRow: {
+    fontSize: 12,
     fontFamily: FontFamily.body,
     color: C.textHint,
   },

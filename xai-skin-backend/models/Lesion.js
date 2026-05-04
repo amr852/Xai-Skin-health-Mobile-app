@@ -21,6 +21,14 @@ const lesionSchema = new mongoose.Schema({
     score: Number,
     camImageUrl: String,
     modelName: String,
+    predictionIndex: Number,
+    xaiMethod: String,
+    enhancementsApplied: [String],
+    topPredictions: [{
+      label: String,
+      score: Number,
+    }],
+    recordId: String,
   },
   createdAt: {
     type: Date,
