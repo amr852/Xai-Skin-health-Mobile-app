@@ -39,8 +39,28 @@ export type LesionFields = {
   notes: string;
 };
 
+/** Optional multipart metadata for library picks (PNG/WebP, original filename). */
+export type LesionImageUploadOptions = {
+  mimeType?: string;
+  fileName?: string;
+};
+
+const ANALYZE_UPLOAD_TIMEOUT_MS = 130_000;
+
 async function clearAuthOnUnauthorized() {
   await AsyncStorage.multiRemove(['authToken', 'authUser']);
+}
+
+function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(input, { ...init, signal: controller.signal }).finally(() =>
+    clearTimeout(id),
+  );
 }
 
 export function useLesions() {
@@ -71,19 +91,28 @@ export function useLesions() {
   }, []);
 
   // Image upload uses raw FormData so multipart is preserved — done via fetch directly.
-  const uploadImage = useCallback(async (uri: string): Promise<string> => {
+  const uploadImage = useCallback(async (uri: string, options?: LesionImageUploadOptions): Promise<string> => {
     const token = await getStoredToken();
+    if (!token) {
+      throw new ApiError(401, 'Not signed in. Please log in again.');
+    }
+    const mime = options?.mimeType?.trim() || 'image/jpeg';
+    const name = options?.fileName?.trim() || 'lesion.jpg';
     const formData = new FormData();
     formData.append('image', {
       uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
-      type: 'image/jpeg',
-      name: 'lesion.jpg',
+      type: mime,
+      name,
     } as any);
-    const res = await fetch(`${API_URL}/lesions/upload-image`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
-    });
+    const res = await fetchWithTimeout(
+      `${API_URL}/lesions/upload-image`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      },
+      ANALYZE_UPLOAD_TIMEOUT_MS,
+    );
     const text = await res.text();
     let body: any;
     try { body = text ? JSON.parse(text) : {}; } catch { body = {}; }
@@ -91,20 +120,37 @@ export function useLesions() {
     return body.url as string;
   }, []);
 
-  const analyzeImage = useCallback(async (uri: string): Promise<LesionAnalysis> => {
+  const analyzeImage = useCallback(async (uri: string, options?: LesionImageUploadOptions): Promise<LesionAnalysis> => {
     const token = await getStoredToken();
+    if (!token) {
+      throw new ApiError(401, 'Not signed in. Please log in again.');
+    }
+    const mime = options?.mimeType?.trim() || 'image/jpeg';
+    const name = options?.fileName?.trim() || 'lesion.jpg';
     const formData = new FormData();
     formData.append('image', {
       uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
-      type: 'image/jpeg',
-      name: 'lesion.jpg',
+      type: mime,
+      name,
     } as any);
 
-    const res = await fetch(`${API_URL}/lesions/analyze`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
-    });
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(
+        `${API_URL}/lesions/analyze`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        },
+        ANALYZE_UPLOAD_TIMEOUT_MS,
+      );
+    } catch (e: unknown) {
+      if ((e as Error)?.name === 'AbortError') {
+        throw new ApiError(0, 'Analysis timed out — check connection and server load.');
+      }
+      throw new ApiError(0, (e as Error)?.message || 'Unable to reach the analysis server.');
+    }
 
     const text = await res.text();
     let body: any;

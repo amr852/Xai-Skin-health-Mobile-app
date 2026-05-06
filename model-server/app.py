@@ -12,12 +12,12 @@ from pymongo import MongoClient
 import torch
 import torch.nn as nn
 from torchvision import models, transforms
-from torchvision.models.feature_extraction import create_feature_extractor
-from pytorch_grad_cam import ScoreCAM
+from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
 from image_quality import (
     is_blurry, is_low_light,
+    blur_variance, brightness_score,
     enhance_blurry_image, enhance_low_light_image
 )
 
@@ -30,12 +30,30 @@ CLASS_NAMES = [
     'hfmd', 'melanocytic nevi', 'melanoma',
     'monkeypox', 'squamous cell carcinoma', 'Vascular lesions',
 ]
+_class_names_from_env = os.environ.get('CLASS_NAMES', '').strip()
+if _class_names_from_env:
+    parsed_names = [x.strip() for x in _class_names_from_env.split(',') if x.strip()]
+    if parsed_names:
+        CLASS_NAMES = parsed_names
+
 NUM_CLASSES   = len(CLASS_NAMES)
 IMG_SIZE      = int(os.environ.get('IMG_SIZE', 224))
 MODEL_PATH    = os.environ.get('MODEL_PATH', 'resnet50_best.pth')
+MODEL_NAME    = os.path.splitext(os.path.basename(MODEL_PATH))[0]
 MONGO_URI     = os.environ.get('MONGO_URI', 'mongodb://localhost:27017')
 DB_NAME       = os.environ.get('DB_NAME', 'skinsense')
 UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'uploads')
+BLUR_THRESHOLD = float(os.environ.get('BLUR_THRESHOLD', 65.0))
+LOW_LIGHT_THRESHOLD = float(os.environ.get('LOW_LIGHT_THRESHOLD', 30.0))
+# IMPORTANT: must match training-time preprocessing.
+# The training script used `Resize((224,224)) + ToTensor()` only — no ImageNet
+# normalization. Defaulting this to '0' avoids a silent train/inference
+# distribution shift that produces wildly wrong predictions even for a model
+# with high validation accuracy. Set NORMALIZE_INPUT=1 only if you retrain
+# with `transforms.Normalize(mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225])`.
+NORMALIZE_INPUT = os.environ.get('NORMALIZE_INPUT', '0').strip().lower() in {
+    '1', 'true', 'yes', 'on'
+}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # ─────────────────────────────────────────────
@@ -59,12 +77,18 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # ─────────────────────────────────────────────
 # 📐 Image transformation
 # ─────────────────────────────────────────────
-transform = transforms.Compose([
+_transform_steps = [
     transforms.Resize((IMG_SIZE, IMG_SIZE)),
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225])
-])
+]
+if NORMALIZE_INPUT:
+    _transform_steps.append(
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225],
+        )
+    )
+transform = transforms.Compose(_transform_steps)
 
 # ─────────────────────────────────────────────
 # 🧠 Load model
@@ -86,6 +110,7 @@ def load_model():
     fc_weight = state_dict.get('fc.weight')
     num_classes = fc_weight.shape[0] if fc_weight is not None else NUM_CLASSES
     print(f"  → {num_classes} output classes detected in checkpoint")
+    print(f"  → normalization enabled: {NORMALIZE_INPUT}")
 
     # ⚠️  Sync CLASS_NAMES if the checkpoint disagrees with the hard-coded list
     global CLASS_NAMES
@@ -103,17 +128,14 @@ def load_model():
     model = model.to(DEVICE)
     model.eval()
 
-    target_layer = model.layer4[-1]
+    # Use the last convolution in ResNet-50 for Grad-CAM.
+    # This is the canonical target for spatially meaningful attribution maps.
+    target_layer = model.layer4[-1].conv3
     return model, target_layer
 
 
 model, target_layer = load_model()
 print(f"  ✅ Active CLASS_NAMES ({len(CLASS_NAMES)}): {CLASS_NAMES}")
-
-# Feature extractor used by Grad-CAM
-feature_extractor = create_feature_extractor(
-    model, return_nodes={'layer4': 'features'}
-)
 
 # ─────────────────────────────────────────────
 # 🛠️ Helpers
@@ -148,22 +170,22 @@ def _encode_pil(pil_image: Image.Image) -> str:
 
 
 def _gradcam(image_tensor: torch.Tensor, target_class: int) -> np.ndarray:
-    """Return a normalised Grad-CAM heatmap (H×W float32 in [0, 1])."""
-    image_tensor = image_tensor.clone().requires_grad_(True)
+    """
+    Return a normalised H×W Grad-CAM heatmap in [0, 1].
+    Uses a single forward/backward CAM implementation for correctness and speed.
+    """
+    tensor_in = image_tensor.clone().detach()
+    with GradCAM(model=model, target_layers=[target_layer]) as cam:
+        grayscale_cam = cam(
+            input_tensor=tensor_in,
+            targets=[ClassifierOutputTarget(target_class)],
+        )[0, :]
 
-    with torch.enable_grad():
-        activations = feature_extractor(image_tensor)['features']
-        logits      = model(image_tensor)
-        score       = logits[0, target_class]
-        grads       = torch.autograd.grad(score, activations)[0]
-
-    pooled = grads.mean(dim=(0, 2, 3))
-    cam    = (activations.detach() * pooled[None, :, None, None]).mean(dim=1)
-    cam    = cam.squeeze(0).cpu().numpy()
-    cam    = np.maximum(cam, 0)
-    if cam.max() > 0:
-        cam /= cam.max()
-    return cam.astype(np.float32)
+    g = np.asarray(grayscale_cam, dtype=np.float32)
+    g = np.maximum(g, 0)
+    if g.max() > g.min():
+        g = (g - g.min()) / (g.max() - g.min() + 1e-8)
+    return g
 
 
 def _overlay_cam(original_pil: Image.Image, heatmap: np.ndarray) -> np.ndarray:
@@ -201,17 +223,30 @@ def _save_enhanced_pair_from_upload(file_storage, id_prefix: str) -> dict:
         if image is None:
             raise ValueError('Could not read image')
 
+        quality_before = {
+            'blur_variance': blur_variance(image),
+            'brightness': brightness_score(image),
+            'is_blurry': is_blurry(tmp_path, threshold=BLUR_THRESHOLD),
+            'is_low_light': is_low_light(image, threshold=LOW_LIGHT_THRESHOLD),
+        }
         enhancements_applied = []
 
-        if is_blurry(tmp_path):
-            print('Image is blurry – enhancing …')
+        if quality_before['is_blurry']:
+            print('Image is blurry - enhancing with sharpen filter...')
             image = enhance_blurry_image(image)
             enhancements_applied.append('sharpening')
 
-        if is_low_light(tmp_path):
-            print('Image is too dark – enhancing …')
+        if quality_before['is_low_light']:
+            print('Image is too dark - enhancing brightness/contrast...')
             image = enhance_low_light_image(image)
             enhancements_applied.append('brightness')
+
+        quality_after = {
+            'blur_variance': blur_variance(image),
+            'brightness': brightness_score(image),
+            'is_blurry': blur_variance(image) < BLUR_THRESHOLD,
+            'is_low_light': is_low_light(image, threshold=LOW_LIGHT_THRESHOLD),
+        }
 
         timestamp     = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')
         original_name = f'orig_{id_prefix}_{timestamp}{ext}'
@@ -226,26 +261,16 @@ def _save_enhanced_pair_from_upload(file_storage, id_prefix: str) -> dict:
             'original_image_name':  original_name,
             'enhanced_image_name':  enhanced_name,
             'enhancements_applied': enhancements_applied,
+            'quality_before':       quality_before,
+            'quality_after':        quality_after,
+            'quality_thresholds':   {
+                'blur_threshold': BLUR_THRESHOLD,
+                'low_light_threshold': LOW_LIGHT_THRESHOLD,
+            },
             'img_pil':              img_pil,
         }
     finally:
         os.unlink(tmp_path)
-
-
-def _scorecam_heatmap(img_pil: Image.Image, tensor: torch.Tensor, pred_idx: int) -> np.ndarray:
-    """Return a normalised H×W float32 heatmap in [0, 1] using Score-CAM."""
-    tensor_in = tensor.clone().detach()
-    with ScoreCAM(model=model, target_layers=[target_layer]) as cam:
-        grayscale_cam = cam(
-            input_tensor=tensor_in,
-            targets=[ClassifierOutputTarget(pred_idx)],
-        )[0, :]
-
-    g = np.asarray(grayscale_cam, dtype=np.float32)
-    g = np.maximum(g, 0)
-    if g.max() > g.min():
-        g = (g - g.min()) / (g.max() - g.min() + 1e-8)
-    return g
 
 
 def _top_k_predictions(logits: torch.Tensor, k: int = 3) -> list:
@@ -293,6 +318,9 @@ def analyze_image():
         'original_image_name':  saved['original_image_name'],
         'enhanced_image_name':  saved['enhanced_image_name'],
         'enhancements_applied': saved['enhancements_applied'],
+        'quality_before':       saved['quality_before'],
+        'quality_after':        saved['quality_after'],
+        'quality_thresholds':   saved['quality_thresholds'],
         'prediction':           None,
         'cam_image_name':       None,
         'xai_method':           None,
@@ -306,17 +334,22 @@ def analyze_image():
         'original_image_name':  saved['original_image_name'],
         'enhanced_image_name':  saved['enhanced_image_name'],
         'enhancements_applied': saved['enhancements_applied'],
+        'quality_before':       saved['quality_before'],
+        'quality_after':        saved['quality_after'],
+        'quality_thresholds':   saved['quality_thresholds'],
         'userId':               user_id,
+        'model_name':           MODEL_NAME,
+        'normalize_input':      NORMALIZE_INPUT,
     }), 200
 
 
 # ─────────────────────────────────────────────
-# 🔬 Full scan: preprocess + predict + Score-CAM (multipart, for Node proxy)
+# 🔬 Full scan: preprocess + predict + Grad-CAM (multipart, for Node proxy)
 # ─────────────────────────────────────────────
 @app.route('/scan', methods=['POST'])
 def scan_lesion():
     """
-    One-shot pipeline for the mobile app proxy: preprocess, classify, Score-CAM.
+    One-shot pipeline for the mobile app proxy: preprocess, classify, fast Grad-CAM.
 
     Form fields:
       image  — required multipart file
@@ -340,24 +373,36 @@ def scan_lesion():
     img_pil = saved['img_pil']
     tensor  = transform(img_pil).unsqueeze(0).to(DEVICE)
 
+    # Prediction comes ONLY from the model's forward pass.
+    # Grad-CAM below is purely a visualization of *this* prediction;
+    # it never overrides or recomputes the predicted class.
     with torch.no_grad():
         logits = model(tensor)
-    pred_idx   = logits.argmax(dim=1).item()
+    pred_idx   = int(logits.argmax(dim=1).item())
     probs      = torch.softmax(logits, dim=1)[0]
     pred_score = float(probs[pred_idx].item())
     class_name = CLASS_NAMES[pred_idx] if pred_idx < len(CLASS_NAMES) else str(pred_idx)
     top_preds  = _top_k_predictions(logits, k=3)
+    print(
+        f"[/scan] model prediction: {class_name} (idx={pred_idx}, "
+        f"score={pred_score:.4f}) | top3={top_preds} | "
+        f"normalize_input={NORMALIZE_INPUT}"
+    )
 
+    cam_name = None
+    cam_b64  = None
     try:
-        heatmap = _scorecam_heatmap(img_pil, tensor, pred_idx)
+        heatmap = _gradcam(tensor, pred_idx)
         overlay = _overlay_cam(img_pil, heatmap)
         base    = os.path.splitext(saved['enhanced_image_name'])[0]
         cam_name = f'cam_{base}.png'
         cam_path = _save_image(overlay, cam_name)
         cam_b64  = _to_base64(cam_path)
     except Exception as e:
-        print('Score-CAM failed:', e)
-        return jsonify({'error': f'XAI generation failed: {e}'}), 500
+        # Fail soft: a broken CAM must NOT discard a valid model prediction.
+        print('Grad-CAM failed (returning prediction without CAM):', e)
+        cam_name = None
+        cam_b64  = None
 
     record_id = None
     if user_id:
@@ -366,9 +411,12 @@ def scan_lesion():
             'original_image_name':  saved['original_image_name'],
             'enhanced_image_name':  saved['enhanced_image_name'],
             'enhancements_applied': saved['enhancements_applied'],
+            'quality_before':       saved['quality_before'],
+            'quality_after':        saved['quality_after'],
+            'quality_thresholds':   saved['quality_thresholds'],
             'prediction':           class_name,
             'cam_image_name':       cam_name,
-            'xai_method':           'Score-CAM',
+            'xai_method':           'Grad-CAM',
             'created_at':           datetime.now(timezone.utc),
         }
         insert_result = results_col.insert_one(record)
@@ -380,9 +428,14 @@ def scan_lesion():
         'score':                 pred_score,
         'top_predictions':       top_preds,
         'enhancements_applied':  saved['enhancements_applied'],
-        'xai_method':            'Score-CAM',
-        'model_name':            'resnet50',
+        'quality_before':        saved['quality_before'],
+        'quality_after':         saved['quality_after'],
+        'quality_thresholds':    saved['quality_thresholds'],
+        'xai_method':            'Grad-CAM',
+        'model_name':            MODEL_NAME,
+        'normalize_input':       NORMALIZE_INPUT,
         'cam_base64':            cam_b64,
+        'cam_image_name':        cam_name,
         'record_id':             record_id,
         'enhanced_image_name':   saved['enhanced_image_name'],
     }), 200
@@ -436,10 +489,17 @@ def predict():
 
         with torch.no_grad():
             outputs   = model(tensor)
-            pred_idx  = outputs.argmax(dim=1).item()
+            pred_idx  = int(outputs.argmax(dim=1).item())
+            probs     = torch.softmax(outputs, dim=1)[0]
+            pred_score = float(probs[pred_idx].item())
             class_name = CLASS_NAMES[pred_idx] if pred_idx < len(CLASS_NAMES) else str(pred_idx)
+        top_preds = _top_k_predictions(outputs, k=3)
+        print(
+            f"[/predict] model prediction: {class_name} (idx={pred_idx}, "
+            f"score={pred_score:.4f}) | top3={top_preds} | "
+            f"normalize_input={NORMALIZE_INPUT}"
+        )
 
-        # Update matching MongoDB record
         results_col.update_one(
             {'enhanced_image_name': image_name},
             {'$set': {'prediction': class_name}},
@@ -448,6 +508,8 @@ def predict():
         return jsonify({
             'prediction_index': pred_idx,
             'prediction':       class_name,
+            'score':            pred_score,
+            'top_predictions':  top_preds,
         }), 200
 
     except FileNotFoundError as e:
@@ -480,37 +542,52 @@ def predict_with_xai():
         img_pil = _load_pil(image_name)
         tensor  = transform(img_pil).unsqueeze(0).to(DEVICE)
 
-        # ── Forward pass ─────────────────────────────────────────────────
+        # ── Forward pass — prediction comes ONLY from the model ──────────
         with torch.no_grad():
             logits   = model(tensor)
-            pred_idx = logits.argmax(dim=1).item()
+            pred_idx = int(logits.argmax(dim=1).item())
+            probs    = torch.softmax(logits, dim=1)[0]
+            pred_score = float(probs[pred_idx].item())
 
         class_name = CLASS_NAMES[pred_idx] if pred_idx < len(CLASS_NAMES) else str(pred_idx)
+        top_preds  = _top_k_predictions(logits, k=3)
+        print(
+            f"[/predict-xai] model prediction: {class_name} (idx={pred_idx}, "
+            f"score={pred_score:.4f}) | top3={top_preds} | "
+            f"normalize_input={NORMALIZE_INPUT}"
+        )
 
-        # ── Grad-CAM ─────────────────────────────────────────────────────
-        heatmap = _gradcam(tensor, pred_idx)
-        overlay = _overlay_cam(img_pil, heatmap)        # BGR numpy
+        # ── Grad-CAM (visualization only — never overrides prediction) ───
+        cam_name = None
+        cam_b64  = None
+        try:
+            heatmap = _gradcam(tensor, pred_idx)
+            overlay = _overlay_cam(img_pil, heatmap)        # BGR numpy
+            base       = os.path.splitext(image_name)[0]
+            cam_name   = f"cam_{base}.png"
+            cam_path   = _save_image(overlay, cam_name)
+            cam_b64    = _to_base64(cam_path)
+        except Exception as cam_err:
+            print('Grad-CAM failed (returning prediction without CAM):', cam_err)
+            cam_name = None
+            cam_b64  = None
 
-        # ── Save overlay ─────────────────────────────────────────────────
-        base       = os.path.splitext(image_name)[0]
-        cam_name   = f"cam_{base}.png"
-        cam_path   = _save_image(overlay, cam_name)
-        cam_b64    = _to_base64(cam_path)
-
-        # ── Update MongoDB ────────────────────────────────────────────────
+        update_set = {'prediction': class_name}
+        if cam_name:
+            update_set['cam_image_name'] = cam_name
+            update_set['xai_method']     = 'Grad-CAM'
         results_col.update_one(
             {'enhanced_image_name': image_name},
-            {'$set': {
-                'prediction':     class_name,
-                'cam_image_name': cam_name,
-                'xai_method':     'Grad-CAM',
-            }},
+            {'$set': update_set},
         )
 
         return jsonify({
-            'prediction':     class_name,
-            'cam_image_name': cam_name,
-            'cam_base64':     cam_b64,
+            'prediction':       class_name,
+            'prediction_index': pred_idx,
+            'score':            pred_score,
+            'top_predictions':  top_preds,
+            'cam_image_name':   cam_name,
+            'cam_base64':       cam_b64,
         }), 200
 
     except FileNotFoundError as e:
@@ -527,6 +604,13 @@ def home():
     return jsonify({
         'status': 'Skin Lesion Classifier API is running',
         'device': str(DEVICE),
+        'model_name': MODEL_NAME,
+        'model_path': MODEL_PATH,
+        'normalize_input': NORMALIZE_INPUT,
+        'quality_thresholds': {
+            'blur_threshold': BLUR_THRESHOLD,
+            'low_light_threshold': LOW_LIGHT_THRESHOLD,
+        },
     })
 
 

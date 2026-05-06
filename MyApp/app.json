@@ -39,6 +39,12 @@
           "cameraPermission": "Allow $(PRODUCT_NAME) to use your camera to capture skin lesion photos for analysis."
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to choose a skin lesion photo from your library for analysis."
+        }
+      ],
       "expo-notifications",
       [
         "expo-splash-screen",

@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const FormData = require('form-data');
 const Lesion = require('../models/Lesion');
+const { verifyToken } = require('../middleware/verifyToken');
 
 const MODEL_SERVER_URL = process.env.MODEL_SERVER_URL || 'http://localhost:5000';
 
@@ -22,23 +22,6 @@ const storage = multer.diskStorage({
   },
 });
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
-
-// Middleware to verify JWT token
-const verifyToken = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  
-  if (!token) {
-    return res.status(401).json({ error: 'Token required' });
-  }
-  
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key_change_this_in_production');
-    req.userId = decoded.userId;
-    next();
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
-  }
-};
 
 // Upload lesion image — must be before /:id routes
 router.post('/upload-image', verifyToken, (req, res) => {
@@ -71,6 +54,9 @@ async function callModelServer(filePath, userId) {
       ...form.getHeaders(),
     },
     timeout: 120000,
+    /** Large Score-CAM PNG (base64) payloads must not be truncated by axios defaults */
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
   });
 
   return response.data;
@@ -97,7 +83,7 @@ router.post('/analyze', verifyToken, (req, res) => {
           label: raw.prediction,
           score: typeof raw.score === 'number' ? raw.score : 0,
           camImageUrl: camUrl,
-          modelName: raw.model_name ? `${raw.model_name} (${raw.xai_method || 'XAI'})` : 'resnet50 (Score-CAM)',
+          modelName: raw.model_name ? `${raw.model_name} (${raw.xai_method || 'XAI'})` : 'resnet50 (Grad-CAM)',
           predictionIndex: raw.prediction_index,
           xaiMethod: raw.xai_method,
           enhancementsApplied: Array.isArray(raw.enhancements_applied) ? raw.enhancements_applied : [],
@@ -106,7 +92,28 @@ router.post('/analyze', verifyToken, (req, res) => {
         },
       });
     } catch (error) {
-      console.error('Analyze lesion error:', error?.message || error);
+      const ax = error.response;
+      console.error(
+        'Analyze lesion error:',
+        error?.message || error,
+        ax?.status,
+        ax?.data,
+      );
+      if (ax?.data) {
+        const detail =
+          typeof ax.data === 'string'
+            ? ax.data
+            : ax.data.error || ax.data.message || JSON.stringify(ax.data);
+        return res.status(502).json({ error: `Model server error: ${detail}` });
+      }
+      if (
+        error.code === 'ECONNREFUSED' ||
+        error.code === 'ENOTFOUND' ||
+        error.code === 'ETIMEDOUT' ||
+        error.code === 'ECONNABORTED'
+      ) {
+        return res.status(502).json({ error: 'Analysis service unavailable' });
+      }
       return res.status(500).json({ error: 'Failed to analyze image' });
     }
   });

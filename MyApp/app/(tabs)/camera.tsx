@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity,
   StatusBar, Platform, Image,
@@ -6,36 +6,47 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { C, FontFamily, Shadow } from '@/constants/theme';
 import { useLesions, type LesionFields, type LesionAnalysis } from '@/hooks/useLesions';
+import { useAuth } from '@/hooks/useAuth';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
-import { StatusBadge } from '@/components/ui/StatusBadge';
 import { BottomTabBar, type NavKey } from '@/components/ui/BottomTabBar';
 import { useAppAlert } from '@/components/ui/AppAlert';
-
-const STATUS_OPTIONS: LesionFields['status'][] = ['Stable', 'Check', 'Urgent'];
+import { laplacianVarianceForImageUri, LAPLACIAN_VARIANCE_THRESHOLD } from '@/lib/imageSharpness';
+import { statusFromPrediction } from '@/lib/lesionSeverity';
 
 const DEFAULT_FORM: LesionFields = {
   title: '', description: '', location: '', status: 'Stable', notes: '',
 };
 
-const STATUS_META: Record<LesionFields['status'], { bg: string; border: string; text: string }> = {
-  Stable: { bg: C.stableBg,  border: C.stableText,  text: C.stableText  },
-  Check:  { bg: C.checkBg,   border: C.checkText,   text: C.checkText   },
-  Urgent: { bg: C.urgentBg,  border: C.urgentText,  text: C.urgentText  },
-};
+const CAPTURE_INSTRUCTIONS = [
+  'Use bright, even lighting — natural daylight near a window works well.',
+  'Hold the phone steady and fill most of the frame with the lesion.',
+  'Keep the lesion in sharp focus; avoid harsh shadows or glare.',
+  'Shoot straight on when possible; avoid extreme angles.',
+  'This tool is for personal tracking only — it is not a medical diagnosis.',
+] as const;
+
+type ScanPhase = 'intro' | 'camera' | 'review';
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
+  const [scanPhase, setScanPhase] = useState<ScanPhase>('intro');
   const [isFacingFront, setIsFacingFront] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [form, setForm]                   = useState<LesionFields>(DEFAULT_FORM);
   const [analysis, setAnalysis]           = useState<LesionAnalysis | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce]       = useState(0);
+  const [imageMimeType, setImageMimeType] = useState('image/jpeg');
+  const [imageFileName, setImageFileName] = useState('lesion.jpg');
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [saving, setSaving]               = useState(false);
   const [activeNav, setActiveNav]         = useState<NavKey>('scan');
@@ -43,38 +54,181 @@ export default function CameraScreen() {
   const router    = useRouter();
   const insets    = useSafeAreaInsets();
   const { addLesion, analyzeImage } = useLesions();
+  const { token } = useAuth();
   const { showAlert, alertNode } = useAppAlert();
 
-  const handleTakePhoto = async () => {
-    if (!cameraRef.current) return;
-    const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
-    if (photo?.uri) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setCapturedPhoto(photo.uri);
-      setForm(DEFAULT_FORM);
-    }
+  const handleNav = (key: NavKey) => {
+    if      (key === 'home')    router.push('/');
+    else if (key === 'history') router.push('/history');
+    else if (key === 'profile') router.push('/profile');
+    else setActiveNav(key);
   };
 
   const handleRetake = () => {
     setCapturedPhoto(null);
     setForm(DEFAULT_FORM);
     setAnalysis(null);
+    setAnalysisError(null);
     setUploadedImageUrl(null);
+    setTorchOn(false);
+    setScanPhase('intro');
+    setImageMimeType('image/jpeg');
+    setImageFileName('lesion.jpg');
+    setRetryNonce(0);
   };
 
-  const handleAnalyze = async () => {
-    if (!capturedPhoto) return;
-    setAnalysisLoading(true);
-    try {
-      const result = await analyzeImage(capturedPhoto);
-      setAnalysis(result);
-      setUploadedImageUrl(result.imageUrl);
-    } catch (e: any) {
-      showAlert({ title: 'Analysis Failed', message: e.message || 'Unable to analyze the image. Try again.', variant: 'error' });
-    } finally {
-      setAnalysisLoading(false);
+  /** Show blur warning only; allow analysis to proceed for testing. */
+  const ensureSharpEnough = useCallback(
+    async (uri: string): Promise<boolean> => {
+      try {
+        const variance = await laplacianVarianceForImageUri(uri);
+        if (variance < LAPLACIAN_VARIANCE_THRESHOLD) {
+          showAlert({
+            title: 'Image looks blurry',
+            message:
+              'This photo may be blurry, but it will still be analyzed so you can test model behavior.',
+            variant: 'warning',
+          });
+          return true;
+        }
+        return true;
+      } catch {
+        /** Manipulator / decode failure should not block capture */
+        return true;
+      }
+    },
+    [showAlert],
+  );
+
+  const openCamera = async () => {
+    if (!token) {
+      showAlert({
+        title: 'Sign in required',
+        message: 'Please log in to capture and analyze a lesion.',
+        variant: 'warning',
+      });
+      return;
+    }
+    if (!permission?.granted) {
+      const r = await requestPermission();
+      if (!r.granted) {
+        showAlert({
+          title: 'Camera access',
+          message: 'Camera permission is needed to take a lesion photo.',
+          variant: 'warning',
+        });
+        return;
+      }
+    }
+    setIsFacingFront(false);
+    setScanPhase('camera');
+  };
+
+  const pickFromLibrary = async () => {
+    if (!token) {
+      showAlert({
+        title: 'Sign in required',
+        message: 'Please log in to analyze a lesion from your photos.',
+        variant: 'warning',
+      });
+      return;
+    }
+    const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!lib.granted) {
+      showAlert({
+        title: 'Photo library',
+        message: 'Photo library access is needed to choose an image.',
+        variant: 'warning',
+      });
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const a = result.assets[0];
+    const uri = a.uri;
+    const mime =
+      a.mimeType?.trim() ||
+      (uri.toLowerCase().includes('.png') ? 'image/png' : 'image/jpeg');
+    const ext = mime === 'image/png' ? '.png' : '.jpg';
+    const name = (a.fileName && a.fileName.trim()) || `lesion${ext}`;
+
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setImageMimeType(mime);
+    setImageFileName(name);
+    setForm(DEFAULT_FORM);
+    setAnalysis(null);
+    setAnalysisError(null);
+    setUploadedImageUrl(null);
+    setRetryNonce(0);
+    const ok = await ensureSharpEnough(uri);
+    if (!ok) return;
+    setCapturedPhoto(uri);
+    setScanPhase('review');
+  };
+
+  const handleTakePhoto = async () => {
+    if (!cameraRef.current) return;
+    const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
+    if (photo?.uri) {
+      const ok = await ensureSharpEnough(photo.uri);
+      if (!ok) return;
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setImageMimeType('image/jpeg');
+      setImageFileName('lesion.jpg');
+      setForm(DEFAULT_FORM);
+      setAnalysis(null);
+      setAnalysisError(null);
+      setUploadedImageUrl(null);
+      setRetryNonce(0);
+      setTorchOn(false);
+      setCapturedPhoto(photo.uri);
+      setScanPhase('review');
     }
   };
+
+  const handleRetryAnalysis = useCallback(() => {
+    setAnalysis(null);
+    setAnalysisError(null);
+    setUploadedImageUrl(null);
+    setRetryNonce(n => n + 1);
+    setForm(prev => ({ ...prev, status: DEFAULT_FORM.status }));
+  }, []);
+
+  useEffect(() => {
+    if (scanPhase !== 'review' || !capturedPhoto) return;
+
+    let cancelled = false;
+    setAnalysis(null);
+    setAnalysisError(null);
+    setAnalysisLoading(true);
+
+    (async () => {
+      try {
+        const result = await analyzeImage(capturedPhoto, {
+          mimeType: imageMimeType,
+          fileName: imageFileName,
+        });
+        if (!cancelled) {
+          setAnalysis(result);
+          setUploadedImageUrl(result.imageUrl);
+          setForm(prev => ({ ...prev, status: statusFromPrediction(result.label) }));
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Unable to analyze the image. Try again.';
+        if (!cancelled) setAnalysisError(msg);
+      } finally {
+        if (!cancelled) setAnalysisLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [capturedPhoto, scanPhase, imageMimeType, imageFileName, analyzeImage, retryNonce]);
 
   const handleSave = async () => {
     if (!form.title.trim()) {
@@ -83,7 +237,13 @@ export default function CameraScreen() {
     }
 
     if (!analysis) {
-      showAlert({ title: 'Analyze First', message: 'Please analyze the photo first to get the model prediction and CAM.', variant: 'warning' });
+      showAlert({
+        title: 'Analysis pending',
+        message: analysisLoading
+          ? 'Please wait for analysis to finish.'
+          : 'Analysis did not complete. Try Retry or take a new photo.',
+        variant: 'warning',
+      });
       return;
     }
 
@@ -95,26 +255,58 @@ export default function CameraScreen() {
         message: 'Your lesion has been saved successfully and added to your records.',
         variant: 'success',
         buttons: [
-          { text: 'View History', style: 'default', onPress: () => { setCapturedPhoto(null); router.push('/history'); } },
-          { text: 'Scan Another', style: 'cancel',  onPress: () => { setCapturedPhoto(null); handleRetake(); } },
+          { text: 'View History', style: 'default', onPress: () => { handleRetake(); router.push('/history'); } },
+          { text: 'Scan Another', style: 'cancel',  onPress: () => { handleRetake(); } },
         ],
       });
-    } catch (e: any) {
-      showAlert({ title: 'Save Failed', message: e.message || 'Failed to save. Please try again.', variant: 'error' });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to save. Please try again.';
+      showAlert({ title: 'Save Failed', message: msg, variant: 'error' });
     } finally {
       setSaving(false);
     }
   };
 
-  const handleNav = (key: NavKey) => {
-    if      (key === 'home')    router.push('/');
-    else if (key === 'history') router.push('/history');
-    else if (key === 'profile') router.push('/profile');
-    else setActiveNav(key);
-  };
+  // ── Intro: instructions + camera / library ─────────────────────────────────
+  if (scanPhase === 'intro') {
+    return (
+      <SafeAreaView style={s.safe} edges={['top']}>
+        {alertNode}
+        <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
+        <ScrollView
+          contentContainerStyle={[s.introScroll, { paddingBottom: 24 + insets.bottom }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled">
+          <View style={s.introHeader}>
+            <Text style={s.introTitle}>Scan a lesion</Text>
+            <Text style={s.introSubtitle}>
+              Follow these tips for clearer photos and more reliable results.
+            </Text>
+          </View>
+          <View style={s.instructionsCard}>
+            {CAPTURE_INSTRUCTIONS.map(line => (
+              <View key={line} style={s.instructionRow}>
+                <View style={s.instructionBullet} />
+                <Text style={s.instructionText}>{line}</Text>
+              </View>
+            ))}
+          </View>
+          <AppButton label="Take photo" onPress={openCamera} size="lg" icon="camera" style={s.introPrimaryBtn} />
+          <AppButton
+            label="Choose from library"
+            onPress={pickFromLibrary}
+            size="lg"
+            variant="secondary"
+            style={s.introSecondaryBtn}
+          />
+        </ScrollView>
+        <BottomTabBar active={activeNav} onPress={handleNav} />
+      </SafeAreaView>
+    );
+  }
 
-  // ── Permission ──────────────────────────────────────────────────────────────
-  if (!permission?.granted) {
+  // ── Camera permission gate (camera phase only) ─────────────────────────────
+  if (scanPhase === 'camera' && !permission?.granted) {
     return (
       <SafeAreaView style={s.safe} edges={['top']}>
         {alertNode}
@@ -126,6 +318,7 @@ export default function CameraScreen() {
           <Text style={s.permTitle}>Camera Access Required</Text>
           <Text style={s.permMsg}>We need camera access to capture skin photos for analysis.</Text>
           <AppButton label="Grant Permission" onPress={requestPermission} size="lg" style={s.permBtn} />
+          <AppButton label="Back to instructions" onPress={() => setScanPhase('intro')} variant="secondary" size="lg" style={{ marginTop: 12, width: '100%' }} />
         </View>
         <BottomTabBar active={activeNav} onPress={handleNav} />
       </SafeAreaView>
@@ -133,13 +326,12 @@ export default function CameraScreen() {
   }
 
   // ── Post-capture form ───────────────────────────────────────────────────────
-  if (capturedPhoto) {
+  if (scanPhase === 'review' && capturedPhoto) {
     return (
       <SafeAreaView style={[s.safe, { backgroundColor: C.bg }]} edges={['top']}>
         {alertNode}
         <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
 
-        {/* Header */}
         <View style={s.formHeader}>
           <TouchableOpacity onPress={handleRetake} style={s.formBack} hitSlop={10} disabled={saving}>
             <Feather name="arrow-left" size={20} color={saving ? C.textHint : C.text} />
@@ -155,12 +347,10 @@ export default function CameraScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
 
-            {/* Photo preview */}
             <View style={s.photoWrap}>
               <Image source={{ uri: capturedPhoto }} style={s.photo} resizeMode="cover" />
             </View>
 
-            {/* Form card */}
             <View style={s.formCard}>
               <AppInput
                 label="Title" required
@@ -185,28 +375,6 @@ export default function CameraScreen() {
                 editable={!saving} returnKeyType="next"
               />
 
-              {/* Status selector */}
-              <Text style={s.statusLabel}>Status</Text>
-              <View style={s.statusRow}>
-                {STATUS_OPTIONS.map(opt => {
-                  const active = form.status === opt;
-                  const m = STATUS_META[opt];
-                  return (
-                    <TouchableOpacity
-                      key={opt}
-                      style={[s.statusChip, active && { backgroundColor: m.bg, borderColor: m.border }]}
-                      onPress={() => setForm(f => ({ ...f, status: opt }))}
-                      disabled={saving}
-                      activeOpacity={0.7}>
-                      {active
-                        ? <StatusBadge status={opt} size="sm" />
-                        : <Text style={s.statusChipTxt}>{opt}</Text>
-                      }
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
               <AppInput
                 label="Notes" optional
                 value={form.notes}
@@ -218,18 +386,24 @@ export default function CameraScreen() {
 
             <View style={s.analysisCard}>
               <Text style={s.analysisTitle}>Model analysis</Text>
-              {!analysis ? (
-                <AppButton
-                  label="Analyze Photo"
-                  onPress={handleAnalyze}
-                  loading={analysisLoading}
-                  disabled={saving || analysisLoading}
-                  size="lg"
-                  style={s.analysisBtn}
-                />
-              ) : (
+              {analysisLoading ? (
+                <Text style={s.analysisSubtext}>Analyzing your image…</Text>
+              ) : analysisError ? (
+                <View style={s.analysisErrorBlock}>
+                  <Text style={s.analysisErrorText}>{analysisError}</Text>
+                  <AppButton
+                    label="Retry analysis"
+                    onPress={handleRetryAnalysis}
+                    size="md"
+                    disabled={saving}
+                    style={s.retryBtn}
+                  />
+                </View>
+              ) : analysis ? (
                 <View style={s.analysisSummary}>
-                  <Text style={s.analysisLabel}>Prediction</Text>
+                  <Text style={s.analysisLabel}>Triage (from prediction)</Text>
+                  <Text style={s.analysisSubtext}>{statusFromPrediction(analysis.label)}</Text>
+                  <Text style={[s.analysisLabel, { marginTop: 10 }]}>Prediction</Text>
                   <Text style={s.analysisValue}>{analysis.label}</Text>
                   <Text style={s.analysisSubtext}>Confidence: {(analysis.score * 100).toFixed(1)}%</Text>
                   <Text style={s.analysisSubtext}>
@@ -254,6 +428,8 @@ export default function CameraScreen() {
                     <Image source={{ uri: analysis.camImageUrl }} style={s.analysisImage} resizeMode="cover" />
                   ) : null}
                 </View>
+              ) : (
+                <Text style={s.analysisSubtext}>Preparing analysis…</Text>
               )}
             </View>
 
@@ -287,26 +463,50 @@ export default function CameraScreen() {
         style={StyleSheet.absoluteFill}
         facing={isFacingFront ? 'front' : 'back'}
         ratio="16:9"
+        enableTorch={!isFacingFront && torchOn}
       />
 
-      {/* Overlay: top bar */}
       <View style={[s.camTopBar, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity style={s.camCircleBtn} onPress={() => router.back()} activeOpacity={0.8}>
+        <TouchableOpacity style={s.camCircleBtn} onPress={() => setScanPhase('intro')} activeOpacity={0.8}>
           <Feather name="x" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={s.camHintPill}>
           <Feather name="crosshair" size={13} color="rgba(255,255,255,0.9)" />
           <Text style={s.camHintTxt}>Align lesion in frame</Text>
         </View>
-        <TouchableOpacity style={s.camCircleBtn} onPress={() => setIsFacingFront(v => !v)} activeOpacity={0.8}>
-          <Feather name="refresh-cw" size={22} color="#fff" />
-        </TouchableOpacity>
+        <View style={s.camTopRight}>
+          <TouchableOpacity
+            style={s.camCircleBtn}
+            onPress={() => (!isFacingFront ? setTorchOn(v => !v) : undefined)}
+            activeOpacity={0.8}
+            disabled={isFacingFront}
+            accessibilityRole="button"
+            accessibilityLabel={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+            accessibilityHint={isFacingFront ? 'Switch to main camera for the flashlight.' : undefined}>
+            <Feather
+              name="zap"
+              size={22}
+              color={!isFacingFront && torchOn ? '#fbbf24' : '#fff'}
+              style={{ opacity: isFacingFront ? 0.35 : 1 }}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.camCircleBtn}
+            onPress={() =>
+              setIsFacingFront(v => {
+                const next = !v;
+                if (next) setTorchOn(false);
+                return next;
+              })}
+            activeOpacity={0.8}
+            accessibilityLabel="Flip camera">
+            <Feather name="refresh-cw" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Overlay: capture bar — clinical crosshair viewfinder, no halo */}
       <View style={[s.camBottomBar, { paddingBottom: insets.bottom + 24 }]}>
         <View style={s.camShutter}>
-          {/* Outer crosshair frame: thin ring + 4 corner ticks */}
           <View pointerEvents="none" style={s.crosshairRing} />
           <View pointerEvents="none" style={[s.crosshairTick, s.tickTop]} />
           <View pointerEvents="none" style={[s.crosshairTick, s.tickRight]} />
@@ -330,7 +530,60 @@ export default function CameraScreen() {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
 
-  // Permission
+  introScroll: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  introHeader: {
+    marginBottom: 20,
+  },
+  introTitle: {
+    fontSize: 26,
+    fontFamily: FontFamily.displayBold,
+    color: C.text,
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  introSubtitle: {
+    fontSize: 15,
+    fontFamily: FontFamily.body,
+    color: C.textHint,
+    lineHeight: 22,
+  },
+  instructionsCard: {
+    backgroundColor: C.surface,
+    borderRadius: 22,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginBottom: 22,
+    ...(Platform.OS === 'ios' ? Shadow.xs : {}),
+  },
+  instructionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 12,
+  },
+  instructionBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: C.text,
+    marginTop: 7,
+    opacity: 0.35,
+  },
+  instructionText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: FontFamily.body,
+    color: C.text,
+    lineHeight: 22,
+  },
+  introPrimaryBtn: { width: '100%', marginBottom: 12 },
+  introSecondaryBtn: { width: '100%' },
+
+  // Permission (camera phase)
   permWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   permIconCircle: {
     width: 88, height: 88, borderRadius: 28,
@@ -390,25 +643,6 @@ const s = StyleSheet.create({
     marginBottom: 16,
     ...(Platform.OS === 'ios' ? Shadow.xs : {}),
   },
-  statusLabel: {
-    fontSize: 13,
-    fontFamily: FontFamily.bodySemibold,
-    color: C.text,
-    marginBottom: 8,
-    letterSpacing: 0.1,
-  },
-  statusRow:   { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  statusChip: {
-    flex: 1, height: 46, borderRadius: 14,
-    borderWidth: 1.5, borderColor: C.border,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: C.surface,
-  },
-  statusChipTxt: {
-    fontSize: 13,
-    fontFamily: FontFamily.bodySemibold,
-    color: C.textHint,
-  },
   analysisCard: {
     backgroundColor: C.surface, borderRadius: 22,
     borderWidth: 1, borderColor: C.border,
@@ -419,9 +653,6 @@ const s = StyleSheet.create({
     fontFamily: FontFamily.bodySemibold,
     color: C.text,
     marginBottom: 12,
-  },
-  analysisBtn: {
-    marginTop: 4,
   },
   analysisSummary: {
     gap: 12,
@@ -463,6 +694,18 @@ const s = StyleSheet.create({
     marginTop: 8,
     backgroundColor: C.surfaceAlt,
   },
+  analysisErrorBlock: {
+    gap: 12,
+  },
+  analysisErrorText: {
+    fontSize: 14,
+    fontFamily: FontFamily.body,
+    color: C.urgentText,
+    lineHeight: 20,
+  },
+  retryBtn: {
+    alignSelf: 'flex-start',
+  },
   saveBtn:    { marginBottom: 14 },
   disclaimer: {
     fontSize: 12,
@@ -486,6 +729,11 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
   },
+  camTopRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   camHintPill: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: 'rgba(0,0,0,0.45)',
@@ -508,14 +756,12 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     width: 124, height: 124,
   },
-  // Outer crosshair ring — thin, calm, medical-imaging cue
   crosshairRing: {
     position: 'absolute',
     width: 116, height: 116, borderRadius: 58,
     borderWidth: 1.25,
     borderColor: 'rgba(255,255,255,0.55)',
   },
-  // Crosshair ticks — small caps at 12/3/6/9 o'clock
   crosshairTick: {
     position: 'absolute',
     width: 1.5, height: 12,

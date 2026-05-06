@@ -162,10 +162,12 @@ function LesionCard({
   item,
   onEdit,
   onDelete,
+  onViewCam,
 }: {
   item: Lesion;
   onEdit: (l: Lesion) => void;
   onDelete: (l: Lesion) => void;
+  onViewCam: (l: Lesion) => void;
 }) {
   return (
     <View style={hs.lesionCard}>
@@ -212,6 +214,18 @@ function LesionCard({
 
           {/* Action buttons — 40pt height + 6pt hitSlop = 52pt effective target */}
           <View style={hs.actions}>
+            {!!item.analysis?.camImageUrl && (
+              <TouchableOpacity
+                style={hs.actionBtnView}
+                onPress={() => onViewCam(item)}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`View Grad-CAM for ${item.title || 'lesion'}`}
+                activeOpacity={0.75}>
+                <Feather name="eye" size={14} color={C.primary} />
+                <Text style={hs.actionBtnViewTxt}>View</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={hs.actionBtnEdit}
               onPress={() => onEdit(item)}
@@ -247,6 +261,7 @@ export default function HistoryScreen() {
   const [activeNav, setActiveNav]         = useState<NavKey>('history');
   const [statusFilter, setStatusFilter]   = useState<FilterKey>('all');
   const [editingLesion, setEditingLesion] = useState<Lesion | null>(null);
+  const [camPreviewUri, setCamPreviewUri] = useState<string | null>(null);
   const [saving, setSaving]               = useState(false);
   const [unreadCount, setUnreadCount]     = useState(0);
   const { showAlert, alertNode }          = useAppAlert();
@@ -293,7 +308,7 @@ export default function HistoryScreen() {
         setSaving(false);
       }
     },
-    [editingLesion, updateLesion],
+    [editingLesion, updateLesion, showAlert],
   );
 
   const handleDelete = useCallback(
@@ -321,6 +336,19 @@ export default function HistoryScreen() {
     [deleteLesion, showAlert],
   );
 
+  const handleViewCam = useCallback((lesion: Lesion) => {
+    const uri = lesion.analysis?.camImageUrl;
+    if (!uri) {
+      showAlert({
+        title: 'No Grad-CAM image',
+        message: 'This lesion does not have an explainability image yet.',
+        variant: 'warning',
+      });
+      return;
+    }
+    setCamPreviewUri(uri);
+  }, [showAlert]);
+
   const handleNav = (key: NavKey) => {
     if      (key === 'scan')    router.push('/camera');
     else if (key === 'home')    router.push('/');
@@ -343,6 +371,29 @@ export default function HistoryScreen() {
           onClose={() => setEditingLesion(null)}
         />
       )}
+
+      <Modal
+        visible={!!camPreviewUri}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setCamPreviewUri(null)}>
+        <View style={hs.camModalBackdrop}>
+          <View style={hs.camModalCard}>
+            <View style={hs.camModalHeader}>
+              <Text style={hs.camModalTitle}>Grad-CAM</Text>
+              <TouchableOpacity
+                onPress={() => setCamPreviewUri(null)}
+                style={hs.camModalCloseBtn}
+                hitSlop={8}>
+                <Feather name="x" size={18} color={C.text} />
+              </TouchableOpacity>
+            </View>
+            {camPreviewUri ? (
+              <Image source={{ uri: camPreviewUri }} style={hs.camModalImage} resizeMode="contain" />
+            ) : null}
+          </View>
+        </View>
+      </Modal>
 
       <ScrollView
         style={hs.scroll}
@@ -401,6 +452,7 @@ export default function HistoryScreen() {
                 item={l}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                onViewCam={handleViewCam}
               />
             ))}
             <View style={hs.disclaimerWrap}>
@@ -590,6 +642,18 @@ const hs = StyleSheet.create({
     color: C.text,
     letterSpacing: 0.1,
   },
+  actionBtnView: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    height: 40, paddingHorizontal: 14, borderRadius: Radius.sm + 2,
+    backgroundColor: C.surfaceAlt,
+    borderWidth: 1, borderColor: C.borderLight,
+  },
+  actionBtnViewTxt: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.text,
+    letterSpacing: 0.1,
+  },
   actionBtnDelete: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     height: 40, paddingHorizontal: 14, borderRadius: Radius.sm + 2,
@@ -604,4 +668,46 @@ const hs = StyleSheet.create({
   },
 
   disclaimerWrap: { marginTop: Space[3] },
+  camModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  camModalCard: {
+    width: '100%',
+    maxWidth: 440,
+    maxHeight: '80%',
+    backgroundColor: C.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 12,
+  },
+  camModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  camModalTitle: {
+    fontSize: FontSize.base,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.text,
+  },
+  camModalCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.surfaceAlt,
+  },
+  camModalImage: {
+    width: '100%',
+    height: 320,
+    borderRadius: Radius.md,
+    backgroundColor: C.surfaceAlt,
+  },
 });
