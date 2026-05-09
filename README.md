@@ -8,7 +8,7 @@
 - **xai-skin-backend/** — Node.js (Express) + MongoDB: auth, lesion CRUD, **scan session** orchestration. Receives uploads and calls the Python model server.
 - **model-server/** — Flask app: YOLO-style detector → per-crop classifier → Grad-CAM; returns boxes, diagnoses, crops, overlays. Nested boxes are deduped **before** classification (`services/bbox_dedupe.py`, used from `routes/scan.py`).
 
-End-to-end scan: **App** `POST /scan-sessions` (multipart image) → **Node** persists session, forwards to **Flask** `POST /scan-multi` → JSON back with `lesions[]` (bbox, diagnosis, `crop_b64` / `overlay_b64` stored as files in Node).
+End-to-end scan: **App** `POST /scan-sessions` (multipart image) → **Node** persists session, forwards to **Flask** `POST /scan-multi` → JSON back with `lesions[]` (bbox, diagnosis, `crop_b64` / `overlay_b64` stored as files in Node). History is now **session-first**; users can save specific regions from a session as tracked lesions.
 
 ## Quick start (human or agent)
 
@@ -29,8 +29,12 @@ End-to-end scan: **App** `POST /scan-sessions` (multipart image) → **Node** pe
 ### Mobile (`MyApp/`)
 
 - **`app/(tabs)/camera.tsx`** — Scan flow: camera, review, analysis hook, bbox overlay, XAI carousel, loading.
-- **`hooks/useLesions.ts`** — `analyzeImage` → `/scan-sessions`; types for lesions / analysis.
+- **`app/(tabs)/history.tsx`** — Session-first history UI; session cards, region modal, and "save region as lesion" action.
+- **`app/scan-session/[id].tsx`** — Full session detail report; per-region save action into lesion records.
+- **`hooks/useLesions.ts`** — `analyzeImage` → `/scan-sessions`; lesion persistence + analysis typing.
+- **`hooks/useScanSessions.ts`** — fetch/delete scan sessions and normalize media URLs.
 - **`lib/api.ts`** — API base URL resolution (`EXPO_PUBLIC_API_URL`, Metro host, emulator defaults).
+- **`lib/mediaUrl.ts`** — Normalizes API/media URLs (`localhost`/`127.0.0.1`/relative paths) for real-device reachability.
 - **`constants/theme.ts`** — **Single source for colors/spacing** (`C`, `Radius`, `Overlay`, etc.). Do not hardcode plum/rose hex in UI; use tokens.
 - **`components/ImageWithBboxOverlay.tsx`** — Bbox drawing + lesion badges + highlight mode.
 - **`components/LesionXaiCarousel.tsx`** — Per-lesion cards (model + Grad-CAM).
@@ -38,7 +42,8 @@ End-to-end scan: **App** `POST /scan-sessions` (multipart image) → **Node** pe
 
 ### Backend Node (`xai-skin-backend/`)
 
-- **`routes/scanSessions.js`** — `POST /scan-sessions`: multer upload, calls Flask `scan-multi`, saves crops/overlays, returns `originalImageUrl`, `lesions` with `cropUrl` / `overlayUrl`.
+- **`routes/scanSessions.js`** — `POST /scan-sessions`: multer upload, calls Flask `scan-multi`, saves crops/overlays, returns `originalImageUrl`, `lesions` with `cropUrl` / `overlayUrl`; `DELETE /scan-sessions/:id` removes a session and related assets.
+- **`routes/lesions.js` + `models/Lesion.js`** — Persists saved lesion records, including region-level fields (`cropUrl`, `overlayUrl`) when saving from a scan session.
 
 ### Model server (`model-server/`)
 
@@ -47,7 +52,8 @@ End-to-end scan: **App** `POST /scan-sessions` (multipart image) → **Node** pe
 ## Conventions
 
 - **UI:** Plum/rose floral-clinical palette from **`theme.ts`** only.
-- **Scan UX:** Lesion chips + carousel stay in sync with bbox highlight; loading uses themed skeleton (`ScanReviewLoading`).
+- **Scan UX:** Lesion chips + carousel stay in sync with bbox highlight; loading uses themed skeleton (`ScanReviewLoading`) and overlay images show loading feedback before render.
+- **History UX:** Keep history session-first; save specific regions as lesions from session detail or region modal instead of duplicating full session cards in lesion history.
 - **Tests (app):** `MyApp/` → `npm test` (Jest); bbox helpers have unit tests under `MyApp/__tests__/`.
 
 ## Out of scope in this README
