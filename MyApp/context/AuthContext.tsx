@@ -1,7 +1,15 @@
 import React, { createContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearInbox } from '@/lib/notificationInbox';
-import { apiFetch, ApiError } from '@/lib/api';
+import {
+  clearAuthStorage,
+  getAccessToken,
+  getUserJson,
+  hydrateNativeAsyncAuthCache,
+  migrateLegacyAuthFromAsyncStorage,
+  setTokenPair,
+  setUserJson,
+} from '@/lib/authStorage';
+import { apiFetch, ApiError, registerAuthListeners } from '@/lib/api';
 
 type User = {
   _id: string;
@@ -14,7 +22,7 @@ type User = {
 
 type AuthResult = { success: boolean; error?: string };
 
-type AuthResponse = { token: string; user: User };
+type AuthResponse = { token: string; refreshToken: string; user: User };
 
 type AuthContextType = {
   user: User | null;
@@ -35,11 +43,8 @@ type AuthContextType = {
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
-const TOKEN_KEY = 'authToken';
-const USER_KEY  = 'authUser';
-
 export async function getStoredToken(): Promise<string | null> {
-  return AsyncStorage.getItem(TOKEN_KEY);
+  return getAccessToken();
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -52,13 +57,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let alive = true;
     (async () => {
       try {
-        const [savedToken, savedUser] = await Promise.all([
-          AsyncStorage.getItem(TOKEN_KEY),
-          AsyncStorage.getItem(USER_KEY),
-        ]);
+        await hydrateNativeAsyncAuthCache();
+        await migrateLegacyAuthFromAsyncStorage();
+        const savedToken = getAccessToken();
+        const savedUser = getUserJson();
         if (alive && savedToken && savedUser) {
           setToken(savedToken);
-          setUser(JSON.parse(savedUser));
+          setUser(JSON.parse(savedUser) as User);
         }
       } catch (e) {
         console.warn('[auth] failed to restore session', e);
@@ -66,12 +71,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (alive) setIsLoading(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  const persist = async (t: string, u: User) => {
-    await AsyncStorage.multiSet([[TOKEN_KEY, t], [USER_KEY, JSON.stringify(u)]]);
-    setToken(t);
+  useEffect(() => {
+    registerAuthListeners(
+      (access, _refresh) => {
+        setToken(access);
+      },
+      () => {
+        setToken(null);
+        setUser(null);
+      },
+    );
+    return () => registerAuthListeners(null, null);
+  }, []);
+
+  const persist = (access: string, refresh: string, u: User) => {
+    setTokenPair(access, refresh);
+    setUserJson(JSON.stringify(u));
+    setToken(access);
     setUser(u);
   };
 
@@ -98,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         json: { email, password, firstName, lastName, gender, dateOfBirth },
       });
-      await persist(data.token, data.user);
+      persist(data.token, data.refreshToken, data.user);
       return { success: true };
     } catch (err) {
       const msg = friendlyError(err, 'Registration failed.');
@@ -117,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         json: { email, password },
       });
-      await persist(data.token, data.user);
+      persist(data.token, data.refreshToken, data.user);
       return { success: true };
     } catch (err) {
       const msg = friendlyError(err, 'Login failed.');
@@ -128,8 +149,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async (): Promise<void> => {
     try {
+      const access = getAccessToken();
+      if (access) {
+        try {
+          await apiFetch('/users/logout', { method: 'POST' });
+        } catch {
+          /* still clear locally */
+        }
+      }
       await clearInbox();
-      await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
+      clearAuthStorage();
       setToken(null);
       setUser(null);
       setError(null);

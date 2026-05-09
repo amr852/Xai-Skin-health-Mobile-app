@@ -34,6 +34,32 @@ router.post('/upload-image', verifyToken, (req, res) => {
   });
 });
 
+function pickAnalysisFields(analysis) {
+  if (!analysis || typeof analysis !== 'object') return undefined;
+  return {
+    label: analysis.label,
+    score: analysis.score,
+    camImageUrl: analysis.camImageUrl,
+    modelName: analysis.modelName,
+    predictionIndex: analysis.predictionIndex,
+    xaiMethod: analysis.xaiMethod,
+    enhancementsApplied: Array.isArray(analysis.enhancementsApplied)
+      ? analysis.enhancementsApplied
+      : undefined,
+    topPredictions: Array.isArray(analysis.topPredictions)
+      ? analysis.topPredictions
+      : undefined,
+    recordId: analysis.recordId,
+    severity: analysis.severity,
+    bbox: analysis.bbox,
+    lesions: Array.isArray(analysis.lesions) ? analysis.lesions : undefined,
+    lesionCount: typeof analysis.lesionCount === 'number' ? analysis.lesionCount : undefined,
+    noLesionFound: typeof analysis.noLesionFound === 'boolean' ? analysis.noLesionFound : undefined,
+    partialFailure: typeof analysis.partialFailure === 'boolean' ? analysis.partialFailure : undefined,
+    sessionId: analysis.sessionId != null ? String(analysis.sessionId) : undefined,
+  };
+}
+
 async function saveCamImage(base64Data) {
   const cleanBase64 = base64Data.replace(/^data:image\/png;base64,/, '');
   const filename = `cam-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
@@ -42,19 +68,21 @@ async function saveCamImage(base64Data) {
   return filename;
 }
 
-async function callModelServer(filePath, userId) {
+async function callModelServer(filePath, userId, source = 'camera') {
   const form = new FormData();
   form.append('image', fs.createReadStream(filePath));
   if (userId) {
     form.append('userId', String(userId));
   }
+  const src = (source || 'camera').toLowerCase();
+  form.append('source', src === 'gallery' ? 'gallery' : 'camera');
 
-  const response = await axios.post(`${MODEL_SERVER_URL}/scan`, form, {
+  const response = await axios.post(`${MODEL_SERVER_URL}/scan-multi`, form, {
     headers: {
       ...form.getHeaders(),
     },
-    timeout: 120000,
-    /** Large Score-CAM PNG (base64) payloads must not be truncated by axios defaults */
+    timeout: 180000,
+    /** Large PNG (base64) payloads must not be truncated by axios defaults */
     maxBodyLength: Infinity,
     maxContentLength: Infinity,
   });
@@ -69,27 +97,89 @@ router.post('/analyze', verifyToken, (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     try {
-      const raw = await callModelServer(req.file.path, req.userId);
+      const source = req.body?.source || 'camera';
+      const raw = await callModelServer(req.file.path, req.userId, source);
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       let camUrl;
-      if (raw?.cam_base64) {
-        const camFilename = await saveCamImage(raw.cam_base64);
+      if (raw?.annotated_image_b64) {
+        const camFilename = await saveCamImage(raw.annotated_image_b64);
+        camUrl = `${baseUrl}/uploads/${camFilename}`;
+      } else if (raw?.lesions?.[0]?.overlay_b64) {
+        const camFilename = await saveCamImage(raw.lesions[0].overlay_b64);
         camUrl = `${baseUrl}/uploads/${camFilename}`;
       }
 
+      const enhancementsApplied = Array.isArray(raw?.quality_metadata?.enhancements_applied)
+        ? raw.quality_metadata.enhancements_applied
+        : Array.isArray(raw?.enhancements_applied)
+          ? raw.enhancements_applied
+          : [];
+
+      const first = raw?.lesions?.[0];
+      let analysis;
+      if (first) {
+        analysis = {
+          label: first.diagnosis?.label,
+          score: typeof first.diagnosis?.score === 'number' ? first.diagnosis.score : 0,
+          camImageUrl: camUrl,
+          modelName: 'resnet50 + YOLO (Grad-CAM)',
+          predictionIndex: undefined,
+          xaiMethod: 'Grad-CAM',
+          enhancementsApplied,
+          topPredictions: Array.isArray(first.diagnosis?.top_k)
+            ? first.diagnosis.top_k
+            : [],
+          recordId: raw.session_id || null,
+          severity: first.severity,
+          bbox: first.bbox,
+        };
+      } else if (raw?.no_lesion_found) {
+        analysis = {
+          label: 'No lesion detected',
+          score: 0,
+          camImageUrl: camUrl,
+          modelName: 'resnet50 + YOLO (Grad-CAM)',
+          predictionIndex: undefined,
+          xaiMethod: 'Grad-CAM',
+          enhancementsApplied,
+          topPredictions: [],
+          recordId: raw.session_id || null,
+        };
+      } else {
+        analysis = {
+          label: raw?.partial_failure
+            ? 'Detection without classification'
+            : 'Analysis unavailable',
+          score: 0,
+          camImageUrl: camUrl,
+          modelName: 'resnet50 + YOLO (Grad-CAM)',
+          predictionIndex: undefined,
+          xaiMethod: 'Grad-CAM',
+          enhancementsApplied,
+          topPredictions: [],
+          recordId: raw.session_id || null,
+        };
+      }
+
+      const lesionsSummary = Array.isArray(raw.lesions)
+        ? raw.lesions.map((L) => ({
+            lesion_id: L.lesion_id,
+            bbox: L.bbox,
+            severity: L.severity,
+            diagnosis: L.diagnosis
+              ? { label: L.diagnosis.label, score: L.diagnosis.score }
+              : undefined,
+          }))
+        : [];
+
       return res.status(200).json({
         imageUrl: `${baseUrl}/uploads/${req.file.filename}`,
-        analysis: {
-          label: raw.prediction,
-          score: typeof raw.score === 'number' ? raw.score : 0,
-          camImageUrl: camUrl,
-          modelName: raw.model_name ? `${raw.model_name} (${raw.xai_method || 'XAI'})` : 'resnet50 (Grad-CAM)',
-          predictionIndex: raw.prediction_index,
-          xaiMethod: raw.xai_method,
-          enhancementsApplied: Array.isArray(raw.enhancements_applied) ? raw.enhancements_applied : [],
-          topPredictions: Array.isArray(raw.top_predictions) ? raw.top_predictions : [],
-          recordId: raw.record_id,
-        },
+        analysis,
+        lesions: lesionsSummary,
+        lesionCount: typeof raw.lesion_count === 'number' ? raw.lesion_count : 0,
+        noLesionFound: !!raw.no_lesion_found,
+        partialFailure: !!raw.partial_failure,
+        sessionId: raw.session_id || null,
       });
     } catch (error) {
       const ax = error.response;
@@ -99,6 +189,9 @@ router.post('/analyze', verifyToken, (req, res) => {
         ax?.status,
         ax?.data,
       );
+      if (ax?.status === 500 && ax?.data?.error === 'detection_failed') {
+        return res.status(502).json({ error: 'detection_failed' });
+      }
       if (ax?.data) {
         const detail =
           typeof ax.data === 'string'
@@ -157,17 +250,7 @@ router.post('/', verifyToken, async (req, res) => {
       status,
       imageUrl,
       notes,
-      analysis: analysis ? {
-        label: analysis.label,
-        score: analysis.score,
-        camImageUrl: analysis.camImageUrl,
-        modelName: analysis.modelName,
-        predictionIndex: analysis.predictionIndex,
-        xaiMethod: analysis.xaiMethod,
-        enhancementsApplied: analysis.enhancementsApplied,
-        topPredictions: analysis.topPredictions,
-        recordId: analysis.recordId,
-      } : undefined,
+      analysis: pickAnalysisFields(analysis),
     });
     
     await lesion.save();

@@ -1,5 +1,29 @@
 const mongoose = require('mongoose');
 
+const bboxSchema = new mongoose.Schema(
+  {
+    x1: Number,
+    y1: Number,
+    x2: Number,
+    y2: Number,
+    conf: Number,
+  },
+  { _id: false },
+);
+
+const analysisLesionItemSchema = new mongoose.Schema(
+  {
+    lesion_id: String,
+    bbox: bboxSchema,
+    severity: String,
+    diagnosis: {
+      label: String,
+      score: Number,
+    },
+  },
+  { _id: false },
+);
+
 const lesionSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -29,6 +53,14 @@ const lesionSchema = new mongoose.Schema({
       score: Number,
     }],
     recordId: String,
+    severity: String,
+    bbox: bboxSchema,
+    /** Multi-lesion scan summary (YOLO + per-crop classifier). */
+    lesions: [analysisLesionItemSchema],
+    lesionCount: Number,
+    noLesionFound: Boolean,
+    partialFailure: Boolean,
+    sessionId: String,
   },
   createdAt: {
     type: Date,

@@ -1,6 +1,8 @@
 # Model server (Flask + PyTorch)
 
-Skin lesion **ResNet-50 checkpoint** classifier with **Grad-CAM** explainability. Images are enhanced when blurry or low-light, then classified. Results can be stored in **MongoDB** when `userId` is supplied.
+Skin lesion stack: **YOLOv12 nano (`yolo12n`)** detection (`best.pt` from your yolo12n training run) plus **ResNet-50** crops with **Grad-CAM**. Camera images are enhanced when blurry or low-light; gallery skips that step. Results can be stored in **MongoDB** when `userId` is supplied.
+
+**Weights:** Put your Ultralytics **yolo12n** training **`best.pt`** in `model-server/` (default filename `best.pt`). At startup the server checks `train_args.model` in the checkpoint and warns (or aborts with `YOLO_STRICT_ARCH=1`) if it is not yolo12n-family.
 
 ## Requirements
 
@@ -17,7 +19,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Place your checkpoint next to the app or set `MODEL_PATH`. The default file name is `resnet50_best.pth`.
+Place **`resnet50_best.pth`** (classifier) and **`best.pt`** (YOLOv12 **nano** detector) next to the app, or set `MODEL_PATH` / `YOLO_MODEL_PATH`.
 
 ## Environment variables
 
@@ -32,6 +34,9 @@ Place your checkpoint next to the app or set `MODEL_PATH`. The default file name
 | `MONGO_URI` | `mongodb://localhost:27017` | MongoDB connection string. |
 | `DB_NAME` | `skinsense` | Database name for `skin_analysis_results`. |
 | `UPLOAD_FOLDER` | `uploads` | Directory for saved originals, enhanced images, and CAM overlays. |
+| `YOLO_MODEL_PATH` | `best.pt` (in app dir) | Path to **yolo12n** Ultralytics `best.pt` weights. |
+| `YOLO_CONF_THRESHOLD` | `0.25` | Minimum detection confidence. |
+| `YOLO_STRICT_ARCH` | `0` | Set to `1` to **exit** if the checkpoint is not trained from yolo12n. |
 | `PORT` | `5000` | HTTP port when running `python app.py`. |
 
 Class labels are defined in `app.py` as `CLASS_NAMES` and can be overridden via the `CLASS_NAMES` env variable.
@@ -45,7 +50,9 @@ set MONGO_URI=mongodb://localhost:27017
 python app.py
 ```
 
-The Node proxy (`xai-skin-backend`) should set `MODEL_SERVER_URL` (e.g. `http://localhost:5000`) and call **`POST /scan`** with multipart `image` and optional `userId`.
+The Node proxy (`xai-skin-backend`) should set `MODEL_SERVER_URL` (e.g. `http://localhost:5000`) and call **`POST /scan-multi`** (multi-lesion) or legacy **`POST /scan`** with multipart `image` and optional `userId`.
+
+`GET /` returns `yolo_train_base` (e.g. `yolo12n.pt`) and `yolo_expected` so you can confirm the correct weights are loaded.
 
 ## HTTP API (summary)
 

@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { apiFetch, ApiError, API_URL } from '@/lib/api';
+import { apiFetch, apiFetchFormData, ApiError, invalidateLocalSession } from '@/lib/api';
 import { getStoredToken } from '@/context/AuthContext';
+import type { LesionBbox } from '@/lib/bboxLayout';
 
 export type TopPrediction = { label: string; score: number };
 
@@ -17,6 +17,30 @@ export type LesionAnalysis = {
   enhancementsApplied?: string[];
   topPredictions?: TopPrediction[];
   recordId?: string | null;
+  severity?: string;
+  bbox?: LesionBbox;
+};
+
+export type LesionDetection = {
+  lesion_id?: string;
+  bbox: LesionBbox;
+  severity?: string;
+  diagnosis?: { label: string; score: number };
+};
+
+export type AnalyzeImageResult = LesionAnalysis & {
+  lesions?: LesionDetection[];
+  lesionCount?: number;
+  noLesionFound?: boolean;
+  partialFailure?: boolean;
+  sessionId?: string | null;
+};
+
+export type StoredLesionFinding = {
+  lesion_id?: string;
+  bbox: LesionBbox;
+  severity?: string;
+  diagnosis?: { label: string; score: number };
 };
 
 export type Lesion = {
@@ -28,7 +52,14 @@ export type Lesion = {
   status: 'Stable' | 'Check' | 'Urgent';
   imageUrl?: string;
   notes?: string;
-  analysis?: Omit<LesionAnalysis, 'imageUrl'> & { camImageUrl?: string };
+  analysis?: Omit<LesionAnalysis, 'imageUrl'> & {
+    camImageUrl?: string;
+    lesions?: StoredLesionFinding[];
+    lesionCount?: number;
+    noLesionFound?: boolean;
+    partialFailure?: boolean;
+    sessionId?: string | null;
+  };
 };
 
 export type LesionFields = {
@@ -43,25 +74,11 @@ export type LesionFields = {
 export type LesionImageUploadOptions = {
   mimeType?: string;
   fileName?: string;
+  /** Passed to the model server (`camera` runs quality enhancement; `gallery` skips it). */
+  source?: 'camera' | 'gallery';
 };
 
 const ANALYZE_UPLOAD_TIMEOUT_MS = 130_000;
-
-async function clearAuthOnUnauthorized() {
-  await AsyncStorage.multiRemove(['authToken', 'authUser']);
-}
-
-function fetchWithTimeout(
-  input: string,
-  init: RequestInit,
-  timeoutMs: number,
-): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(input, { ...init, signal: controller.signal }).finally(() =>
-    clearTimeout(id),
-  );
-}
 
 export function useLesions() {
   const [lesions, setLesions] = useState<Lesion[]>([]);
@@ -74,12 +91,12 @@ export function useLesions() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch<Lesion[]>('/lesions', { token });
+      const data = await apiFetch<Lesion[]>('/lesions');
       if (!Array.isArray(data)) throw new ApiError(500, 'Unexpected response from server');
       setLesions(data);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
-        await clearAuthOnUnauthorized();
+        invalidateLocalSession();
         setLesions([]);
         setError(null);
       } else {
@@ -104,23 +121,16 @@ export function useLesions() {
       type: mime,
       name,
     } as any);
-    const res = await fetchWithTimeout(
-      `${API_URL}/lesions/upload-image`,
-      {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      },
-      ANALYZE_UPLOAD_TIMEOUT_MS,
+    const body = await apiFetchFormData<{ url: string }>(
+      '/lesions/upload-image',
+      formData,
+      { timeoutMs: ANALYZE_UPLOAD_TIMEOUT_MS },
     );
-    const text = await res.text();
-    let body: any;
-    try { body = text ? JSON.parse(text) : {}; } catch { body = {}; }
-    if (!res.ok) throw new ApiError(res.status, body?.error || 'Image upload failed', body);
+    if (!body?.url) throw new ApiError(500, 'Upload response missing url', body);
     return body.url as string;
   }, []);
 
-  const analyzeImage = useCallback(async (uri: string, options?: LesionImageUploadOptions): Promise<LesionAnalysis> => {
+  const analyzeImage = useCallback(async (uri: string, options?: LesionImageUploadOptions): Promise<AnalyzeImageResult> => {
     const token = await getStoredToken();
     if (!token) {
       throw new ApiError(401, 'Not signed in. Please log in again.');
@@ -133,29 +143,30 @@ export function useLesions() {
       type: mime,
       name,
     } as any);
+    const src = options?.source === 'gallery' ? 'gallery' : 'camera';
+    formData.append('source', src);
 
-    let res: Response;
+    let body: {
+      imageUrl?: string;
+      analysis?: Record<string, unknown>;
+      lesions?: LesionDetection[];
+      lesionCount?: number;
+      noLesionFound?: boolean;
+      partialFailure?: boolean;
+      sessionId?: string | null;
+    };
     try {
-      res = await fetchWithTimeout(
-        `${API_URL}/lesions/analyze`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        },
-        ANALYZE_UPLOAD_TIMEOUT_MS,
+      body = await apiFetchFormData<typeof body>(
+        '/lesions/analyze',
+        formData,
+        { timeoutMs: ANALYZE_UPLOAD_TIMEOUT_MS },
       );
     } catch (e: unknown) {
-      if ((e as Error)?.name === 'AbortError') {
-        throw new ApiError(0, 'Analysis timed out — check connection and server load.');
+      if (e instanceof ApiError && e.status === 0) {
+        throw new ApiError(0, e.message || 'Unable to reach the analysis server.');
       }
-      throw new ApiError(0, (e as Error)?.message || 'Unable to reach the analysis server.');
+      throw e;
     }
-
-    const text = await res.text();
-    let body: any;
-    try { body = text ? JSON.parse(text) : {}; } catch { body = {}; }
-    if (!res.ok) throw new ApiError(res.status, body?.error || 'Analysis failed', body);
 
     if (!body.imageUrl || !body.analysis) {
       throw new ApiError(500, 'Unexpected analysis response');
@@ -164,11 +175,16 @@ export function useLesions() {
     return {
       ...body.analysis,
       imageUrl: body.imageUrl,
-    } as LesionAnalysis;
+      lesions: body.lesions,
+      lesionCount: body.lesionCount,
+      noLesionFound: body.noLesionFound,
+      partialFailure: body.partialFailure,
+      sessionId: body.sessionId,
+    } as AnalyzeImageResult;
   }, []);
 
   const addLesion = useCallback(
-    async (fields: LesionFields, imageUri?: string, analysis?: LesionAnalysis): Promise<void> => {
+    async (fields: LesionFields, imageUri?: string, analysis?: LesionAnalysis | AnalyzeImageResult): Promise<void> => {
       setLoading(true);
       setError(null);
       try {
@@ -180,7 +196,6 @@ export function useLesions() {
 
         await apiFetch<Lesion>('/lesions', {
           method: 'POST',
-          token,
           json: { ...fields, imageUrl, analysis },
         });
       } catch (e) {
@@ -205,7 +220,6 @@ export function useLesions() {
         }
         await apiFetch(`/lesions/${id}`, {
           method: 'PUT',
-          token,
           json: { ...fields, ...(imageUrl ? { imageUrl } : {}) },
         });
         setLesions(prev =>
@@ -226,7 +240,7 @@ export function useLesions() {
     setError(null);
     try {
       const token = await getStoredToken();
-      await apiFetch(`/lesions/${id}`, { method: 'DELETE', token });
+      await apiFetch(`/lesions/${id}`, { method: 'DELETE' });
       setLesions(prev => prev.filter(l => l._id !== id));
     } catch (e) {
       setError((e as Error).message);

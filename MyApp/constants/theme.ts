@@ -1,10 +1,10 @@
 import { Platform } from 'react-native';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CLINICAL DESIGN SYSTEM — Xai Skin Health
+// PREMIUM FLORAL × CLINICAL — Xai Skin Health
 //
-// Direction: medical-grade, calm, professional. Apple Health × One Medical ×
-// Withings. Single warm brand accent (rose) on a slate-neutral substrate.
+// Warm paper backgrounds, rose accent, soft sage highlights. Status colours
+// stay high-contrast for safety. Borders pick up a dusty floral warmth.
 //
 // Decoration policy: every visual element here serves data or brand. Pure
 // ornament is forbidden. The DECORATION_BUDGET map below tracks where each
@@ -12,13 +12,13 @@ import { Platform } from 'react-native';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const C = {
-  // ── Page & surface ──────────────────────────────────────────────────────────
-  bg:          '#F8FAFC',   // slate-50 — calm clinical background
-  surface:     '#FFFFFF',   // card / sheet surface
-  surfaceAlt:  '#F1F5F9',   // slate-100 — inputs, soft dividers
-  cream:       '#F1F5F9',   // legacy alias (kept for now, drops in P2)
-  ivory:       '#F8FAFC',
-  sand:        '#E2E8F0',
+  // ── Page & surface (warm floral paper) ─────────────────────────────────────
+  bg:          '#F5F0EC',   // warm linen — primary screen canvas
+  surface:     '#FFFCFA',   // card / sheet — soft white with peach bias
+  surfaceAlt:  '#EFE8E3',   // inputs, chips, soft wells
+  cream:       '#FAF4EF',   // legacy alias — warm cream
+  ivory:       '#FFFCFA',
+  sand:        '#E5D9D2',   // muted rose-beige
   overlay:     'rgba(15,23,42,0.45)', // slate-900 scrim
 
   // ── Typography ──────────────────────────────────────────────────────────────
@@ -58,10 +58,17 @@ export const C = {
   goldSoft:    '#FCE7EE',
 
   // ── Borders ─────────────────────────────────────────────────────────────────
-  border:      '#E2E8F0',   // slate-200
-  borderLight: '#F1F5F9',
+  border:      '#E5D8D4',   // dusty rose-gray
+  borderLight: '#F2EAE6',
   borderFocus: '#9B3058',
-  borderSage:  '#E2E8F0',
+  borderSage:  '#C5D4C0',   // soft sage hairline (floral accent)
+
+  // ── Floral accents (non-status decoration only) ────────────────────────────
+  floralSage:     '#6B8B6E',
+  floralSageSoft: '#E8F0E9',
+  floralHeroTop:  '#FAF6F3',
+  floralHeroBot:  '#F3EBE5',
+  floralPetal:    'rgba(155, 48, 88, 0.08)',
 
   // ── Status — medical traffic-light (UNCHANGED for clinical safety) ──────────
   stableText:  '#166534',
@@ -117,7 +124,9 @@ export const C = {
 export const Gradient = {
   hero:        ['#9B3058', '#5C1B36'] as const,
   heroAngle:   16, // degrees
-  surfaceTint: ['#FFFFFF', '#F8FAFC'] as const, // for stat-card inner highlight
+  surfaceTint: ['#FFFCFA', '#F5F0EC'] as const, // warm card inner highlight
+  /** History / soft headers — rose wash without full hero saturation */
+  floralBand:  ['#FAF6F3', '#F3EBE5'] as const,
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────

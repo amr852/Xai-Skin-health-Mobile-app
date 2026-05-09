@@ -5,14 +5,16 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { C, FontFamily, FontSize, Space, Radius, Shadow } from '@/constants/theme';
+import { C, FontFamily, FontSize, Space, Radius, Shadow, Gradient } from '@/constants/theme';
 import { StatusArc } from '@/components/decor/StatusArc';
 import { Hairline } from '@/components/decor/Hairline';
 import { SegmentControl } from '@/components/ui/SegmentControl';
 import { useUiOverlay } from '@/context/UiOverlayContext';
 import { useLesions, type Lesion, type LesionFields } from '@/hooks/useLesions';
+import { ImageWithBboxOverlay } from '@/components/ImageWithBboxOverlay';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -33,6 +35,19 @@ const statusMeta: Record<StatusKey, { label: string; color: string; bg: string }
   Check:  { label: 'Check',  color: C.checkText,  bg: C.checkBg  },
   Urgent: { label: 'Urgent', color: C.urgentText,  bg: C.urgentBg },
 };
+
+function lesionRegionCount(item: Lesion): number {
+  const n = item.analysis?.lesionCount;
+  if (typeof n === 'number' && n > 0) return n;
+  return item.analysis?.lesions?.length ?? 0;
+}
+
+function mapModelSeverityToStatus(s?: string): StatusKey {
+  const k = (s || '').toLowerCase();
+  if (k === 'urgent') return 'Urgent';
+  if (k === 'stable') return 'Stable';
+  return 'Check';
+}
 
 // ── Edit Modal ────────────────────────────────────────────────────────────────
 function EditModal({
@@ -158,25 +173,125 @@ function EditModal({
   );
 }
 
+function LesionRegionsModal({
+  item,
+  onClose,
+}: {
+  item: Lesion;
+  onClose: () => void;
+}) {
+  const regions = item.analysis?.lesions ?? [];
+  const detections = regions.map((L) => ({
+    bbox: L.bbox,
+    severity: L.severity,
+    label: L.diagnosis?.label,
+  }));
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={rm.safe}>
+        <View style={rm.header}>
+          <TouchableOpacity onPress={onClose} style={rm.headerBtn} hitSlop={10}>
+            <Text style={rm.headerClose}>Done</Text>
+          </TouchableOpacity>
+          <Text style={rm.headerTitle}>Scan regions</Text>
+          <View style={{ width: 56 }} />
+        </View>
+        <ScrollView
+          style={rm.scroll}
+          contentContainerStyle={rm.scrollContent}
+          showsVerticalScrollIndicator={false}>
+          {item.imageUrl && regions.length > 0 ? (
+            <View style={rm.previewCard}>
+              <Text style={rm.previewLabel}>Photo with model outlines</Text>
+              <ImageWithBboxOverlay
+                source={{ uri: item.imageUrl }}
+                height={220}
+                borderRadius={Radius.lg}
+                detections={detections}
+              />
+            </View>
+          ) : null}
+
+          <Text style={rm.sectionLabel}>
+            {regions.length === 0
+              ? 'No per-region data was stored for this entry.'
+              : `${regions.length} region${regions.length === 1 ? '' : 's'}`}
+          </Text>
+
+          {regions.map((L, i) => {
+            const st = mapModelSeverityToStatus(L.severity);
+            const meta = statusMeta[st];
+            const label = L.diagnosis?.label ?? '—';
+            const score = typeof L.diagnosis?.score === 'number' ? L.diagnosis.score : 0;
+            return (
+              <View key={L.lesion_id ?? `r-${i}`} style={rm.regionRow}>
+                <View style={rm.regionRowTop}>
+                  <Text style={rm.regionTitle}>Region {i + 1}</Text>
+                  <View style={[rm.sevPill, { backgroundColor: meta.bg, borderColor: meta.color }]}>
+                    <Text style={[rm.sevPillTxt, { color: meta.color }]}>{st}</Text>
+                  </View>
+                </View>
+                <Text style={rm.regionPred}>
+                  {label} · {(score * 100).toFixed(1)}%
+                </Text>
+                <Text style={rm.regionMeta}>
+                  Detector conf: {((L.bbox?.conf ?? 0) * 100).toFixed(1)}%
+                </Text>
+              </View>
+            );
+          })}
+
+          {item.analysis?.camImageUrl ? (
+            <View style={rm.heatmapHint}>
+              <Feather name="zap" size={14} color={C.primary} />
+              <Text style={rm.heatmapHintTxt}>
+                Open “Heatmap” on the card for the full Grad-CAM composite.
+              </Text>
+            </View>
+          ) : null}
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
 function LesionCard({
   item,
   onEdit,
   onDelete,
   onViewCam,
+  onViewRegions,
 }: {
   item: Lesion;
   onEdit: (l: Lesion) => void;
   onDelete: (l: Lesion) => void;
   onViewCam: (l: Lesion) => void;
+  onViewRegions: (l: Lesion) => void;
 }) {
+  const nRegions = lesionRegionCount(item);
+  const regions = item.analysis?.lesions;
+  const hasStoredRegions = Array.isArray(regions) && regions.length > 0;
+  const detections = (regions ?? []).map((L) => ({
+    bbox: L.bbox,
+    severity: L.severity,
+    label: L.diagnosis?.label,
+  }));
+
   return (
     <View style={hs.lesionCard}>
-      {/* Leading-edge status arc — encodes status as data, not decoration */}
       <StatusArc status={item.status} edge="left" length={'100%'} thickness={4} />
 
       <View style={hs.ledgerRow}>
-        {/* 64-px square thumbnail — Apple Mail / Things style */}
-        {item.imageUrl ? (
+        {item.imageUrl && hasStoredRegions ? (
+          <ImageWithBboxOverlay
+            source={{ uri: item.imageUrl }}
+            width={72}
+            height={72}
+            borderRadius={10}
+            detections={detections}
+          />
+        ) : item.imageUrl ? (
           <Image source={{ uri: item.imageUrl }} style={hs.thumb} resizeMode="cover" />
         ) : (
           <View style={[hs.thumb, hs.thumbEmpty]}>
@@ -189,6 +304,13 @@ function LesionCard({
             <Text style={hs.lesionLabel} numberOfLines={1}>{item.title || 'Untitled'}</Text>
             <StatusBadge status={item.status} size="sm" />
           </View>
+
+          {nRegions > 1 ? (
+            <View style={hs.multiBadge}>
+              <Feather name="layers" size={11} color={C.primary} />
+              <Text style={hs.multiBadgeTxt}>{nRegions} regions</Text>
+            </View>
+          ) : null}
 
           {!!item.description && (
             <Text style={hs.lesionDescription} numberOfLines={1}>{item.description}</Text>
@@ -212,8 +334,19 @@ function LesionCard({
             </Text>
           </View>
 
-          {/* Action buttons — 40pt height + 6pt hitSlop = 52pt effective target */}
           <View style={hs.actions}>
+            {hasStoredRegions ? (
+              <TouchableOpacity
+                style={hs.actionBtnRegions}
+                onPress={() => onViewRegions(item)}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`View regions for ${item.title || 'lesion'}`}
+                activeOpacity={0.75}>
+                <Feather name="grid" size={14} color={C.floralSage} />
+                <Text style={hs.actionBtnRegionsTxt}>Regions</Text>
+              </TouchableOpacity>
+            ) : null}
             {!!item.analysis?.camImageUrl && (
               <TouchableOpacity
                 style={hs.actionBtnView}
@@ -223,7 +356,7 @@ function LesionCard({
                 accessibilityLabel={`View Grad-CAM for ${item.title || 'lesion'}`}
                 activeOpacity={0.75}>
                 <Feather name="eye" size={14} color={C.primary} />
-                <Text style={hs.actionBtnViewTxt}>View</Text>
+                <Text style={hs.actionBtnViewTxt}>Heatmap</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -261,6 +394,7 @@ export default function HistoryScreen() {
   const [activeNav, setActiveNav]         = useState<NavKey>('history');
   const [statusFilter, setStatusFilter]   = useState<FilterKey>('all');
   const [editingLesion, setEditingLesion] = useState<Lesion | null>(null);
+  const [regionsLesion, setRegionsLesion] = useState<Lesion | null>(null);
   const [camPreviewUri, setCamPreviewUri] = useState<string | null>(null);
   const [saving, setSaving]               = useState(false);
   const [unreadCount, setUnreadCount]     = useState(0);
@@ -349,6 +483,10 @@ export default function HistoryScreen() {
     setCamPreviewUri(uri);
   }, [showAlert]);
 
+  const handleViewRegions = useCallback((lesion: Lesion) => {
+    setRegionsLesion(lesion);
+  }, []);
+
   const handleNav = (key: NavKey) => {
     if      (key === 'scan')    router.push('/camera');
     else if (key === 'home')    router.push('/');
@@ -372,6 +510,10 @@ export default function HistoryScreen() {
         />
       )}
 
+      {regionsLesion && (
+        <LesionRegionsModal item={regionsLesion} onClose={() => setRegionsLesion(null)} />
+      )}
+
       <Modal
         visible={!!camPreviewUri}
         animationType="fade"
@@ -380,7 +522,7 @@ export default function HistoryScreen() {
         <View style={hs.camModalBackdrop}>
           <View style={hs.camModalCard}>
             <View style={hs.camModalHeader}>
-              <Text style={hs.camModalTitle}>Grad-CAM</Text>
+              <Text style={hs.camModalTitle}>Grad-CAM heatmap</Text>
               <TouchableOpacity
                 onPress={() => setCamPreviewUri(null)}
                 style={hs.camModalCloseBtn}
@@ -409,11 +551,13 @@ export default function HistoryScreen() {
           onAvatarPress={openAvatarMenu}
         />
 
-        {/* Title block — ledger heading, no decorative SVG */}
-        <View style={hs.titleBlock}>
-          <Text style={hs.pageTitle}>Lesion Records</Text>
-          <Text style={hs.pageSubtitle}>Every lesion you have logged, in chronological order.</Text>
-        </View>
+        <LinearGradient colors={[...Gradient.floralBand]} style={hs.titleBlock} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+          <Text style={hs.pageTitle}>Lesion records</Text>
+          <Text style={hs.pageSubtitle}>
+            <Text style={hs.pageSubtitleAccent}>Garden view</Text>
+            {' — '}every scan, newest first. Multi-region captures show outlines on the thumbnail.
+          </Text>
+        </LinearGradient>
 
         {/* Filter — segmented control with counts; replaces stats + pills duplication */}
         <View style={hs.filterBar}>
@@ -453,6 +597,7 @@ export default function HistoryScreen() {
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 onViewCam={handleViewCam}
+                onViewRegions={handleViewRegions}
               />
             ))}
             <View style={hs.disclaimerWrap}>
@@ -532,17 +677,128 @@ const em = StyleSheet.create({
   },
 });
 
+const rm = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: C.bg },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+    backgroundColor: C.surface,
+  },
+  headerBtn: { minWidth: 56 },
+  headerClose: { fontSize: 16, fontFamily: FontFamily.bodySemibold, color: C.primary },
+  headerTitle: {
+    fontSize: 17,
+    fontFamily: FontFamily.displayBold,
+    color: C.text,
+    letterSpacing: -0.3,
+  },
+  scroll: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 48 },
+  previewCard: {
+    marginBottom: 20,
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.surface,
+    padding: 12,
+    ...Shadow.sm,
+  },
+  previewLabel: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.textSub,
+    marginBottom: 10,
+  },
+  sectionLabel: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.bodyBold,
+    color: C.text,
+    marginBottom: 12,
+  },
+  regionRow: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: Radius.lg,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    marginBottom: 10,
+    ...Shadow.xs,
+  },
+  regionRowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  regionTitle: {
+    fontSize: FontSize.base,
+    fontFamily: FontFamily.bodyBold,
+    color: C.text,
+  },
+  sevPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  sevPillTxt: { fontSize: FontSize.xs, fontFamily: FontFamily.bodyBold },
+  regionPred: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.primary,
+  },
+  regionMeta: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.body,
+    color: C.textHint,
+    marginTop: 4,
+  },
+  heatmapHint: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: 16,
+    padding: 12,
+    borderRadius: Radius.md,
+    backgroundColor: C.floralSageSoft,
+    borderWidth: 1,
+    borderColor: C.borderSage,
+  },
+  heatmapHintTxt: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.body,
+    color: C.textSub,
+    lineHeight: 20,
+  },
+});
+
 // ── History Screen Styles ────────────────────────────────────────────────────
 const hs = StyleSheet.create({
   safe:          { flex: 1, backgroundColor: C.bg },
   scroll:        { flex: 1 },
   scrollContent: { paddingBottom: 110 },
 
-  // Title block — clean ledger heading
-  titleBlock: { paddingHorizontal: Space[5], paddingTop: 4, paddingBottom: Space[3] },
+  titleBlock: {
+    marginHorizontal: Space[5],
+    paddingHorizontal: Space[4],
+    paddingVertical: Space[4],
+    borderRadius: Radius.xl,
+    marginBottom: Space[2],
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    ...Shadow.xs,
+  },
   pageTitle: {
     fontSize: FontSize['2xl'],
-    fontFamily: FontFamily.bodyBold,
+    fontFamily: FontFamily.displayBold,
     color: C.text,
     letterSpacing: -0.5,
   },
@@ -550,8 +806,12 @@ const hs = StyleSheet.create({
     fontSize: FontSize.sm,
     fontFamily: FontFamily.body,
     color: C.textSub,
-    marginTop: 4,
+    marginTop: 6,
     lineHeight: 20,
+  },
+  pageSubtitleAccent: {
+    fontFamily: FontFamily.displayItalic,
+    color: C.floralSage,
   },
 
   // Filter bar — segment control + hairline
@@ -564,13 +824,32 @@ const hs = StyleSheet.create({
   lesionCard: {
     marginHorizontal: Space[5],
     marginBottom: Space[2] + 2,
-    borderRadius: 14,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: C.surface,
     borderWidth: 1,
     borderColor: C.border,
     position: 'relative',
-    ...Shadow.xs,
+    ...Shadow.sm,
+  },
+  multiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    backgroundColor: C.floralPetal,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+  },
+  multiBadgeTxt: {
+    fontSize: 11,
+    fontFamily: FontFamily.bodyBold,
+    color: C.primary,
+    letterSpacing: 0.2,
   },
   ledgerRow: {
     flexDirection: 'row',
@@ -629,7 +908,19 @@ const hs = StyleSheet.create({
   },
 
   // Inline action buttons — 40pt height for WCAG 2.5.5 (with 6pt hitSlop = 52pt target)
-  actions: { flexDirection: 'row', gap: Space[2], marginTop: 2 },
+  actions: { flexDirection: 'row', gap: Space[2], marginTop: 2, flexWrap: 'wrap' },
+  actionBtnRegions: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    height: 40, paddingHorizontal: 12, borderRadius: Radius.sm + 2,
+    backgroundColor: C.floralSageSoft,
+    borderWidth: 1, borderColor: C.borderSage,
+  },
+  actionBtnRegionsTxt: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.floralSage,
+    letterSpacing: 0.1,
+  },
   actionBtnEdit: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     height: 40, paddingHorizontal: 14, borderRadius: Radius.sm + 2,

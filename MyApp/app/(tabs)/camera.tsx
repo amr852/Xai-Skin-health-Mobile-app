@@ -11,7 +11,8 @@ import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { C, FontFamily, Shadow } from '@/constants/theme';
-import { useLesions, type LesionFields, type LesionAnalysis } from '@/hooks/useLesions';
+import { useLesions, type LesionFields, type AnalyzeImageResult } from '@/hooks/useLesions';
+import { ImageWithBboxOverlay } from '@/components/ImageWithBboxOverlay';
 import { useAuth } from '@/hooks/useAuth';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
@@ -41,7 +42,8 @@ export default function CameraScreen() {
   const [torchOn, setTorchOn] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [form, setForm]                   = useState<LesionFields>(DEFAULT_FORM);
-  const [analysis, setAnalysis]           = useState<LesionAnalysis | null>(null);
+  const [analysis, setAnalysis]           = useState<AnalyzeImageResult | null>(null);
+  const [captureSource, setCaptureSource] = useState<'camera' | 'gallery'>('camera');
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce]       = useState(0);
@@ -75,6 +77,7 @@ export default function CameraScreen() {
     setImageMimeType('image/jpeg');
     setImageFileName('lesion.jpg');
     setRetryNonce(0);
+    setCaptureSource('camera');
   };
 
   /** Show blur warning only; allow analysis to proceed for testing. */
@@ -157,6 +160,7 @@ export default function CameraScreen() {
     const name = (a.fileName && a.fileName.trim()) || `lesion${ext}`;
 
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setCaptureSource('gallery');
     setImageMimeType(mime);
     setImageFileName(name);
     setForm(DEFAULT_FORM);
@@ -177,6 +181,7 @@ export default function CameraScreen() {
       const ok = await ensureSharpEnough(photo.uri);
       if (!ok) return;
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setCaptureSource('camera');
       setImageMimeType('image/jpeg');
       setImageFileName('lesion.jpg');
       setForm(DEFAULT_FORM);
@@ -211,6 +216,7 @@ export default function CameraScreen() {
         const result = await analyzeImage(capturedPhoto, {
           mimeType: imageMimeType,
           fileName: imageFileName,
+          source: captureSource,
         });
         if (!cancelled) {
           setAnalysis(result);
@@ -228,7 +234,7 @@ export default function CameraScreen() {
     return () => {
       cancelled = true;
     };
-  }, [capturedPhoto, scanPhase, imageMimeType, imageFileName, analyzeImage, retryNonce]);
+  }, [capturedPhoto, scanPhase, imageMimeType, imageFileName, captureSource, analyzeImage, retryNonce]);
 
   const handleSave = async () => {
     if (!form.title.trim()) {
@@ -348,7 +354,24 @@ export default function CameraScreen() {
             showsVerticalScrollIndicator={false}>
 
             <View style={s.photoWrap}>
-              <Image source={{ uri: capturedPhoto }} style={s.photo} resizeMode="cover" />
+              <ImageWithBboxOverlay
+                source={{ uri: capturedPhoto }}
+                height={220}
+                detections={(analysis?.lesions ?? []).map((L) => ({
+                  bbox: L.bbox,
+                  severity: L.severity,
+                  label: L.diagnosis?.label,
+                }))}
+              />
+              {analysis && !analysisLoading && (analysis.lesions?.length ?? 0) > 0 ? (
+                <Text style={s.detectionHint}>
+                  {analysis.lesions!.length === 1
+                    ? '1 region outlined — matches model view.'
+                    : `${analysis.lesions!.length} regions outlined — review each finding below.`}
+                </Text>
+              ) : analysis && !analysisLoading && analysis.noLesionFound ? (
+                <Text style={s.detectionHint}>No lesion-like region detected in this image.</Text>
+              ) : null}
             </View>
 
             <View style={s.formCard}>
@@ -629,13 +652,16 @@ const s = StyleSheet.create({
   },
   formScroll: { paddingHorizontal: 16, paddingTop: 16 },
   photoWrap: {
-    width: '100%', height: 220, borderRadius: 22,
-    marginBottom: 16, alignItems: 'center', justifyContent: 'center',
-    overflow: 'visible',
+    width: '100%',
+    marginBottom: 16,
+    alignItems: 'stretch',
   },
-  photo: {
-    width: '100%', height: 220, borderRadius: 22,
-    backgroundColor: '#111',
+  detectionHint: {
+    marginTop: 10,
+    fontSize: 13,
+    fontFamily: FontFamily.body,
+    color: C.textHint,
+    lineHeight: 19,
   },
   formCard: {
     backgroundColor: C.surface, borderRadius: 22,

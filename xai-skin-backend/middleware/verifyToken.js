@@ -9,11 +9,12 @@ function verifyToken(req, res, next) {
   if (!raw || raw === 'null' || raw === 'undefined') {
     return res.status(401).json({ error: 'Token required' });
   }
+  const secret = process.env.JWT_SECRET || 'your_jwt_secret_key_change_this_in_production';
   try {
-    const decoded = jwt.verify(
-      raw,
-      process.env.JWT_SECRET || 'your_jwt_secret_key_change_this_in_production',
-    );
+    const decoded = jwt.verify(raw, secret);
+    if (decoded.typ === 'refresh') {
+      return res.status(401).json({ error: 'Invalid token type', code: 'INVALID_TOKEN' });
+    }
     req.userId = decoded.userId;
     next();
   } catch (error) {

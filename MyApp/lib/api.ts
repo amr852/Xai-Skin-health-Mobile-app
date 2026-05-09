@@ -1,5 +1,11 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import {
+  clearAuthStorage,
+  getAccessToken,
+  getRefreshToken,
+  setTokenPair,
+} from '@/lib/authStorage';
 
 /**
  * Single source of truth for the API base URL.
@@ -51,7 +57,11 @@ export class ApiError extends Error {
 }
 
 interface ApiInit extends Omit<RequestInit, 'body'> {
-  /** JWT token for the Authorization header. Pass null/undefined to skip. */
+  /**
+   * Access JWT for Authorization.
+   * - `undefined` (default): read from MMKV / web storage (recommended).
+   * - `null`: omit Authorization header.
+   */
   token?: string | null;
   /** Optional JSON body (object) — auto-serialized. Use rawBody for FormData. */
   json?: unknown;
@@ -61,6 +71,85 @@ interface ApiInit extends Omit<RequestInit, 'body'> {
   timeoutMs?: number;
   /** AbortSignal from the caller (combined with internal timeout). */
   signal?: AbortSignal;
+  /** Internal: prevent refresh retry loops. */
+  _didRefresh?: boolean;
+}
+
+type SessionListener = (access: string, refresh: string) => void;
+type InvalidateListener = () => void;
+
+let onSessionRefreshed: SessionListener | null = null;
+let onSessionInvalidated: InvalidateListener | null = null;
+
+/** AuthProvider registers so React state stays in sync after silent refresh. */
+export function registerAuthListeners(
+  onRefreshed: SessionListener | null,
+  onInvalidated: InvalidateListener | null,
+) {
+  onSessionRefreshed = onRefreshed;
+  onSessionInvalidated = onInvalidated;
+}
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function tryRefreshAccessToken(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+
+  const p = (async (): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_URL}/users/refresh`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      const text = await res.text();
+      let parsed: Record<string, unknown> = {};
+      if (text) {
+        try {
+          parsed = JSON.parse(text) as Record<string, unknown>;
+        } catch {
+          parsed = {};
+        }
+      }
+      if (!res.ok) {
+        clearAuthStorage();
+        onSessionInvalidated?.();
+        return false;
+      }
+      const access = parsed.token as string | undefined;
+      const nextRefresh = parsed.refreshToken as string | undefined;
+      if (!access || !nextRefresh) {
+        clearAuthStorage();
+        onSessionInvalidated?.();
+        return false;
+      }
+      setTokenPair(access, nextRefresh);
+      onSessionRefreshed?.(access, nextRefresh);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+
+  refreshInFlight = p;
+  try {
+    return await p;
+  } finally {
+    if (refreshInFlight === p) refreshInFlight = null;
+  }
+}
+
+export function invalidateLocalSession() {
+  clearAuthStorage();
+  onSessionInvalidated?.();
+}
+
+function resolveAuthHeader(token: string | null | undefined): Record<string, string> {
+  if (token === null) return {};
+  const access = token !== undefined ? token : getAccessToken();
+  return access ? { Authorization: `Bearer ${access}` } : {};
 }
 
 /**
@@ -70,7 +159,16 @@ interface ApiInit extends Omit<RequestInit, 'body'> {
  * - Handles empty bodies and non-JSON responses gracefully.
  */
 export async function apiFetch<T = unknown>(path: string, init: ApiInit = {}): Promise<T> {
-  const { token, json, rawBody, timeoutMs = 12_000, signal, headers, ...rest } = init;
+  const {
+    token,
+    json,
+    rawBody,
+    timeoutMs = 12_000,
+    signal,
+    headers,
+    _didRefresh = false,
+    ...rest
+  } = init;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -81,7 +179,7 @@ export async function apiFetch<T = unknown>(path: string, init: ApiInit = {}): P
 
   const finalHeaders: Record<string, string> = {
     Accept: 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...resolveAuthHeader(token),
     ...(headers as Record<string, string> | undefined),
   };
 
@@ -95,7 +193,12 @@ export async function apiFetch<T = unknown>(path: string, init: ApiInit = {}): P
 
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, { ...rest, headers: finalHeaders, body, signal: controller.signal });
+    res = await fetch(`${API_URL}${path}`, {
+      ...rest,
+      headers: finalHeaders,
+      body,
+      signal: controller.signal,
+    });
   } catch (e: any) {
     clearTimeout(timer);
     if (e?.name === 'AbortError') {
@@ -108,10 +211,93 @@ export async function apiFetch<T = unknown>(path: string, init: ApiInit = {}): P
   const text = await res.text();
   let parsed: unknown = undefined;
   if (text) {
-    try { parsed = JSON.parse(text); } catch { parsed = text; }
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = text;
+    }
   }
 
   if (!res.ok) {
+    const code =
+      parsed && typeof parsed === 'object' && 'code' in parsed
+        ? String((parsed as { code?: string }).code)
+        : undefined;
+    if (
+      res.status === 401 &&
+      code === 'TOKEN_EXPIRED' &&
+      !_didRefresh &&
+      path !== '/users/refresh'
+    ) {
+      const refreshed = await tryRefreshAccessToken();
+      if (refreshed) {
+        return apiFetch<T>(path, { ...init, _didRefresh: true });
+      }
+    }
+
+    const message =
+      (parsed && typeof parsed === 'object' && 'error' in (parsed as any) && (parsed as any).error) ||
+      (parsed && typeof parsed === 'object' && 'message' in (parsed as any) && (parsed as any).message) ||
+      `${res.status} ${res.statusText || 'Request failed'}`;
+    throw new ApiError(res.status, String(message), parsed);
+  }
+
+  return parsed as T;
+}
+
+/**
+ * Multipart POST with the same TOKEN_EXPIRED → refresh → retry behaviour as apiFetch.
+ */
+export async function apiFetchFormData<T = unknown>(
+  path: string,
+  formData: FormData,
+  init: { timeoutMs?: number; _didRefresh?: boolean } = {},
+): Promise<T> {
+  const timeoutMs = init.timeoutMs ?? 12_000;
+  const _didRefresh = init._didRefresh ?? false;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const access = getAccessToken();
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        ...(access ? { Authorization: `Bearer ${access}` } : {}),
+      },
+      body: formData,
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    clearTimeout(timer);
+    if (e?.name === 'AbortError') {
+      throw new ApiError(0, 'Request timed out — check that the server is reachable.');
+    }
+    throw new ApiError(0, e?.message || 'Network error — server unreachable.');
+  }
+  clearTimeout(timer);
+
+  const text = await res.text();
+  let parsed: unknown = undefined;
+  if (text) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = text;
+    }
+  }
+
+  if (!res.ok) {
+    const code =
+      parsed && typeof parsed === 'object' && 'code' in parsed
+        ? String((parsed as { code?: string }).code)
+        : undefined;
+    if (res.status === 401 && code === 'TOKEN_EXPIRED' && !_didRefresh) {
+      const refreshed = await tryRefreshAccessToken();
+      if (refreshed) return apiFetchFormData<T>(path, formData, { ...init, _didRefresh: true });
+    }
     const message =
       (parsed && typeof parsed === 'object' && 'error' in (parsed as any) && (parsed as any).error) ||
       (parsed && typeof parsed === 'object' && 'message' in (parsed as any) && (parsed as any).message) ||

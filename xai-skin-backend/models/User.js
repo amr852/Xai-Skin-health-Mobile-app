@@ -31,6 +31,11 @@ const userSchema = new mongoose.Schema({
     required: true
   },
   profilePicture: String,
+  /** Bumped on logout / password change to invalidate outstanding refresh JWTs. */
+  refreshTokenVersion: {
+    type: Number,
+    default: 0,
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -43,9 +48,11 @@ const userSchema = new mongoose.Schema({
 
 // Fixed pre-save hook — no next() parameter
 userSchema.pre('save', async function() {
-  if (!this.isModified('password')) return;
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
+  if (this.isModified('password')) {
+    this.refreshTokenVersion = (this.refreshTokenVersion ?? 0) + 1;
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+  }
 });
 
 userSchema.methods.comparePassword = async function(enteredPassword) {
