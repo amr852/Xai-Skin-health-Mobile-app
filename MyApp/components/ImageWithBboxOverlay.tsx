@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Image, StyleSheet, View, type ImageSourcePropType } from 'react-native';
+import { Image, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import {
   bboxToOverlayRect,
   containLayout,
   type LesionBbox,
 } from '@/lib/bboxLayout';
+import { C, FontFamily, Overlay, Radius } from '@/constants/theme';
 
 export type DetectionOverlayItem = {
   bbox: LesionBbox;
   severity?: string;
   label?: string;
+  /** 1-based lesion index shown on the badge; omit to hide the badge. */
+  lesionNumber?: number;
 };
 
 type Props = {
@@ -19,18 +22,20 @@ type Props = {
   /** Default full width; set a number for square thumbnails (e.g. 72). */
   width?: number | `${number}%` | '100%';
   borderRadius?: number;
+  /** When set to a number, only that lesion (1-based) is full-opacity; others dim. `'all'` shows every box equally. */
+  highlightSelection?: 'all' | number;
 };
 
 function borderColorForSeverity(severity?: string): string {
   switch ((severity || '').toLowerCase()) {
     case 'urgent':
-      return '#ef4444';
+      return C.urgentBorder;
     case 'check':
-      return '#f59e0b';
+      return C.checkBorder;
     case 'stable':
-      return '#22c55e';
+      return C.stableBorder;
     default:
-      return 'rgba(255,255,255,0.95)';
+      return C.borderFocus;
   }
 }
 
@@ -40,6 +45,7 @@ export function ImageWithBboxOverlay({
   height,
   width = '100%',
   borderRadius = 22,
+  highlightSelection = 'all',
 }: Props) {
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [layout, setLayout] = useState({ w: 0, h: 0 });
@@ -75,8 +81,8 @@ export function ImageWithBboxOverlay({
     <View
       style={[styles.wrap, { height, width, borderRadius }]}
       onLayout={e => {
-        const { width, height: h } = e.nativeEvent.layout;
-        setLayout({ w: width, h });
+        const { width: lw, height: lh } = e.nativeEvent.layout;
+        setLayout({ w: lw, h: lh });
       }}>
       <Image
         source={source}
@@ -87,6 +93,11 @@ export function ImageWithBboxOverlay({
         ? detections.map((d, i) => {
             const r = bboxToOverlayRect(d.bbox, contain);
             const color = borderColorForSeverity(d.severity);
+            const num = d.lesionNumber;
+            const dimmed =
+              highlightSelection !== 'all' &&
+              typeof num === 'number' &&
+              num !== highlightSelection;
             return (
               <View
                 key={`${d.bbox.x1}-${d.bbox.y1}-${i}`}
@@ -99,9 +110,16 @@ export function ImageWithBboxOverlay({
                     width: Math.max(1, r.width),
                     height: Math.max(1, r.height),
                     borderColor: color,
+                    opacity: dimmed ? 0.38 : 1,
                   },
-                ]}
-              />
+                ]}>
+                {dimmed ? <View style={[styles.dimScrim, { backgroundColor: Overlay.scrimSoft }]} /> : null}
+                {typeof num === 'number' ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{num}</Text>
+                  </View>
+                ) : null}
+              </View>
             );
           })
         : null}
@@ -114,16 +132,39 @@ const styles = StyleSheet.create({
     width: '100%',
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: '#111',
+    backgroundColor: C.text,
   },
   image: {
     width: '100%',
-    backgroundColor: '#111',
+    backgroundColor: C.text,
   },
   box: {
     position: 'absolute',
     borderWidth: 2,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
     backgroundColor: 'transparent',
+    overflow: 'visible',
+  },
+  dimScrim: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: Radius.xs,
+  },
+  badge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    minWidth: 22,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    backgroundColor: C.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    fontSize: 11,
+    fontFamily: FontFamily.bodyBold,
+    color: C.white,
+    letterSpacing: 0.2,
   },
 });

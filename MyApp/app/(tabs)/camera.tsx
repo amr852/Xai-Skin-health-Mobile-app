@@ -1,8 +1,10 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity,
   StatusBar, Platform, Image,
   ScrollView, KeyboardAvoidingView,
+  ActivityIndicator,
+  InteractionManager,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -13,6 +15,14 @@ import * as Haptics from 'expo-haptics';
 import { C, FontFamily, Shadow, Overlay, Radius } from '@/constants/theme';
 import { useLesions, type LesionFields, type AnalyzeImageResult } from '@/hooks/useLesions';
 import { ImageWithBboxOverlay } from '@/components/ImageWithBboxOverlay';
+import { LesionFilterBar } from '@/components/LesionFilterBar';
+import {
+  LesionXaiCarousel,
+  type LesionCarouselItem,
+  type LesionXaiCarouselHandle,
+} from '@/components/LesionXaiCarousel';
+import { ScanReviewLoading } from '@/components/ScanReviewLoading';
+import { dedupeNestedDetections } from '@/lib/bboxDedupe';
 import { useAuth } from '@/hooks/useAuth';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
@@ -20,21 +30,6 @@ import { BottomTabBar, type NavKey } from '@/components/ui/BottomTabBar';
 import { useAppAlert } from '@/components/ui/AppAlert';
 import { laplacianVarianceForImageUri, LAPLACIAN_VARIANCE_THRESHOLD } from '@/lib/imageSharpness';
 import { statusFromPrediction } from '@/lib/lesionSeverity';
-
-type TriageKey = 'Stable' | 'Check' | 'Urgent';
-
-function mapModelSeverityToTriage(s?: string): TriageKey {
-  const k = (s || '').toLowerCase();
-  if (k === 'urgent') return 'Urgent';
-  if (k === 'stable') return 'Stable';
-  return 'Check';
-}
-
-const triageStyle: Record<TriageKey, { bg: string; color: string; border: string }> = {
-  Stable: { bg: C.stableBg, color: C.stableText, border: C.stableBorder },
-  Check:  { bg: C.checkBg,  color: C.checkText,  border: C.checkBorder },
-  Urgent: { bg: C.urgentBg, color: C.urgentText, border: C.urgentBorder },
-};
 
 const DEFAULT_FORM: LesionFields = {
   title: '', description: '', location: '', status: 'Stable', notes: '',
@@ -67,7 +62,13 @@ export default function CameraScreen() {
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [saving, setSaving]               = useState(false);
   const [activeNav, setActiveNav]         = useState<NavKey>('scan');
+  const [lesionHighlight, setLesionHighlight] = useState<'all' | number>('all');
+  const [xaiCarouselIndex, setXaiCarouselIndex] = useState(0);
   const cameraRef = useRef<CameraView>(null);
+  const xaiCarouselRef = useRef<LesionXaiCarouselHandle>(null);
+  const carouselDragRef = useRef(false);
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [captureBusy, setCaptureBusy] = useState(false);
   const router    = useRouter();
   const insets    = useSafeAreaInsets();
   const { addLesion, analyzeImage } = useLesions();
@@ -93,6 +94,8 @@ export default function CameraScreen() {
     setImageFileName('lesion.jpg');
     setRetryNonce(0);
     setCaptureSource('camera');
+    setLesionHighlight('all');
+    setXaiCarouselIndex(0);
   };
 
   /** Show blur warning only; allow analysis to proceed for testing. */
@@ -139,6 +142,7 @@ export default function CameraScreen() {
       }
     }
     setIsFacingFront(false);
+    setIsCameraReady(false);
     setScanPhase('camera');
   };
 
@@ -185,16 +189,21 @@ export default function CameraScreen() {
     setRetryNonce(0);
     const ok = await ensureSharpEnough(uri);
     if (!ok) return;
+    setAnalysisLoading(true);
     setCapturedPhoto(uri);
     setScanPhase('review');
   };
 
   const handleTakePhoto = async () => {
-    if (!cameraRef.current) return;
-    const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
-    if (photo?.uri) {
+    if (!cameraRef.current || !isCameraReady || captureBusy) return;
+    setCaptureBusy(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
+      if (!photo?.uri) return;
+
       const ok = await ensureSharpEnough(photo.uri);
       if (!ok) return;
+
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setCaptureSource('camera');
       setImageMimeType('image/jpeg');
@@ -205,8 +214,20 @@ export default function CameraScreen() {
       setUploadedImageUrl(null);
       setRetryNonce(0);
       setTorchOn(false);
-      setCapturedPhoto(photo.uri);
-      setScanPhase('review');
+      setAnalysisLoading(true);
+
+      InteractionManager.runAfterInteractions(() => {
+        setCapturedPhoto(photo.uri);
+        setScanPhase('review');
+      });
+    } catch (e: unknown) {
+      const raw = e instanceof Error ? e.message : String(e);
+      const msg = /unmount|not ready|session/i.test(raw)
+        ? 'The camera was not ready. Wait a moment, then try again.'
+        : raw || 'Could not capture photo.';
+      showAlert({ title: 'Capture failed', message: msg, variant: 'error' });
+    } finally {
+      setCaptureBusy(false);
     }
   };
 
@@ -250,6 +271,52 @@ export default function CameraScreen() {
       cancelled = true;
     };
   }, [capturedPhoto, scanPhase, imageMimeType, imageFileName, captureSource, analyzeImage, retryNonce]);
+
+  const displayLesions = useMemo(() => {
+    if (!analysis?.lesions?.length) return [];
+    return dedupeNestedDetections(analysis.lesions);
+  }, [analysis?.lesions]);
+
+  const carouselLesions: LesionCarouselItem[] = useMemo(
+    () =>
+      displayLesions.map((L, i) => ({
+        ...L,
+        displayIndex: i + 1,
+      })),
+    [displayLesions],
+  );
+
+  useEffect(() => {
+    setLesionHighlight('all');
+    setXaiCarouselIndex(0);
+  }, [capturedPhoto, retryNonce]);
+
+  useEffect(() => {
+    if (scanPhase !== 'camera') return;
+    setIsCameraReady(false);
+  }, [isFacingFront, scanPhase]);
+
+  const onLesionFilterSelect = useCallback((value: 'all' | number) => {
+    if (value === 'all') {
+      setLesionHighlight('all');
+      return;
+    }
+    setLesionHighlight(value);
+    setXaiCarouselIndex(value - 1);
+    xaiCarouselRef.current?.scrollToLesion(value);
+  }, []);
+
+  const onXaiCarouselSlideSettled = useCallback((zeroBased: number) => {
+    setXaiCarouselIndex(zeroBased);
+    if (carouselDragRef.current) {
+      setLesionHighlight(zeroBased + 1);
+      carouselDragRef.current = false;
+    }
+  }, []);
+
+  const onXaiCarouselDragStart = useCallback(() => {
+    carouselDragRef.current = true;
+  }, []);
 
   const handleSave = async () => {
     if (!form.title.trim()) {
@@ -368,52 +435,66 @@ export default function CameraScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
 
+            <Text style={s.scanResultEyebrow}>Scan result</Text>
+
             <View style={s.photoWrap}>
-              <ImageWithBboxOverlay
-                source={{ uri: capturedPhoto }}
-                height={220}
-                detections={(analysis?.lesions ?? []).map((L) => ({
-                  bbox: L.bbox,
-                  severity: L.severity,
-                  label: L.diagnosis?.label,
-                }))}
-              />
-              {analysis && !analysisLoading && (analysis.lesions?.length ?? 0) > 0 ? (
+              {analysisLoading ? (
+                <ScanReviewLoading active />
+              ) : (
+                <>
+                  <LesionFilterBar
+                    lesionCount={displayLesions.length}
+                    selected={lesionHighlight}
+                    onSelect={onLesionFilterSelect}
+                  />
+                  <ImageWithBboxOverlay
+                    source={{ uri: capturedPhoto }}
+                    height={220}
+                    highlightSelection={lesionHighlight}
+                    detections={displayLesions.map((L, i) => ({
+                      bbox: L.bbox,
+                      severity: L.severity,
+                      label: L.diagnosis?.label,
+                      lesionNumber: i + 1,
+                    }))}
+                  />
+                </>
+              )}
+              {analysis && !analysisLoading && displayLesions.length > 0 ? (
                 <Text style={s.detectionHint}>
-                  {analysis.lesions!.length === 1
-                    ? '1 region outlined — matches model view.'
-                    : `${analysis.lesions!.length} regions outlined — review each finding below.`}
+                  {displayLesions.length === 1
+                    ? '1 region outlined — swipe the card for Grad-CAM on that crop.'
+                    : `${displayLesions.length} regions outlined — use chips or swipe cards to focus each finding.`}
                 </Text>
               ) : analysis && !analysisLoading && analysis.noLesionFound ? (
                 <Text style={s.detectionHint}>No lesion-like region detected in this image.</Text>
               ) : null}
             </View>
 
-            {analysis && !analysisLoading && (analysis.lesions?.length ?? 0) > 0 ? (
-              <View style={s.regionList}>
-                <Text style={s.regionListTitle}>Regions detected</Text>
-                {analysis.lesions!.map((L, i) => {
-                  const tri = mapModelSeverityToTriage(L.severity);
-                  const meta = triageStyle[tri];
-                  const label = L.diagnosis?.label ?? '—';
-                  const score = typeof L.diagnosis?.score === 'number' ? L.diagnosis.score : 0;
-                  return (
-                    <View key={L.lesion_id ?? `reg-${i}`} style={s.regionCard}>
-                      <View style={s.regionCardTop}>
-                        <Text style={s.regionCardHeading}>Region {i + 1}</Text>
-                        <View style={[s.regionTriagePill, { backgroundColor: meta.bg, borderColor: meta.border }]}>
-                          <Text style={[s.regionTriageTxt, { color: meta.color }]}>{tri}</Text>
-                        </View>
-                      </View>
-                      <Text style={s.regionCardPred}>
-                        {label} · {(score * 100).toFixed(1)}%
-                      </Text>
-                      <Text style={s.regionCardMeta}>
-                        Box conf: {((L.bbox?.conf ?? 0) * 100).toFixed(1)}%
-                      </Text>
-                    </View>
-                  );
-                })}
+            {analysis && !analysisLoading && carouselLesions.length > 0 ? (
+              <View style={s.xaiBlock}>
+                <Text style={s.xaiBlockTitle}>Model analysis & explainability</Text>
+                <LesionXaiCarousel
+                  ref={xaiCarouselRef}
+                  lesions={carouselLesions}
+                  compositeUrl={analysis.camImageUrl}
+                  xaiMethod={analysis.xaiMethod}
+                  onSlideIndexChange={onXaiCarouselSlideSettled}
+                  onScrollDragStart={onXaiCarouselDragStart}
+                />
+                <View style={s.carouselMeta}>
+                  <Text style={s.carouselCounter}>
+                    {xaiCarouselIndex + 1} of {carouselLesions.length}
+                  </Text>
+                  <View style={s.dotRow}>
+                    {carouselLesions.map((_, i) => (
+                      <View
+                        key={`dot-${i}`}
+                        style={[s.dot, i === xaiCarouselIndex ? s.dotOn : s.dotOff]}
+                      />
+                    ))}
+                  </View>
+                </View>
               </View>
             ) : null}
 
@@ -451,7 +532,7 @@ export default function CameraScreen() {
             </View>
 
             <View style={s.analysisCard}>
-              <Text style={s.analysisTitle}>Model analysis</Text>
+              <Text style={s.analysisTitle}>Session summary</Text>
               {analysisLoading ? (
                 <Text style={s.analysisSubtext}>Analyzing your image…</Text>
               ) : analysisError ? (
@@ -466,34 +547,52 @@ export default function CameraScreen() {
                   />
                 </View>
               ) : analysis ? (
-                <View style={s.analysisSummary}>
-                  <Text style={s.analysisLabel}>Triage (from prediction)</Text>
-                  <Text style={s.analysisSubtext}>{statusFromPrediction(analysis.label)}</Text>
-                  <Text style={[s.analysisLabel, { marginTop: 10 }]}>Prediction</Text>
-                  <Text style={s.analysisValue}>{analysis.label}</Text>
-                  <Text style={s.analysisSubtext}>Confidence: {(analysis.score * 100).toFixed(1)}%</Text>
-                  <Text style={s.analysisSubtext}>
-                    Explainability: {analysis.xaiMethod ?? 'Score-CAM'} heatmap
-                  </Text>
-                  {analysis.enhancementsApplied && analysis.enhancementsApplied.length > 0 ? (
-                    <Text style={s.analysisEnhance}>
-                      Enhanced: {analysis.enhancementsApplied.join(', ')}
+                carouselLesions.length > 0 ? (
+                  <View style={s.analysisSummary}>
+                    <Text style={s.analysisSubtext}>
+                      Each card above combines the classifier output and Grad-CAM for that region.
                     </Text>
-                  ) : null}
-                  {analysis.topPredictions && analysis.topPredictions.length > 0 ? (
-                    <View style={s.topPredBlock}>
-                      <Text style={s.analysisLabel}>Top classes</Text>
-                      {analysis.topPredictions.map((row, i) => (
-                        <Text key={`${row.label}-${i}`} style={s.topPredRow}>
-                          {row.label}: {(row.score * 100).toFixed(1)}%
-                        </Text>
-                      ))}
-                    </View>
-                  ) : null}
-                  {analysis.camImageUrl ? (
-                    <Image source={{ uri: analysis.camImageUrl }} style={s.analysisImage} resizeMode="cover" />
-                  ) : null}
-                </View>
+                    {analysis.partialFailure ? (
+                      <Text style={s.analysisEnhance}>
+                        Some regions could not be fully analyzed — review cards for gaps.
+                      </Text>
+                    ) : null}
+                    {analysis.enhancementsApplied && analysis.enhancementsApplied.length > 0 ? (
+                      <Text style={[s.analysisEnhance, { marginTop: 6 }]}>
+                        Enhanced: {analysis.enhancementsApplied.join(', ')}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : (
+                  <View style={s.analysisSummary}>
+                    <Text style={s.analysisLabel}>Triage (from prediction)</Text>
+                    <Text style={s.analysisSubtext}>{statusFromPrediction(analysis.label)}</Text>
+                    <Text style={[s.analysisLabel, { marginTop: 10 }]}>Prediction</Text>
+                    <Text style={s.analysisValue}>{analysis.label}</Text>
+                    <Text style={s.analysisSubtext}>Confidence: {(analysis.score * 100).toFixed(1)}%</Text>
+                    <Text style={s.analysisSubtext}>
+                      Explainability: {analysis.xaiMethod ?? 'Grad-CAM'} heatmap
+                    </Text>
+                    {analysis.enhancementsApplied && analysis.enhancementsApplied.length > 0 ? (
+                      <Text style={s.analysisEnhance}>
+                        Enhanced: {analysis.enhancementsApplied.join(', ')}
+                      </Text>
+                    ) : null}
+                    {analysis.topPredictions && analysis.topPredictions.length > 0 ? (
+                      <View style={s.topPredBlock}>
+                        <Text style={s.analysisLabel}>Top classes</Text>
+                        {analysis.topPredictions.map((row, i) => (
+                          <Text key={`${row.label}-${i}`} style={s.topPredRow}>
+                            {row.label}: {(row.score * 100).toFixed(1)}%
+                          </Text>
+                        ))}
+                      </View>
+                    ) : null}
+                    {analysis.camImageUrl ? (
+                      <Image source={{ uri: analysis.camImageUrl }} style={s.analysisImage} resizeMode="cover" />
+                    ) : null}
+                  </View>
+                )
               ) : (
                 <Text style={s.analysisSubtext}>Preparing analysis…</Text>
               )}
@@ -528,8 +627,18 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
         facing={isFacingFront ? 'front' : 'back'}
+        mode="picture"
         ratio="16:9"
         enableTorch={!isFacingFront && torchOn}
+        onCameraReady={() => setIsCameraReady(true)}
+        onMountError={event => {
+          setIsCameraReady(false);
+          showAlert({
+            title: 'Camera',
+            message: event.message ?? 'Could not start the camera preview.',
+            variant: 'error',
+          });
+        }}
       />
 
         <View style={[s.camTopBar, { paddingTop: insets.top + 8 }]}>
@@ -579,13 +688,19 @@ export default function CameraScreen() {
           <View pointerEvents="none" style={[s.crosshairTick, s.tickBottom]} />
           <View pointerEvents="none" style={[s.crosshairTick, s.tickLeft]} />
           <TouchableOpacity
-            style={s.camShutterBtn}
+            style={[s.camShutterBtn, (!isCameraReady || captureBusy) && s.camShutterDisabled]}
             onPress={handleTakePhoto}
             activeOpacity={0.85}
             accessibilityRole="button"
             accessibilityLabel="Capture photo"
+            accessibilityState={{ disabled: !isCameraReady || captureBusy }}
+            disabled={!isCameraReady || captureBusy}
             hitSlop={12}>
-            <View style={s.camShutterInner} />
+            {captureBusy ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <View style={s.camShutterInner} />
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -694,6 +809,14 @@ const s = StyleSheet.create({
     letterSpacing: -0.3,
   },
   formScroll: { paddingHorizontal: 16, paddingTop: 16 },
+  scanResultEyebrow: {
+    fontSize: 12,
+    fontFamily: FontFamily.bodyBold,
+    color: C.textHint,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
   photoWrap: {
     width: '100%',
     marginBottom: 16,
@@ -706,57 +829,41 @@ const s = StyleSheet.create({
     color: C.textHint,
     lineHeight: 19,
   },
-  regionList: {
+  xaiBlock: {
     marginBottom: 16,
-    gap: 10,
   },
-  regionListTitle: {
-    fontSize: 13,
-    fontFamily: FontFamily.bodyBold,
+  xaiBlockTitle: {
+    fontSize: 15,
+    fontFamily: FontFamily.bodySemibold,
     color: C.text,
-    marginBottom: 2,
-    letterSpacing: 0.2,
+    marginBottom: 10,
   },
-  regionCard: {
-    backgroundColor: C.surface,
-    borderRadius: Radius.lg,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: C.border,
+  carouselMeta: {
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+    marginBottom: 4,
   },
-  regionCardTop: {
+  carouselCounter: {
+    fontSize: 13,
+    fontFamily: FontFamily.bodyMedium,
+    color: C.textHint,
+  },
+  dotRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
+    gap: 6,
   },
-  regionCardHeading: {
-    fontSize: 15,
-    fontFamily: FontFamily.bodyBold,
-    color: C.text,
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
-  regionTriagePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
+  dotOn: {
+    backgroundColor: C.primary,
   },
-  regionTriageTxt: {
-    fontSize: 11,
-    fontFamily: FontFamily.bodyBold,
-    letterSpacing: 0.3,
-  },
-  regionCardPred: {
-    fontSize: 14,
-    fontFamily: FontFamily.bodySemibold,
-    color: C.primary,
-  },
-  regionCardMeta: {
-    fontSize: 12,
-    fontFamily: FontFamily.body,
-    color: C.textHint,
-    marginTop: 4,
+  dotOff: {
+    backgroundColor: C.border,
   },
   formCard: {
     backgroundColor: C.surface, borderRadius: 22,
@@ -900,4 +1007,5 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   camShutterInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff' },
+  camShutterDisabled: { opacity: 0.45 },
 });

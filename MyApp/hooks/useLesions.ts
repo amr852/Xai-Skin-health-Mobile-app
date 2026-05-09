@@ -25,7 +25,13 @@ export type LesionDetection = {
   lesion_id?: string;
   bbox: LesionBbox;
   severity?: string;
-  diagnosis?: { label: string; score: number };
+  diagnosis?: {
+    label: string;
+    score: number;
+    top_k?: { label: string; score: number }[];
+  };
+  cropUrl?: string | null;
+  overlayUrl?: string | null;
 };
 
 export type AnalyzeImageResult = LesionAnalysis & {
@@ -237,8 +243,14 @@ export function useLesions() {
             lesion_id: L.lesion_id,
             bbox: L.bbox,
             severity: L.severity,
+            cropUrl: L.cropUrl ?? null,
+            overlayUrl: L.overlayUrl ?? null,
             diagnosis: L.diagnosis
-              ? { label: L.diagnosis.label ?? '—', score: L.diagnosis.score ?? 0 }
+              ? {
+                  label: L.diagnosis.label ?? '—',
+                  score: L.diagnosis.score ?? 0,
+                  top_k: Array.isArray(L.diagnosis.top_k) ? L.diagnosis.top_k : undefined,
+                }
               : undefined,
           }))
       : [];

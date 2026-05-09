@@ -19,6 +19,7 @@ from helpers import (
 from services.classifier import lesion_classifier
 from services.detector import lesion_detector
 from services.explainer import gradcam_explainer, paint_lesion_on_canvas, pil_to_png_b64
+from services.bbox_dedupe import dedupe_nested_boxes
 
 scan_bp = Blueprint("scan", __name__)
 
@@ -66,6 +67,8 @@ def scan_multi():
                 "lesions": [],
             }
         ), 200
+
+    boxes = dedupe_nested_boxes(boxes)
 
     canvas = full_bgr.copy()
     lesions_out: list[dict] = []
