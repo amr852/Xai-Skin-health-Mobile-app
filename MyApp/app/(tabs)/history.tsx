@@ -13,7 +13,7 @@ import { StatusArc } from '@/components/decor/StatusArc';
 import { Hairline } from '@/components/decor/Hairline';
 import { SegmentControl } from '@/components/ui/SegmentControl';
 import { useUiOverlay } from '@/context/UiOverlayContext';
-import { useLesions, type Lesion, type LesionFields } from '@/hooks/useLesions';
+import { useLesions, type AnalyzeImageResult, type Lesion, type LesionFields } from '@/hooks/useLesions';
 import { useScanSessions, type ScanSession } from '@/hooks/useScanSessions';
 import { ImageWithBboxOverlay } from '@/components/ImageWithBboxOverlay';
 import { useAuth } from '@/hooks/useAuth';
@@ -182,9 +182,11 @@ type RegionsModalSource =
 function LesionRegionsModal({
   source,
   onClose,
+  onSaveSessionRegion,
 }: {
   source: RegionsModalSource;
   onClose: () => void;
+  onSaveSessionRegion?: (session: ScanSession, regionIndex: number) => void;
 }) {
   const regions =
     source.type === 'lesion'
@@ -269,6 +271,17 @@ function LesionRegionsModal({
                 <Text style={rm.regionMeta}>
                   Detector conf: {((L.bbox?.conf ?? 0) * 100).toFixed(1)}%
                 </Text>
+                {source.type === 'session' && onSaveSessionRegion ? (
+                  <TouchableOpacity
+                    style={rm.saveBtn}
+                    onPress={() => onSaveSessionRegion(source.item, i)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Save region ${i + 1} as lesion`}>
+                    <Feather name="bookmark" size={14} color={C.primary} />
+                    <Text style={rm.saveBtnTxt}>Save as lesion</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             );
           })}
@@ -426,11 +439,13 @@ function SessionCard({
   onViewRegions,
   onViewHeatmap,
   onOpenDetail,
+  onDelete,
 }: {
   item: ScanSession;
   onViewRegions: (s: ScanSession) => void;
   onViewHeatmap: (uri: string) => void;
   onOpenDetail: (s: ScanSession) => void;
+  onDelete: (s: ScanSession) => void;
 }) {
   const regions = item.lesions ?? [];
   const nRegions = item.lesionCount || regions.length || 0;
@@ -537,6 +552,16 @@ function SessionCard({
                 <Text style={hs.actionBtnViewTxt}>Heatmap</Text>
               </TouchableOpacity>
             ) : null}
+            <TouchableOpacity
+              style={hs.actionBtnDelete}
+              onPress={() => onDelete(item)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Delete session"
+              activeOpacity={0.75}>
+              <Feather name="trash-2" size={14} color={C.urgentText} />
+              <Text style={hs.actionBtnDeleteTxt}>Delete</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -548,10 +573,10 @@ function SessionCard({
 export default function HistoryScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { lesions, loading, error, fetchLesions, updateLesion, deleteLesion } = useLesions();
-  const { sessions, loading: sessionsLoading, error: sessionsError, fetchSessions } = useScanSessions();
+  const { lesions, loading, error, fetchLesions, addLesion, updateLesion, deleteLesion } = useLesions();
+  const { sessions, loading: sessionsLoading, error: sessionsError, fetchSessions, deleteSession } = useScanSessions();
   const [activeNav, setActiveNav]         = useState<NavKey>('history');
-  const [listTab, setListTab]             = useState<HistoryListTab>('lesions');
+  const listTab: HistoryListTab           = 'sessions';
   const [statusFilter, setStatusFilter]   = useState<FilterKey>('all');
   const [editingLesion, setEditingLesion] = useState<Lesion | null>(null);
   const [regionsModal, setRegionsModal]   = useState<RegionsModalSource | null>(null);
@@ -571,10 +596,6 @@ export default function HistoryScreen() {
       void fetchSessions();
     }, [fetchLesions, fetchSessions]),
   );
-
-  useEffect(() => {
-    if (listTab === 'sessions') void fetchSessions();
-  }, [listTab, fetchSessions]);
 
   useFocusEffect(
     useCallback(() => {
@@ -643,7 +664,7 @@ export default function HistoryScreen() {
   );
 
   const handleViewCam = useCallback((lesion: Lesion) => {
-    const uri = lesion.analysis?.camImageUrl;
+    const uri = lesion.analysis?.camImageUrl ?? lesion.analysis?.lesions?.[0]?.overlayUrl;
     if (!uri) {
       showAlert({
         title: 'No Grad-CAM image',
@@ -671,6 +692,127 @@ export default function HistoryScreen() {
     [router],
   );
 
+  const handleDeleteSession = useCallback(
+    (session: ScanSession) => {
+      showAlert({
+        title: 'Delete Session',
+        message: 'This scan session and its images will be removed permanently.',
+        variant: 'confirm',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await deleteSession(session._id);
+              } catch (e: any) {
+                showAlert({
+                  title: 'Delete Failed',
+                  message: e.message || 'Failed to delete scan session.',
+                  variant: 'error',
+                });
+              }
+            },
+          },
+        ],
+      });
+    },
+    [deleteSession, showAlert],
+  );
+
+  const handleSaveSessionRegion = useCallback(
+    (session: ScanSession, regionIndex: number) => {
+      const region = session.lesions?.[regionIndex];
+      if (!region?.bbox || !session.originalImageUrl) {
+        showAlert({
+          title: 'Save unavailable',
+          message: 'This region is missing required image data.',
+          variant: 'warning',
+        });
+        return;
+      }
+
+      const regionLabel = region.diagnosis?.label ?? `Region ${regionIndex + 1}`;
+      const defaultStatus = mapModelSeverityToStatus(region.severity);
+      const status = defaultStatus;
+
+      showAlert({
+        title: 'Save lesion',
+        message: `Save ${regionLabel} from this session into your lesion records?`,
+        variant: 'confirm',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Save',
+            style: 'default',
+            onPress: async () => {
+              try {
+                const lesionsSummary = (session.lesions ?? [])
+                  .filter((x): x is typeof x & { bbox: NonNullable<typeof x.bbox> } => x.bbox != null)
+                  .map((x) => ({
+                    lesion_id: x.lesionId,
+                    bbox: x.bbox,
+                    severity: x.severity,
+                    cropUrl: x.cropImageUrl ?? null,
+                    overlayUrl: x.overlayImageUrl ?? null,
+                    diagnosis: x.diagnosis
+                      ? {
+                          label: x.diagnosis.label ?? '—',
+                          score: typeof x.diagnosis.score === 'number' ? x.diagnosis.score : 0,
+                        }
+                      : undefined,
+                  }));
+
+                const analysis: AnalyzeImageResult = {
+                  label: region.diagnosis?.label ?? '—',
+                  score: typeof region.diagnosis?.score === 'number' ? region.diagnosis.score : 0,
+                  camImageUrl: region.overlayImageUrl || session.annotatedImageUrl || undefined,
+                  imageUrl: session.originalImageUrl,
+                  modelName: 'resnet50 + YOLO (Grad-CAM)',
+                  xaiMethod: 'Grad-CAM',
+                  enhancementsApplied: session.qualityMetadata?.enhancements_applied ?? [],
+                  topPredictions: region.diagnosis?.top_k ?? [],
+                  severity: region.severity,
+                  bbox: region.bbox,
+                  lesions: lesionsSummary,
+                  lesionCount: typeof session.lesionCount === 'number' ? session.lesionCount : lesionsSummary.length,
+                  noLesionFound: !!session.noLesionFound,
+                  partialFailure: !!session.partialFailure,
+                  sessionId: session._id,
+                };
+
+                await addLesion(
+                  {
+                    title: `${regionLabel} (${new Date(session.createdAt).toLocaleDateString()})`,
+                    description: 'Saved from scan session',
+                    location: '',
+                    status,
+                    notes: `Session ${session._id} · Region ${regionIndex + 1}`,
+                  },
+                  undefined,
+                  analysis,
+                );
+                showAlert({
+                  title: 'Lesion saved',
+                  message: 'Region was added to your lesion records.',
+                  variant: 'success',
+                });
+              } catch (e: any) {
+                showAlert({
+                  title: 'Save failed',
+                  message: e.message || 'Could not save this region.',
+                  variant: 'error',
+                });
+              }
+            },
+          },
+        ],
+      });
+    },
+    [addLesion, showAlert],
+  );
+
   const handleNav = (key: NavKey) => {
     if      (key === 'scan')    router.push('/camera');
     else if (key === 'home')    router.push('/');
@@ -695,7 +837,11 @@ export default function HistoryScreen() {
       )}
 
       {regionsModal ? (
-        <LesionRegionsModal source={regionsModal} onClose={() => setRegionsModal(null)} />
+        <LesionRegionsModal
+          source={regionsModal}
+          onClose={() => setRegionsModal(null)}
+          onSaveSessionRegion={handleSaveSessionRegion}
+        />
       ) : null}
 
       <Modal
@@ -739,22 +885,9 @@ export default function HistoryScreen() {
           <Text style={hs.pageTitle}>Lesion records</Text>
           <Text style={hs.pageSubtitle}>
             <Text style={hs.pageSubtitleAccent}>Garden view</Text>
-            {listTab === 'lesions'
-              ? ' — saved entries and triage, newest first.'
-              : ' — server-side multi-capture sessions from Scan (same pipeline as analyze).'}
+            {' — session history from Scan. Tap any detected region to save it as a tracked lesion.'}
           </Text>
         </LinearGradient>
-
-        <View style={hs.listModeBar}>
-          <SegmentControl<HistoryListTab>
-            value={listTab}
-            onChange={setListTab}
-            items={[
-              { key: 'lesions', label: 'Lesions', count: lesions.length },
-              { key: 'sessions', label: 'Sessions', count: sessions.length },
-            ]}
-          />
-        </View>
 
         {listTab === 'lesions' ? (
           <>
@@ -837,6 +970,7 @@ export default function HistoryScreen() {
                   onViewRegions={handleViewSessionRegions}
                   onViewHeatmap={setCamPreviewUri}
                   onOpenDetail={handleOpenSessionDetail}
+                  onDelete={handleDeleteSession}
                 />
               ))
             ) : (
@@ -992,6 +1126,24 @@ const rm = StyleSheet.create({
     fontFamily: FontFamily.body,
     color: C.textHint,
     marginTop: 4,
+  },
+  saveBtn: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: C.borderFocus,
+    backgroundColor: C.primaryLight,
+  },
+  saveBtnTxt: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.primary,
   },
   heatmapHint: {
     flexDirection: 'row',

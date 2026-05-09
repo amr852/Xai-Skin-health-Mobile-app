@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
-import { apiFetch, ApiError, invalidateLocalSession } from '@/lib/api';
+import { API_URL, apiFetch, ApiError, invalidateLocalSession } from '@/lib/api';
 import { getStoredToken } from '@/context/AuthContext';
 import type { LesionBbox } from '@/lib/bboxLayout';
+import { normalizeApiMediaUrl } from '@/lib/mediaUrl';
 
 export type ScanSessionDiagnosis = {
   label?: string;
@@ -33,6 +34,22 @@ export type ScanSession = {
   createdAt: string;
 };
 
+function normalizeScanSessionMedia(session: ScanSession): ScanSession {
+  return {
+    ...session,
+    originalImageUrl: normalizeApiMediaUrl(session.originalImageUrl, API_URL),
+    annotatedImageUrl:
+      normalizeApiMediaUrl(session.annotatedImageUrl, API_URL) ?? session.annotatedImageUrl ?? null,
+    lesions: Array.isArray(session.lesions)
+      ? session.lesions.map((lesion) => ({
+          ...lesion,
+          cropImageUrl: normalizeApiMediaUrl(lesion.cropImageUrl, API_URL),
+          overlayImageUrl: normalizeApiMediaUrl(lesion.overlayImageUrl, API_URL),
+        }))
+      : [],
+  };
+}
+
 export function useScanSessions() {
   const [sessions, setSessions] = useState<ScanSession[]>([]);
   const [loading, setLoading] = useState(false);
@@ -50,7 +67,7 @@ export function useScanSessions() {
     try {
       const data = await apiFetch<ScanSession[]>('/scan-sessions');
       if (!Array.isArray(data)) throw new ApiError(500, 'Unexpected scan-sessions response');
-      setSessions(data);
+      setSessions(data.map((item) => normalizeScanSessionMedia(item)));
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         invalidateLocalSession();
@@ -64,10 +81,30 @@ export function useScanSessions() {
     }
   }, []);
 
-  return { sessions, loading, error, fetchSessions };
+  const deleteSession = useCallback(async (id: string): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    try {
+      await apiFetch(`/scan-sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      setSessions((prev) => prev.filter((s) => s._id !== id));
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) {
+        // If the session is already gone server-side, keep client state in sync.
+        setSessions((prev) => prev.filter((s) => s._id !== id));
+        return;
+      }
+      setError((e as Error).message);
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return { sessions, loading, error, fetchSessions, deleteSession };
 }
 
 export async function fetchScanSessionById(id: string): Promise<ScanSession> {
   const safe = encodeURIComponent(id);
-  return apiFetch<ScanSession>(`/scan-sessions/${safe}`);
+  const session = await apiFetch<ScanSession>(`/scan-sessions/${safe}`);
+  return normalizeScanSessionMedia(session);
 }

@@ -21,6 +21,8 @@ import { StatusArc } from '@/components/decor/StatusArc';
 import { ImageWithBboxOverlay } from '@/components/ImageWithBboxOverlay';
 import { fetchScanSessionById, type ScanSession } from '@/hooks/useScanSessions';
 import { ApiError } from '@/lib/api';
+import { useLesions, type AnalyzeImageResult } from '@/hooks/useLesions';
+import { useAppAlert } from '@/components/ui/AppAlert';
 type StatusKey = 'Stable' | 'Check' | 'Urgent';
 
 function mapModelSeverityToStatus(s?: string): StatusKey {
@@ -43,6 +45,8 @@ export default function ScanSessionDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [heatmapUri, setHeatmapUri] = useState<string | null>(null);
+  const { addLesion } = useLesions();
+  const { showAlert, alertNode } = useAppAlert();
 
   const load = useCallback(async () => {
     if (!id || typeof id !== 'string') {
@@ -87,9 +91,74 @@ export default function ScanSessionDetailScreen() {
   const primaryHeatmap =
     session?.annotatedImageUrl || regions.find((l) => l.overlayImageUrl)?.overlayImageUrl;
 
+  const saveRegionAsLesion = useCallback(
+    async (regionIndex: number) => {
+      if (!session) return;
+      const region = session.lesions?.[regionIndex];
+      if (!region?.bbox || !session.originalImageUrl) {
+        showAlert({
+          title: 'Save unavailable',
+          message: 'This region is missing required image data.',
+          variant: 'warning',
+        });
+        return;
+      }
+
+      const lesionsSummary = (session.lesions ?? [])
+        .filter((x): x is typeof x & { bbox: NonNullable<typeof x.bbox> } => x.bbox != null)
+        .map((x) => ({
+          lesion_id: x.lesionId,
+          bbox: x.bbox,
+          severity: x.severity,
+          cropUrl: x.cropImageUrl ?? null,
+          overlayUrl: x.overlayImageUrl ?? null,
+          diagnosis: x.diagnosis
+            ? {
+                label: x.diagnosis.label ?? '—',
+                score: typeof x.diagnosis.score === 'number' ? x.diagnosis.score : 0,
+              }
+            : undefined,
+        }));
+
+      const analysis: AnalyzeImageResult = {
+        label: region.diagnosis?.label ?? '—',
+        score: typeof region.diagnosis?.score === 'number' ? region.diagnosis.score : 0,
+        camImageUrl: region.overlayImageUrl || session.annotatedImageUrl || undefined,
+        imageUrl: session.originalImageUrl,
+        modelName: 'resnet50 + YOLO (Grad-CAM)',
+        xaiMethod: 'Grad-CAM',
+        enhancementsApplied: session.qualityMetadata?.enhancements_applied ?? [],
+        topPredictions: region.diagnosis?.top_k ?? [],
+        severity: region.severity,
+        bbox: region.bbox,
+        lesions: lesionsSummary,
+        lesionCount: typeof session.lesionCount === 'number' ? session.lesionCount : lesionsSummary.length,
+        noLesionFound: !!session.noLesionFound,
+        partialFailure: !!session.partialFailure,
+        sessionId: session._id,
+      };
+
+      const label = region.diagnosis?.label ?? `Region ${regionIndex + 1}`;
+      const status = mapModelSeverityToStatus(region.severity);
+      await addLesion(
+        {
+          title: `${label} (${new Date(session.createdAt).toLocaleDateString()})`,
+          description: 'Saved from scan session',
+          location: '',
+          status,
+          notes: `Session ${session._id} · Region ${regionIndex + 1}`,
+        },
+        undefined,
+        analysis,
+      );
+    },
+    [addLesion, session, showAlert],
+  );
+
   return (
     <SafeAreaView style={s.safe} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
+      {alertNode}
 
       <View style={s.topBar}>
         <TouchableOpacity
@@ -237,6 +306,42 @@ export default function ScanSessionDetailScreen() {
                   <Text style={s.regionMeta}>
                     Detector conf: {((L.bbox?.conf ?? 0) * 100).toFixed(1)}%
                   </Text>
+                  <TouchableOpacity
+                    style={s.saveBtn}
+                    activeOpacity={0.8}
+                    onPress={() =>
+                      showAlert({
+                        title: 'Save lesion',
+                        message: `Save Region ${i + 1} into your lesion records?`,
+                        variant: 'confirm',
+                        buttons: [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Save',
+                            style: 'default',
+                            onPress: async () => {
+                              try {
+                                await saveRegionAsLesion(i);
+                                showAlert({
+                                  title: 'Lesion saved',
+                                  message: 'Region was added to your lesion records.',
+                                  variant: 'success',
+                                });
+                              } catch (e: any) {
+                                showAlert({
+                                  title: 'Save failed',
+                                  message: e.message || 'Could not save this region.',
+                                  variant: 'error',
+                                });
+                              }
+                            },
+                          },
+                        ],
+                      })
+                    }>
+                    <Feather name="bookmark" size={14} color={C.primary} />
+                    <Text style={s.saveBtnTxt}>Save as lesion</Text>
+                  </TouchableOpacity>
                   {(L.cropImageUrl || L.overlayImageUrl) && (
                     <View style={s.regionThumbs}>
                       {L.cropImageUrl ? (
@@ -550,6 +655,24 @@ const s = StyleSheet.create({
     marginTop: 6,
   },
   regionThumbs: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  saveBtn: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: C.borderFocus,
+    backgroundColor: C.primaryLight,
+  },
+  saveBtnTxt: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.primary,
+  },
   regionThumb: {
     width: 72,
     height: 72,

@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react';
 import { Platform } from 'react-native';
-import { apiFetch, apiFetchFormData, ApiError, invalidateLocalSession } from '@/lib/api';
+import { API_URL, apiFetch, apiFetchFormData, ApiError, invalidateLocalSession } from '@/lib/api';
 import { getStoredToken } from '@/context/AuthContext';
 import type { LesionBbox } from '@/lib/bboxLayout';
+import { normalizeApiMediaUrl } from '@/lib/mediaUrl';
 
 export type TopPrediction = { label: string; score: number };
 
@@ -47,6 +48,8 @@ export type StoredLesionFinding = {
   bbox: LesionBbox;
   severity?: string;
   diagnosis?: { label: string; score: number };
+  cropUrl?: string | null;
+  overlayUrl?: string | null;
 };
 
 export type Lesion = {
@@ -86,6 +89,33 @@ export type LesionImageUploadOptions = {
 
 const ANALYZE_UPLOAD_TIMEOUT_MS = 130_000;
 
+function normalizeStoredFinding(finding: StoredLesionFinding): StoredLesionFinding {
+  return {
+    ...finding,
+    cropUrl: normalizeApiMediaUrl(finding.cropUrl, API_URL) ?? null,
+    overlayUrl: normalizeApiMediaUrl(finding.overlayUrl, API_URL) ?? null,
+  };
+}
+
+function normalizeStoredLesionMedia(item: Lesion): Lesion {
+  const analysis = item.analysis;
+  return {
+    ...item,
+    imageUrl: normalizeApiMediaUrl(item.imageUrl, API_URL),
+    analysis: analysis
+      ? {
+          ...analysis,
+          camImageUrl:
+            normalizeApiMediaUrl(analysis.camImageUrl, API_URL) ??
+            normalizeApiMediaUrl(analysis.lesions?.[0]?.overlayUrl, API_URL),
+          lesions: Array.isArray(analysis.lesions)
+            ? analysis.lesions.map((x) => normalizeStoredFinding(x))
+            : analysis.lesions,
+        }
+      : analysis,
+  };
+}
+
 export function useLesions() {
   const [lesions, setLesions] = useState<Lesion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -99,7 +129,7 @@ export function useLesions() {
     try {
       const data = await apiFetch<Lesion[]>('/lesions');
       if (!Array.isArray(data)) throw new ApiError(500, 'Unexpected response from server');
-      setLesions(data);
+      setLesions(data.map((item) => normalizeStoredLesionMedia(item)));
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         invalidateLocalSession();
@@ -133,7 +163,7 @@ export function useLesions() {
       { timeoutMs: ANALYZE_UPLOAD_TIMEOUT_MS },
     );
     if (!body?.url) throw new ApiError(500, 'Upload response missing url', body);
-    return body.url as string;
+    return normalizeApiMediaUrl(body.url as string, API_URL) ?? (body.url as string);
   }, []);
 
   const analyzeImage = useCallback(async (uri: string, options?: LesionImageUploadOptions): Promise<AnalyzeImageResult> => {
@@ -194,13 +224,21 @@ export function useLesions() {
       ? body.quality_metadata!.enhancements_applied!
       : [];
 
+    const normalizedOriginalImageUrl =
+      normalizeApiMediaUrl(body.originalImageUrl, API_URL) ?? body.originalImageUrl;
+    const normalizedAnnotatedImageUrl =
+      normalizeApiMediaUrl(body.annotatedImageUrl, API_URL) ?? body.annotatedImageUrl;
+
     const first = body.lesions?.[0];
     let analysis: Omit<LesionAnalysis, 'imageUrl'>;
     if (first) {
       analysis = {
         label: first.diagnosis?.label ?? '—',
         score: typeof first.diagnosis?.score === 'number' ? first.diagnosis.score : 0,
-        camImageUrl: body.annotatedImageUrl || first.overlayUrl || undefined,
+        camImageUrl:
+          normalizedAnnotatedImageUrl ||
+          normalizeApiMediaUrl(first.overlayUrl, API_URL) ||
+          undefined,
         modelName: 'resnet50 + YOLO (Grad-CAM)',
         predictionIndex: undefined,
         xaiMethod: 'Grad-CAM',
@@ -214,7 +252,7 @@ export function useLesions() {
       analysis = {
         label: 'No lesion detected',
         score: 0,
-        camImageUrl: body.annotatedImageUrl || undefined,
+        camImageUrl: normalizedAnnotatedImageUrl || undefined,
         modelName: 'resnet50 + YOLO (Grad-CAM)',
         predictionIndex: undefined,
         xaiMethod: 'Grad-CAM',
@@ -226,7 +264,7 @@ export function useLesions() {
       analysis = {
         label: body.partial_failure ? 'Detection without classification' : 'Analysis unavailable',
         score: 0,
-        camImageUrl: body.annotatedImageUrl || undefined,
+        camImageUrl: normalizedAnnotatedImageUrl || undefined,
         modelName: 'resnet50 + YOLO (Grad-CAM)',
         predictionIndex: undefined,
         xaiMethod: 'Grad-CAM',
@@ -243,8 +281,8 @@ export function useLesions() {
             lesion_id: L.lesion_id,
             bbox: L.bbox,
             severity: L.severity,
-            cropUrl: L.cropUrl ?? null,
-            overlayUrl: L.overlayUrl ?? null,
+            cropUrl: normalizeApiMediaUrl(L.cropUrl, API_URL) ?? null,
+            overlayUrl: normalizeApiMediaUrl(L.overlayUrl, API_URL) ?? null,
             diagnosis: L.diagnosis
               ? {
                   label: L.diagnosis.label ?? '—',
@@ -257,7 +295,7 @@ export function useLesions() {
 
     return {
       ...analysis,
-      imageUrl: body.originalImageUrl,
+      imageUrl: normalizedOriginalImageUrl,
       lesions: lesionsSummary.filter((x) => x.bbox),
       lesionCount: body.lesion_count,
       noLesionFound: !!body.no_lesion_found,

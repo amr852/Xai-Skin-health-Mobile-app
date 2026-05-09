@@ -53,6 +53,27 @@ function publicUploadUrl(req, filename) {
   return `${baseUrl}/uploads/${filename}`;
 }
 
+async function removeUploadedFileFromUrl(url) {
+  if (!url || typeof url !== 'string') return;
+  try {
+    let pathname;
+    try {
+      pathname = new URL(url).pathname;
+    } catch {
+      pathname = url;
+    }
+    const fileName = path.basename(pathname);
+    if (!fileName) return;
+    const absolute = path.join(uploadsDir, fileName);
+    if (!absolute.startsWith(uploadsDir)) return;
+    await fs.promises.unlink(absolute);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') {
+      console.warn('scanSessions cleanup warning:', error?.message || error);
+    }
+  }
+}
+
 /**
  * POST /scan-sessions — run multi-lesion pipeline and persist session + image assets.
  */
@@ -192,6 +213,36 @@ router.get('/:id', verifyToken, async (req, res) => {
   } catch (error) {
     console.error('GET /scan-sessions/:id error:', error);
     res.status(500).json({ error: 'Failed to fetch scan session' });
+  }
+});
+
+/** DELETE /scan-sessions/:id — remove one stored session */
+router.delete('/:id', verifyToken, async (req, res) => {
+  try {
+    const session = await ScanSession.findById(req.params.id).lean();
+
+    if (!session) {
+      return res.status(404).json({ error: 'Scan session not found' });
+    }
+    if (String(session.userId) !== String(req.userId)) {
+      return res.status(404).json({ error: 'Scan session not found' });
+    }
+
+    await ScanSession.deleteOne({ _id: req.params.id });
+
+    const urlsToDelete = [
+      session.originalImageUrl,
+      session.annotatedImageUrl,
+      ...(Array.isArray(session.lesions)
+        ? session.lesions.flatMap((x) => [x.cropImageUrl, x.overlayImageUrl])
+        : []),
+    ];
+    await Promise.all(urlsToDelete.map((url) => removeUploadedFileFromUrl(url)));
+
+    return res.status(200).json({ message: 'Scan session deleted successfully' });
+  } catch (error) {
+    console.error('DELETE /scan-sessions/:id error:', error);
+    return res.status(500).json({ error: 'Failed to delete scan session' });
   }
 });
 

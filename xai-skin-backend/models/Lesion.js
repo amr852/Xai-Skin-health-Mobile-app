@@ -16,6 +16,8 @@ const analysisLesionItemSchema = new mongoose.Schema(
     lesion_id: String,
     bbox: bboxSchema,
     severity: String,
+    cropUrl: String,
+    overlayUrl: String,
     diagnosis: {
       label: String,
       score: Number,

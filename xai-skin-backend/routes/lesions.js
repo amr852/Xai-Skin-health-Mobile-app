@@ -52,7 +52,16 @@ function pickAnalysisFields(analysis) {
     recordId: analysis.recordId,
     severity: analysis.severity,
     bbox: analysis.bbox,
-    lesions: Array.isArray(analysis.lesions) ? analysis.lesions : undefined,
+    lesions: Array.isArray(analysis.lesions)
+      ? analysis.lesions.map((item) => ({
+          lesion_id: item?.lesion_id,
+          bbox: item?.bbox,
+          severity: item?.severity,
+          cropUrl: item?.cropUrl,
+          overlayUrl: item?.overlayUrl,
+          diagnosis: item?.diagnosis,
+        }))
+      : undefined,
     lesionCount: typeof analysis.lesionCount === 'number' ? analysis.lesionCount : undefined,
     noLesionFound: typeof analysis.noLesionFound === 'boolean' ? analysis.noLesionFound : undefined,
     partialFailure: typeof analysis.partialFailure === 'boolean' ? analysis.partialFailure : undefined,

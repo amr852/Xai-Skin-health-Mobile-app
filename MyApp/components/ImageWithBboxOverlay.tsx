@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import { ActivityIndicator, Image, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import {
   bboxToOverlayRect,
   containLayout,
@@ -49,11 +49,16 @@ export function ImageWithBboxOverlay({
 }: Props) {
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [layout, setLayout] = useState({ w: 0, h: 0 });
+  const [loadingImage, setLoadingImage] = useState(true);
 
   const uri =
     typeof source === 'object' && source !== null && 'uri' in source
       ? (source as { uri: string }).uri
       : null;
+
+  useEffect(() => {
+    setLoadingImage(true);
+  }, [uri]);
 
   useEffect(() => {
     if (!uri) return;
@@ -88,7 +93,15 @@ export function ImageWithBboxOverlay({
         source={source}
         style={[styles.image, { height, width, borderRadius }]}
         resizeMode="contain"
+        onLoadStart={() => setLoadingImage(true)}
+        onLoadEnd={() => setLoadingImage(false)}
+        onError={() => setLoadingImage(false)}
       />
+      {loadingImage ? (
+        <View pointerEvents="none" style={styles.loadingMask}>
+          <ActivityIndicator size="small" color={C.primary} />
+        </View>
+      ) : null}
       {contain && detections.length > 0
         ? detections.map((d, i) => {
             const r = bboxToOverlayRect(d.bbox, contain);
@@ -148,6 +161,12 @@ const styles = StyleSheet.create({
   dimScrim: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: Radius.xs,
+  },
+  loadingMask: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Overlay.scrimSoft,
   },
   badge: {
     position: 'absolute',
