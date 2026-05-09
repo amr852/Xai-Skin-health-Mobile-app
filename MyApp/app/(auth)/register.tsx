@@ -197,7 +197,7 @@ export default function RegisterScreen() {
                     <MaterialCommunityIcons
                       name={g === 'male' ? 'gender-male' : 'gender-female'}
                       size={16}
-                      color={gender === g ? '#fff' : C.textHint}
+                      color={gender === g ? C.primary : C.textHint}
                     />
                     <Text style={[s.genderBtnTxt, gender === g && s.genderBtnTxtActive]}>
                       {g === 'male' ? 'Male' : 'Female'}
@@ -409,13 +409,13 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: C.border,
     backgroundColor: C.surface,
   },
-  genderBtnActive: { backgroundColor: C.primary, borderColor: C.primary },
+  genderBtnActive: { backgroundColor: C.primaryLight, borderColor: C.primary },
   genderBtnTxt: {
     fontSize: 14,
     fontFamily: FontFamily.bodySemibold,
     color: C.textHint,
   },
-  genderBtnTxtActive: { color: '#fff' },
+  genderBtnTxtActive: { color: C.primary },
 
   // ── Date picker ─────────────────────────────────────────────────
   dateBtn: {

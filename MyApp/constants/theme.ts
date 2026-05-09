@@ -149,6 +149,12 @@ export const Overlay = {
   scrimMedium:   'rgba(15,23,42,0.45)',     // standard modal scrim (alias of C.overlay)
   scrimStrong:   'rgba(0,0,0,0.50)',        // photo capture scrim
   scrimBlack:    'rgba(0,0,0,0.65)',        // full-photo viewer
+  /** Camera chrome — bottom bar dim over live preview */
+  photoBarBg:    'rgba(0,0,0,0.30)',
+  /** Camera hint pill over preview */
+  photoHintPillBg: 'rgba(0,0,0,0.45)',
+  /** Shutter outer ring fill */
+  whiteGhost:    'rgba(255,255,255,0.10)',
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,11 +166,12 @@ export const Overlay = {
 
 export const DECORATION_BUDGET = {
   GradientHero:   ['auth.welcome', 'home.greetingStrip'],
+  FloralBand:     ['history.titleBlock', 'profile.hero'],
   Crest:          ['auth.welcome',  'auth.login'],
   PulseLine:      ['home.greetingStrip', 'home.uvCard'],
   GridBackplate:  ['home.uvCard',  'vitals.ringCard'],
   StatusArc:      ['history.row',  'home.sunCard'],
-  Hairline:       ['profile.section', 'history.filterBar'],
+  Hairline:       ['profile.hero', 'history.filterBar'],
   ItalicAccent:   ['auth.welcome.tagline', 'history.empty'],
 } as const;
 

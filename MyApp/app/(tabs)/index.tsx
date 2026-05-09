@@ -128,7 +128,10 @@ export default function HomeScreen() {
               </View>
             </View>
             <Text style={s.gradientHello}>Hello, {userName}.</Text>
-            <Text style={s.gradientLine}>Your skin care snapshot for today.</Text>
+            <Text style={s.gradientLine}>
+              <Text style={s.gradientLineEm}>Today</Text>
+              {' — '}your snapshot for hydration, UV, and lesion tracking.
+            </Text>
           </View>
         </GradientHero>
       </View>
@@ -325,6 +328,10 @@ const s = StyleSheet.create({
     fontSize: FontSize.sm,
     fontFamily: FontFamily.body,
     color: Overlay.whiteHigh,
+  },
+  gradientLineEm: {
+    fontFamily: FontFamily.bodyBold,
+    color: Overlay.whiteAlmost,
   },
 
   // ── UV bento tile ──────────────────────────────────────────

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   StatusBar, Platform, Image, ActivityIndicator, Modal,
@@ -7,13 +7,14 @@ import {
 import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, type Href } from 'expo-router';
 import { C, FontFamily, FontSize, Space, Radius, Shadow, Gradient } from '@/constants/theme';
 import { StatusArc } from '@/components/decor/StatusArc';
 import { Hairline } from '@/components/decor/Hairline';
 import { SegmentControl } from '@/components/ui/SegmentControl';
 import { useUiOverlay } from '@/context/UiOverlayContext';
 import { useLesions, type Lesion, type LesionFields } from '@/hooks/useLesions';
+import { useScanSessions, type ScanSession } from '@/hooks/useScanSessions';
 import { ImageWithBboxOverlay } from '@/components/ImageWithBboxOverlay';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -27,6 +28,7 @@ import { countUnread, subscribeInboxChange } from '@/lib/notificationInbox';
 
 type StatusKey = 'Stable' | 'Check' | 'Urgent';
 type FilterKey = 'all' | StatusKey;
+type HistoryListTab = 'lesions' | 'sessions';
 
 const STATUS_OPTIONS: StatusKey[] = ['Stable', 'Check', 'Urgent'];
 
@@ -173,19 +175,48 @@ function EditModal({
   );
 }
 
+type RegionsModalSource =
+  | { type: 'lesion'; item: Lesion }
+  | { type: 'session'; item: ScanSession };
+
 function LesionRegionsModal({
-  item,
+  source,
   onClose,
 }: {
-  item: Lesion;
+  source: RegionsModalSource;
   onClose: () => void;
 }) {
-  const regions = item.analysis?.lesions ?? [];
-  const detections = regions.map((L) => ({
-    bbox: L.bbox,
-    severity: L.severity,
-    label: L.diagnosis?.label,
-  }));
+  const regions =
+    source.type === 'lesion'
+      ? (source.item.analysis?.lesions ?? [])
+      : (source.item.lesions ?? []).map((L) => ({
+          lesion_id: L.lesionId,
+          bbox: L.bbox,
+          severity: L.severity,
+          diagnosis:
+            L.diagnosis != null
+              ? {
+                  label: L.diagnosis.label ?? '—',
+                  score: typeof L.diagnosis.score === 'number' ? L.diagnosis.score : 0,
+                }
+              : undefined,
+        }));
+
+  const imageUri = source.type === 'lesion' ? source.item.imageUrl : source.item.originalImageUrl;
+  const camHintUri =
+    source.type === 'lesion'
+      ? source.item.analysis?.camImageUrl
+      : source.item.annotatedImageUrl || source.item.lesions?.find((l) => l.overlayImageUrl)?.overlayImageUrl;
+
+  const detections = regions
+    .filter((L): L is typeof L & { bbox: NonNullable<typeof L.bbox> } => L.bbox != null)
+    .map((L) => ({
+      bbox: L.bbox,
+      severity: L.severity,
+      label: L.diagnosis?.label,
+    }));
+
+  const headerTitle = source.type === 'lesion' ? 'Scan regions' : 'Session regions';
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -194,18 +225,18 @@ function LesionRegionsModal({
           <TouchableOpacity onPress={onClose} style={rm.headerBtn} hitSlop={10}>
             <Text style={rm.headerClose}>Done</Text>
           </TouchableOpacity>
-          <Text style={rm.headerTitle}>Scan regions</Text>
+          <Text style={rm.headerTitle}>{headerTitle}</Text>
           <View style={{ width: 56 }} />
         </View>
         <ScrollView
           style={rm.scroll}
           contentContainerStyle={rm.scrollContent}
           showsVerticalScrollIndicator={false}>
-          {item.imageUrl && regions.length > 0 ? (
+          {imageUri && regions.length > 0 ? (
             <View style={rm.previewCard}>
               <Text style={rm.previewLabel}>Photo with model outlines</Text>
               <ImageWithBboxOverlay
-                source={{ uri: item.imageUrl }}
+                source={{ uri: imageUri }}
                 height={220}
                 borderRadius={Radius.lg}
                 detections={detections}
@@ -242,11 +273,13 @@ function LesionRegionsModal({
             );
           })}
 
-          {item.analysis?.camImageUrl ? (
+          {camHintUri ? (
             <View style={rm.heatmapHint}>
               <Feather name="zap" size={14} color={C.primary} />
               <Text style={rm.heatmapHintTxt}>
-                Open “Heatmap” on the card for the full Grad-CAM composite.
+                {source.type === 'lesion'
+                  ? 'Open “Heatmap” on the card for the full Grad-CAM composite.'
+                  : 'Open Heatmap on the session card for the saved explainability overlay.'}
               </Text>
             </View>
           ) : null}
@@ -271,12 +304,14 @@ function LesionCard({
 }) {
   const nRegions = lesionRegionCount(item);
   const regions = item.analysis?.lesions;
-  const hasStoredRegions = Array.isArray(regions) && regions.length > 0;
-  const detections = (regions ?? []).map((L) => ({
-    bbox: L.bbox,
-    severity: L.severity,
-    label: L.diagnosis?.label,
-  }));
+  const hasStoredRegions = Array.isArray(regions) && regions.some((r) => r.bbox != null);
+  const detections = (regions ?? [])
+    .filter((L): L is typeof L & { bbox: NonNullable<typeof L.bbox> } => L.bbox != null)
+    .map((L) => ({
+      bbox: L.bbox,
+      severity: L.severity,
+      label: L.diagnosis?.label,
+    }));
 
   return (
     <View style={hs.lesionCard}>
@@ -386,15 +421,140 @@ function LesionCard({
   );
 }
 
+function SessionCard({
+  item,
+  onViewRegions,
+  onViewHeatmap,
+  onOpenDetail,
+}: {
+  item: ScanSession;
+  onViewRegions: (s: ScanSession) => void;
+  onViewHeatmap: (uri: string) => void;
+  onOpenDetail: (s: ScanSession) => void;
+}) {
+  const regions = item.lesions ?? [];
+  const nRegions = item.lesionCount || regions.length || 0;
+  const hasStoredRegions = regions.some((r) => r.bbox != null);
+  const detections = regions
+    .filter((L): L is typeof L & { bbox: NonNullable<typeof L.bbox> } => L.bbox != null)
+    .map((L) => ({
+      bbox: L.bbox,
+      severity: L.severity,
+      label: L.diagnosis?.label,
+    }));
+  const arcStatus = mapModelSeverityToStatus(regions[0]?.severity);
+  const heatmapUri = item.annotatedImageUrl || regions.find((l) => l.overlayImageUrl)?.overlayImageUrl;
+  const first = regions[0];
+  const predLine =
+    first?.diagnosis?.label != null || typeof first?.diagnosis?.score === 'number'
+      ? `${first.diagnosis?.label ?? '—'} · ${(((first.diagnosis?.score ?? 0) as number) * 100).toFixed(1)}%`
+      : item.noLesionFound
+        ? 'No lesion-like region'
+        : 'Session capture';
+
+  return (
+    <View style={hs.sessionCard}>
+      <StatusArc status={arcStatus} edge="left" length={'100%'} thickness={4} />
+
+      <View style={hs.ledgerRow}>
+        {item.originalImageUrl && hasStoredRegions ? (
+          <ImageWithBboxOverlay
+            source={{ uri: item.originalImageUrl }}
+            width={72}
+            height={72}
+            borderRadius={10}
+            detections={detections}
+          />
+        ) : item.originalImageUrl ? (
+          <Image source={{ uri: item.originalImageUrl }} style={hs.thumb} resizeMode="cover" />
+        ) : (
+          <View style={[hs.thumb, hs.thumbEmpty]}>
+            <Feather name="camera-off" size={20} color={C.muted} />
+          </View>
+        )}
+
+        <View style={hs.ledgerBody}>
+          <View style={hs.cardTop}>
+            <Text style={hs.lesionLabel} numberOfLines={1}>
+              Server scan session
+            </Text>
+            <StatusBadge status={arcStatus} size="sm" />
+          </View>
+
+          {nRegions > 1 ? (
+            <View style={hs.multiBadge}>
+              <Feather name="layers" size={11} color={C.primary} />
+              <Text style={hs.multiBadgeTxt}>{nRegions} regions</Text>
+            </View>
+          ) : null}
+
+          <Text style={hs.analysisText} numberOfLines={1}>
+            {predLine}
+          </Text>
+
+          <View style={hs.metaRow}>
+            <Text style={hs.metaText}>
+              {new Date(item.createdAt).toLocaleDateString('en-US', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={hs.sessionReportLink}
+            onPress={() => onOpenDetail(item)}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Open full session report">
+            <Text style={hs.sessionReportLinkTxt}>Full session report</Text>
+            <Feather name="chevron-right" size={18} color={C.primary} />
+          </TouchableOpacity>
+
+          <View style={hs.actions}>
+            {hasStoredRegions ? (
+              <TouchableOpacity
+                style={hs.actionBtnRegions}
+                onPress={() => onViewRegions(item)}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="View session regions"
+                activeOpacity={0.75}>
+                <Feather name="grid" size={14} color={C.floralSage} />
+                <Text style={hs.actionBtnRegionsTxt}>Regions</Text>
+              </TouchableOpacity>
+            ) : null}
+            {heatmapUri ? (
+              <TouchableOpacity
+                style={hs.actionBtnView}
+                onPress={() => onViewHeatmap(heatmapUri)}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="View session heatmap"
+                activeOpacity={0.75}>
+                <Feather name="eye" size={14} color={C.primary} />
+                <Text style={hs.actionBtnViewTxt}>Heatmap</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function HistoryScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { lesions, loading, error, fetchLesions, updateLesion, deleteLesion } = useLesions();
+  const { sessions, loading: sessionsLoading, error: sessionsError, fetchSessions } = useScanSessions();
   const [activeNav, setActiveNav]         = useState<NavKey>('history');
+  const [listTab, setListTab]             = useState<HistoryListTab>('lesions');
   const [statusFilter, setStatusFilter]   = useState<FilterKey>('all');
   const [editingLesion, setEditingLesion] = useState<Lesion | null>(null);
-  const [regionsLesion, setRegionsLesion] = useState<Lesion | null>(null);
+  const [regionsModal, setRegionsModal]   = useState<RegionsModalSource | null>(null);
   const [camPreviewUri, setCamPreviewUri] = useState<string | null>(null);
   const [saving, setSaving]               = useState(false);
   const [unreadCount, setUnreadCount]     = useState(0);
@@ -406,8 +566,15 @@ export default function HistoryScreen() {
   const userName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
 
   useFocusEffect(
-    useCallback(() => { void fetchLesions(); }, [fetchLesions]),
+    useCallback(() => {
+      void fetchLesions();
+      void fetchSessions();
+    }, [fetchLesions, fetchSessions]),
   );
+
+  useEffect(() => {
+    if (listTab === 'sessions') void fetchSessions();
+  }, [listTab, fetchSessions]);
 
   useFocusEffect(
     useCallback(() => {
@@ -426,6 +593,11 @@ export default function HistoryScreen() {
     const filtered = statusFilter === 'all' ? lesions : lesions.filter(l => l.status === statusFilter);
     return [...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [lesions, statusFilter]);
+
+  const sortedSessions = useMemo(
+    () => [...sessions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [sessions],
+  );
 
   const handleEdit = useCallback((lesion: Lesion) => setEditingLesion(lesion), []);
 
@@ -484,8 +656,20 @@ export default function HistoryScreen() {
   }, [showAlert]);
 
   const handleViewRegions = useCallback((lesion: Lesion) => {
-    setRegionsLesion(lesion);
+    setRegionsModal({ type: 'lesion', item: lesion });
   }, []);
+
+  const handleViewSessionRegions = useCallback((session: ScanSession) => {
+    setRegionsModal({ type: 'session', item: session });
+  }, []);
+
+  const handleOpenSessionDetail = useCallback(
+    (session: ScanSession) => {
+      const href = `/scan-session/${String(session._id)}` as Href;
+      router.push(href);
+    },
+    [router],
+  );
 
   const handleNav = (key: NavKey) => {
     if      (key === 'scan')    router.push('/camera');
@@ -510,9 +694,9 @@ export default function HistoryScreen() {
         />
       )}
 
-      {regionsLesion && (
-        <LesionRegionsModal item={regionsLesion} onClose={() => setRegionsLesion(null)} />
-      )}
+      {regionsModal ? (
+        <LesionRegionsModal source={regionsModal} onClose={() => setRegionsModal(null)} />
+      ) : null}
 
       <Modal
         visible={!!camPreviewUri}
@@ -555,66 +739,115 @@ export default function HistoryScreen() {
           <Text style={hs.pageTitle}>Lesion records</Text>
           <Text style={hs.pageSubtitle}>
             <Text style={hs.pageSubtitleAccent}>Garden view</Text>
-            {' — '}every scan, newest first. Multi-region captures show outlines on the thumbnail.
+            {listTab === 'lesions'
+              ? ' — saved entries and triage, newest first.'
+              : ' — server-side multi-capture sessions from Scan (same pipeline as analyze).'}
           </Text>
         </LinearGradient>
 
-        {/* Filter — segmented control with counts; replaces stats + pills duplication */}
-        <View style={hs.filterBar}>
-          <SegmentControl
-            value={statusFilter}
-            onChange={setStatusFilter}
+        <View style={hs.listModeBar}>
+          <SegmentControl<HistoryListTab>
+            value={listTab}
+            onChange={setListTab}
             items={[
-              { key: 'all',    label: 'All',    count: lesions.length },
-              { key: 'Stable', label: 'Stable', count: lesions.filter(l => l.status === 'Stable').length },
-              { key: 'Check',  label: 'Check',  count: lesions.filter(l => l.status === 'Check').length  },
-              { key: 'Urgent', label: 'Urgent', count: lesions.filter(l => l.status === 'Urgent').length },
+              { key: 'lesions', label: 'Lesions', count: lesions.length },
+              { key: 'sessions', label: 'Sessions', count: sessions.length },
             ]}
           />
-          <Hairline width={'100%'} style={{ marginTop: 12 }} />
         </View>
 
-        {/* List content */}
-        {loading && lesions.length === 0 ? (
-          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-            <ActivityIndicator size="large" color={C.primary} />
-          </View>
-        ) : error ? (
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load"
-            message={error}
-            actionLabel="Retry"
-            onAction={fetchLesions}
-            variant="error"
-          />
-        ) : sortedAndFiltered.length > 0 ? (
+        {listTab === 'lesions' ? (
           <>
-            {sortedAndFiltered.map(l => (
-              <LesionCard
-                key={l._id}
-                item={l}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onViewCam={handleViewCam}
-                onViewRegions={handleViewRegions}
+            <View style={hs.filterBar}>
+              <SegmentControl
+                value={statusFilter}
+                onChange={setStatusFilter}
+                items={[
+                  { key: 'all',    label: 'All',    count: lesions.length },
+                  { key: 'Stable', label: 'Stable', count: lesions.filter(l => l.status === 'Stable').length },
+                  { key: 'Check',  label: 'Check',  count: lesions.filter(l => l.status === 'Check').length  },
+                  { key: 'Urgent', label: 'Urgent', count: lesions.filter(l => l.status === 'Urgent').length },
+                ]}
               />
-            ))}
-            <View style={hs.disclaimerWrap}>
-              <DisclaimerBox />
+              <Hairline width={'100%'} style={{ marginTop: 12 }} />
             </View>
+
+            {loading && lesions.length === 0 ? (
+              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color={C.primary} />
+              </View>
+            ) : error ? (
+              <EmptyState
+                icon="alert-circle"
+                title="Failed to load"
+                message={error}
+                actionLabel="Retry"
+                onAction={fetchLesions}
+                variant="error"
+              />
+            ) : sortedAndFiltered.length > 0 ? (
+              <>
+                {sortedAndFiltered.map(l => (
+                  <LesionCard
+                    key={l._id}
+                    item={l}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onViewCam={handleViewCam}
+                    onViewRegions={handleViewRegions}
+                  />
+                ))}
+                <View style={hs.disclaimerWrap}>
+                  <DisclaimerBox />
+                </View>
+              </>
+            ) : (
+              <EmptyState
+                icon="inbox"
+                title={statusFilter === 'all' ? 'Nothing to show yet' : `No ${statusFilter} lesions`}
+                italicTitle
+                message={
+                  statusFilter === 'all'
+                    ? 'Capture your first lesion from the Scan tab to begin tracking.'
+                    : 'Try a different filter, or add a new entry from the Scan tab.'
+                }
+              />
+            )}
           </>
         ) : (
-          <EmptyState
-            icon="inbox"
-            title={statusFilter === 'all' ? 'Nothing to show yet' : `No ${statusFilter} lesions`}
-            italicTitle
-            message={
-              statusFilter === 'all'
-                ? 'Capture your first lesion from the Scan tab to begin tracking.'
-                : 'Try a different filter, or add a new entry from the Scan tab.'
-            }
-          />
+          <>
+            {sessionsLoading && sessions.length === 0 ? (
+              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color={C.primary} />
+              </View>
+            ) : sessionsError ? (
+              <EmptyState
+                icon="alert-circle"
+                title="Failed to load sessions"
+                message={sessionsError}
+                actionLabel="Retry"
+                onAction={fetchSessions}
+                variant="error"
+              />
+            ) : sortedSessions.length > 0 ? (
+              sortedSessions.map((s) => (
+                <SessionCard
+                  key={s._id}
+                  item={s}
+                  onViewRegions={handleViewSessionRegions}
+                  onViewHeatmap={setCamPreviewUri}
+                  onOpenDetail={handleOpenSessionDetail}
+                />
+              ))
+            ) : (
+              <EmptyState
+                icon="layers"
+                title="No sessions yet"
+                italicTitle
+                message="Run a scan while signed in — analysis is saved as a session automatically."
+              />
+            )}
+          </>
         )}
       </ScrollView>
 
@@ -786,6 +1019,10 @@ const hs = StyleSheet.create({
   scroll:        { flex: 1 },
   scrollContent: { paddingBottom: 110 },
 
+  listModeBar: {
+    paddingHorizontal: Space[5],
+    paddingBottom: Space[2],
+  },
   titleBlock: {
     marginHorizontal: Space[5],
     paddingHorizontal: Space[4],
@@ -822,6 +1059,17 @@ const hs = StyleSheet.create({
 
   // Ledger row — leading status arc + thumbnail + content
   lesionCard: {
+    marginHorizontal: Space[5],
+    marginBottom: Space[2] + 2,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+    position: 'relative',
+    ...Shadow.sm,
+  },
+  sessionCard: {
     marginHorizontal: Space[5],
     marginBottom: Space[2] + 2,
     borderRadius: Radius.lg,
@@ -904,6 +1152,21 @@ const hs = StyleSheet.create({
     fontSize: 11,
     fontFamily: FontFamily.bodyMedium,
     color: C.textHint,
+    letterSpacing: 0.2,
+  },
+  sessionReportLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+  },
+  sessionReportLinkTxt: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.bodyBold,
+    color: C.primary,
     letterSpacing: 0.2,
   },
 

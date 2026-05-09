@@ -11,9 +11,11 @@ import {
   Platform,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { C, FontFamily, FontSize, Space, Radius, Shadow } from '@/constants/theme';
+import { C, FontFamily, FontSize, Space, Radius, Shadow, Gradient } from '@/constants/theme';
+import { Hairline } from '@/components/decor/Hairline';
 import { useAuth } from '@/hooks/useAuth';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
@@ -163,28 +165,37 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={s.safe} edges={['top', 'left', 'right']}>
       {alertNode}
-      <StatusBar barStyle="light-content" backgroundColor={C.primary} />
+      <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
 
       <ScrollView
         style={s.scroll}
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}>
 
-        {/* ── Calm avatar block, no hero strip ── */}
-        <View style={s.heroBlock}>
-          <View style={s.avatarRing}>
-            <View style={s.avatarCircle}>
-              <Text style={s.avatarInitials}>{getInitials(user?.firstName, user?.lastName)}</Text>
+        <LinearGradient
+          colors={[...Gradient.floralBand]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={s.heroGradient}>
+          <View style={s.heroBlock}>
+            <View style={s.avatarRing}>
+              <View style={s.avatarCircle}>
+                <Text style={s.avatarInitials}>{getInitials(user?.firstName, user?.lastName)}</Text>
+              </View>
+            </View>
+
+            <Text style={s.userName}>{fullName}</Text>
+            <Text style={s.userEmail}>{user?.email}</Text>
+
+            <View style={s.patientBadge}>
+              <Feather name="user-check" size={11} color={C.textSub} />
+              <Text style={s.patientBadgeTxt}>Registered patient</Text>
             </View>
           </View>
+        </LinearGradient>
 
-          <Text style={s.userName}>{fullName}</Text>
-          <Text style={s.userEmail}>{user?.email}</Text>
-
-          <View style={s.patientBadge}>
-            <Feather name="user-check" size={11} color={C.textSub} />
-            <Text style={s.patientBadgeTxt}>Registered patient</Text>
-          </View>
+        <View style={s.heroHairlineWrap}>
+          <Hairline width="100%" fadeInset={0} />
         </View>
 
         {/* ── Quick Actions ── */}
@@ -419,30 +430,42 @@ const s = StyleSheet.create({
   scroll:      { flex: 1 },
   scrollContent: { paddingBottom: 110 },
 
-  // ── Calm avatar block ───────────────────────────────────────────
+  heroGradient: {
+    marginHorizontal: Space[5],
+    marginTop: Space[3],
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    overflow: 'hidden',
+    ...Shadow.xs,
+  },
   heroBlock: {
     alignItems: 'center',
     paddingTop: Space[6],
     paddingBottom: Space[5],
     paddingHorizontal: Space[5],
-    backgroundColor: C.bg,
+  },
+  heroHairlineWrap: {
+    paddingHorizontal: Space[5],
+    marginTop: Space[3],
+    marginBottom: Space[1],
   },
   avatarRing: {
-    width: 96, height: 96, borderRadius: 48,
-    backgroundColor: C.surface,
-    borderWidth: 1, borderColor: C.border,
-    alignItems: 'center', justifyContent: 'center',
+    padding: 4,
+    borderRadius: 999,
+    borderWidth: 2.5,
+    borderColor: C.headerAvatarRing,
     marginBottom: 12,
   },
   avatarCircle: {
     width: 80, height: 80, borderRadius: 40,
-    backgroundColor: C.primary,
+    backgroundColor: C.primaryLight,
     alignItems: 'center', justifyContent: 'center',
   },
   avatarInitials: {
     fontSize: FontSize['2xl'],
     fontFamily: FontFamily.bodyBold,
-    color: '#fff',
+    color: C.primary,
     letterSpacing: -0.3,
   },
   userName: {

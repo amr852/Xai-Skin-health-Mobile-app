@@ -3,7 +3,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import { ArrowLeft, AlertCircle } from 'lucide-react-native';
-import { C, FontFamily, FontSize, Radius, Shadow, Space } from '@/constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { C, FontFamily, FontSize, Gradient, Radius, Shadow, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
@@ -59,16 +60,22 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
 
-          {/* Editorial heading: small crest + asymmetric title */}
-          <View style={s.headingBlock}>
-            <Crest size={48} />
-            <View style={{ height: 24 }} />
-            <Text style={s.eyebrow}>SIGN IN</Text>
-            <Text style={s.heading}>Welcome back.</Text>
-            <Text style={s.subheading}>
-              Continue your tracking history with the same email you registered with.
-            </Text>
-          </View>
+          {/* Warm paper hero — aligns with history/profile floral surfaces (not full rose band). */}
+          <LinearGradient
+            colors={[...Gradient.surfaceTint]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={s.headingPanel}>
+            <View style={s.headingBlock}>
+              <Crest size={48} />
+              <View style={{ height: 24 }} />
+              <Text style={s.eyebrow}>SIGN IN</Text>
+              <Text style={s.heading}>Welcome back.</Text>
+              <Text style={s.subheading}>
+                Continue your tracking history with the same email you registered with.
+              </Text>
+            </View>
+          </LinearGradient>
 
           <View style={s.card}>
             <AppInput
@@ -137,7 +144,15 @@ const s = StyleSheet.create({
 
   scroll: { paddingHorizontal: Space[6], paddingBottom: Space[10] },
 
-  headingBlock: { alignItems: 'flex-start', paddingTop: Space[2], paddingBottom: Space[6] + 4 },
+  headingPanel: {
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    marginBottom: Space[4],
+    overflow: 'hidden',
+    ...Shadow.xs,
+  },
+  headingBlock: { alignItems: 'flex-start', paddingHorizontal: Space[5], paddingTop: Space[5], paddingBottom: Space[5] + 2 },
   eyebrow: {
     fontSize: FontSize.xs,
     fontFamily: FontFamily.bodyBold,

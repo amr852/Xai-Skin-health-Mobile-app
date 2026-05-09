@@ -89,6 +89,10 @@ function RootLayoutNav() {
         <Stack.Screen name="(auth)" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
         <Stack.Screen name="notifications" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen
+          name="scan-session/[id]"
+          options={{ headerShown: false, animation: 'slide_from_right' }}
+        />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
 

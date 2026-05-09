@@ -146,18 +146,30 @@ export function useLesions() {
     const src = options?.source === 'gallery' ? 'gallery' : 'camera';
     formData.append('source', src);
 
-    let body: {
-      imageUrl?: string;
-      analysis?: Record<string, unknown>;
-      lesions?: LesionDetection[];
-      lesionCount?: number;
-      noLesionFound?: boolean;
-      partialFailure?: boolean;
-      sessionId?: string | null;
+    type ScanSessionCreateBody = {
+      _id: string;
+      session_id?: string | null;
+      nodeSessionId?: string;
+      lesion_count: number;
+      no_lesion_found: boolean;
+      partial_failure: boolean;
+      annotatedImageUrl?: string | null;
+      originalImageUrl?: string;
+      quality_metadata?: { enhancements_applied?: string[] };
+      lesions: Array<{
+        lesion_id: string;
+        bbox?: LesionDetection['bbox'];
+        severity?: string;
+        diagnosis?: { label?: string; score?: number; top_k?: { label: string; score: number }[] };
+        cropUrl?: string | null;
+        overlayUrl?: string | null;
+      }>;
     };
+
+    let body: ScanSessionCreateBody;
     try {
-      body = await apiFetchFormData<typeof body>(
-        '/lesions/analyze',
+      body = await apiFetchFormData<ScanSessionCreateBody>(
+        '/scan-sessions',
         formData,
         { timeoutMs: ANALYZE_UPLOAD_TIMEOUT_MS },
       );
@@ -168,18 +180,77 @@ export function useLesions() {
       throw e;
     }
 
-    if (!body.imageUrl || !body.analysis) {
-      throw new ApiError(500, 'Unexpected analysis response');
+    if (!body.originalImageUrl) {
+      throw new ApiError(500, 'Unexpected scan session response');
     }
 
+    const enhancementsApplied = Array.isArray(body.quality_metadata?.enhancements_applied)
+      ? body.quality_metadata!.enhancements_applied!
+      : [];
+
+    const first = body.lesions?.[0];
+    let analysis: Omit<LesionAnalysis, 'imageUrl'>;
+    if (first) {
+      analysis = {
+        label: first.diagnosis?.label ?? '—',
+        score: typeof first.diagnosis?.score === 'number' ? first.diagnosis.score : 0,
+        camImageUrl: body.annotatedImageUrl || first.overlayUrl || undefined,
+        modelName: 'resnet50 + YOLO (Grad-CAM)',
+        predictionIndex: undefined,
+        xaiMethod: 'Grad-CAM',
+        enhancementsApplied,
+        topPredictions: Array.isArray(first.diagnosis?.top_k) ? first.diagnosis!.top_k! : [],
+        recordId: body.session_id || null,
+        severity: first.severity,
+        bbox: first.bbox,
+      };
+    } else if (body.no_lesion_found) {
+      analysis = {
+        label: 'No lesion detected',
+        score: 0,
+        camImageUrl: body.annotatedImageUrl || undefined,
+        modelName: 'resnet50 + YOLO (Grad-CAM)',
+        predictionIndex: undefined,
+        xaiMethod: 'Grad-CAM',
+        enhancementsApplied,
+        topPredictions: [],
+        recordId: body.session_id || null,
+      };
+    } else {
+      analysis = {
+        label: body.partial_failure ? 'Detection without classification' : 'Analysis unavailable',
+        score: 0,
+        camImageUrl: body.annotatedImageUrl || undefined,
+        modelName: 'resnet50 + YOLO (Grad-CAM)',
+        predictionIndex: undefined,
+        xaiMethod: 'Grad-CAM',
+        enhancementsApplied,
+        topPredictions: [],
+        recordId: body.session_id || null,
+      };
+    }
+
+    const lesionsSummary: LesionDetection[] = Array.isArray(body.lesions)
+      ? body.lesions
+          .filter((L): L is typeof L & { bbox: NonNullable<typeof L.bbox> } => L.bbox != null)
+          .map((L) => ({
+            lesion_id: L.lesion_id,
+            bbox: L.bbox,
+            severity: L.severity,
+            diagnosis: L.diagnosis
+              ? { label: L.diagnosis.label ?? '—', score: L.diagnosis.score ?? 0 }
+              : undefined,
+          }))
+      : [];
+
     return {
-      ...body.analysis,
-      imageUrl: body.imageUrl,
-      lesions: body.lesions,
-      lesionCount: body.lesionCount,
-      noLesionFound: body.noLesionFound,
-      partialFailure: body.partialFailure,
-      sessionId: body.sessionId,
+      ...analysis,
+      imageUrl: body.originalImageUrl,
+      lesions: lesionsSummary.filter((x) => x.bbox),
+      lesionCount: body.lesion_count,
+      noLesionFound: !!body.no_lesion_found,
+      partialFailure: !!body.partial_failure,
+      sessionId: body.nodeSessionId ?? String(body._id),
     } as AnalyzeImageResult;
   }, []);
 

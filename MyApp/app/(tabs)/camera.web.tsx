@@ -1,78 +1,65 @@
 import { StyleSheet, Text, View, TouchableOpacity, StatusBar, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { C } from '@/constants/theme';
 import { useState } from 'react';
+import { C, FontFamily, Gradient, Space, Radius, Shadow } from '@/constants/theme';
+import { BottomTabBar, type NavKey } from '@/components/ui/BottomTabBar';
 
-type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
-type NavKey = 'home' | 'scan' | 'history' | 'profile';
-
-export default function CameraScreen() {
+export default function CameraScreenWeb() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const [activeNav, setActiveNav] = useState<NavKey>('scan');
 
-  const navItems: { key: NavKey; icon: FeatherIconName; a11y: string }[] = [
-    { key: 'home', icon: 'home', a11y: 'Home' },
-    { key: 'scan', icon: 'camera', a11y: 'Camera' },
-    { key: 'history', icon: 'clock', a11y: 'History' },
-    { key: 'profile', icon: 'user', a11y: 'Profile' },
-  ];
+  const handleNav = (key: NavKey) => {
+    if (key === 'home') router.push('/');
+    else if (key === 'history') router.push('/history');
+    else if (key === 'profile') router.push('/profile');
+    else setActiveNav(key);
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
-        <Feather name="camera" size={64} color={C.muted} />
-        <Text style={styles.permissionTitle}>Camera Not Available on Web</Text>
+
+      <LinearGradient
+        colors={[...Gradient.floralBand]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.heroBand}>
+        <Feather name="camera" size={28} color={C.primary} style={{ marginBottom: 8 }} />
+        <Text style={styles.heroEyebrow}>Scan</Text>
+        <Text style={styles.heroTitle}>Camera on this device</Text>
+        <Text style={styles.heroBody}>
+          Live capture runs on iOS and Android. On web you can still review records and profile.
+        </Text>
+      </LinearGradient>
+
+      <View style={styles.body}>
+        <Feather name="smartphone" size={56} color={C.textHint} />
+        <Text style={styles.permissionTitle}>Use the mobile app to scan</Text>
         <Text style={styles.permissionText}>
-          Camera functionality is only available on iOS and Android devices.
+          Open Xai Skin Health on your phone for the full camera workflow, multi-region analysis, and save flow.
         </Text>
         <TouchableOpacity
-          style={styles.permissionButton}
+          style={styles.primaryBtn}
+          onPress={() => router.push('/history')}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Open records">
+          <Text style={styles.primaryBtnTxt}>View records</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.secondaryBtn}
           onPress={() => router.push('/')}
-          activeOpacity={0.7}>
-          <Text style={styles.permissionButtonText}>Go Home</Text>
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Go home">
+          <Text style={styles.secondaryBtnTxt}>Back to home</Text>
         </TouchableOpacity>
       </View>
 
-      <View
-        style={[styles.navOuter, { paddingBottom: Math.max(insets.bottom, 16) }]}
-        pointerEvents="box-none">
-        <View style={styles.navPill}>
-          {navItems.map(item => {
-            const active = activeNav === item.key;
-            return (
-              <TouchableOpacity
-                key={item.key}
-                style={[styles.navIconCircle, active ? styles.navIconCircleActive : styles.navIconCircleIdle]}
-                onPress={() => {
-                  if (item.key === 'home') {
-                    router.push('/');
-                  } else if (item.key === 'history') {
-                    router.push('/history');
-                  } else if (item.key === 'profile') {
-                    router.push('/profile');
-                  } else {
-                    setActiveNav(item.key);
-                  }
-                }}
-                activeOpacity={0.82}
-                accessibilityRole="button"
-                accessibilityLabel={item.a11y}
-                accessibilityState={{ selected: active }}>
-                <Feather
-                  name={item.icon}
-                  size={21}
-                  color={active ? C.navIconActive : C.navIconInactive}
-                />
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
+      <BottomTabBar active={activeNav} onPress={handleNav} />
     </SafeAreaView>
   );
 }
@@ -82,78 +69,87 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: C.bg,
   },
+  heroBand: {
+    marginHorizontal: Space[5],
+    marginTop: Space[4],
+    paddingHorizontal: Space[5],
+    paddingVertical: Space[5],
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    alignItems: 'center',
+    ...Shadow.xs,
+    ...(Platform.OS === 'web' ? { boxShadow: '0 2px 12px rgba(15,23,42,0.06)' } : {}),
+  },
+  heroEyebrow: {
+    fontSize: 11,
+    fontFamily: FontFamily.bodyBold,
+    color: C.floralSage,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  heroTitle: {
+    fontSize: 22,
+    fontFamily: FontFamily.displayBold,
+    color: C.text,
+    letterSpacing: -0.4,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  heroBody: {
+    fontSize: 14,
+    fontFamily: FontFamily.body,
+    color: C.textSub,
+    lineHeight: 21,
+    textAlign: 'center',
+    maxWidth: 340,
+  },
+  body: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Space[6],
+  },
   permissionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 18,
+    fontFamily: FontFamily.displayBold,
     color: C.text,
     marginTop: 16,
     marginBottom: 8,
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   permissionText: {
     fontSize: 14,
+    fontFamily: FontFamily.body,
     color: C.muted,
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 20,
+    marginBottom: 28,
+    lineHeight: 21,
+    maxWidth: 360,
   },
-  permissionButton: {
-    backgroundColor: C.blue,
+  primaryBtn: {
+    backgroundColor: C.primary,
     paddingHorizontal: 32,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
+    minWidth: 200,
+    alignItems: 'center',
   },
-  permissionButtonText: {
+  primaryBtnTxt: {
     color: C.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: FontFamily.bodyBold,
   },
-  navOuter: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 8,
+  secondaryBtn: {
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
   },
-  navPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    backgroundColor: C.navPillBg,
-    borderRadius: 999,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    gap: 22,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.05)',
-    ...(Platform.OS === 'ios'
-      ? {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.08,
-          shadowRadius: 12,
-        }
-      : Platform.OS === 'android'
-        ? { elevation: 6 }
-        : { boxShadow: '0 4px 20px rgba(0,0,0,0.07)' }),
-  },
-  navIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navIconCircleIdle: {
-    backgroundColor: C.navCircleInactive,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.04)',
-  },
-  navIconCircleActive: {
-    backgroundColor: C.navCircleActive,
-    borderColor: C.navCircleActive,
+  secondaryBtnTxt: {
+    fontSize: 15,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.primary,
   },
 });

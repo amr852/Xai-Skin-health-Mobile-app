@@ -10,7 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { C, FontFamily, Shadow } from '@/constants/theme';
+import { C, FontFamily, Shadow, Overlay, Radius } from '@/constants/theme';
 import { useLesions, type LesionFields, type AnalyzeImageResult } from '@/hooks/useLesions';
 import { ImageWithBboxOverlay } from '@/components/ImageWithBboxOverlay';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,6 +20,21 @@ import { BottomTabBar, type NavKey } from '@/components/ui/BottomTabBar';
 import { useAppAlert } from '@/components/ui/AppAlert';
 import { laplacianVarianceForImageUri, LAPLACIAN_VARIANCE_THRESHOLD } from '@/lib/imageSharpness';
 import { statusFromPrediction } from '@/lib/lesionSeverity';
+
+type TriageKey = 'Stable' | 'Check' | 'Urgent';
+
+function mapModelSeverityToTriage(s?: string): TriageKey {
+  const k = (s || '').toLowerCase();
+  if (k === 'urgent') return 'Urgent';
+  if (k === 'stable') return 'Stable';
+  return 'Check';
+}
+
+const triageStyle: Record<TriageKey, { bg: string; color: string; border: string }> = {
+  Stable: { bg: C.stableBg, color: C.stableText, border: C.stableBorder },
+  Check:  { bg: C.checkBg,  color: C.checkText,  border: C.checkBorder },
+  Urgent: { bg: C.urgentBg, color: C.urgentText, border: C.urgentBorder },
+};
 
 const DEFAULT_FORM: LesionFields = {
   title: '', description: '', location: '', status: 'Stable', notes: '',
@@ -374,6 +389,34 @@ export default function CameraScreen() {
               ) : null}
             </View>
 
+            {analysis && !analysisLoading && (analysis.lesions?.length ?? 0) > 0 ? (
+              <View style={s.regionList}>
+                <Text style={s.regionListTitle}>Regions detected</Text>
+                {analysis.lesions!.map((L, i) => {
+                  const tri = mapModelSeverityToTriage(L.severity);
+                  const meta = triageStyle[tri];
+                  const label = L.diagnosis?.label ?? '—';
+                  const score = typeof L.diagnosis?.score === 'number' ? L.diagnosis.score : 0;
+                  return (
+                    <View key={L.lesion_id ?? `reg-${i}`} style={s.regionCard}>
+                      <View style={s.regionCardTop}>
+                        <Text style={s.regionCardHeading}>Region {i + 1}</Text>
+                        <View style={[s.regionTriagePill, { backgroundColor: meta.bg, borderColor: meta.border }]}>
+                          <Text style={[s.regionTriageTxt, { color: meta.color }]}>{tri}</Text>
+                        </View>
+                      </View>
+                      <Text style={s.regionCardPred}>
+                        {label} · {(score * 100).toFixed(1)}%
+                      </Text>
+                      <Text style={s.regionCardMeta}>
+                        Box conf: {((L.bbox?.conf ?? 0) * 100).toFixed(1)}%
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+
             <View style={s.formCard}>
               <AppInput
                 label="Title" required
@@ -489,12 +532,12 @@ export default function CameraScreen() {
         enableTorch={!isFacingFront && torchOn}
       />
 
-      <View style={[s.camTopBar, { paddingTop: insets.top + 8 }]}>
+        <View style={[s.camTopBar, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity style={s.camCircleBtn} onPress={() => setScanPhase('intro')} activeOpacity={0.8}>
           <Feather name="x" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={s.camHintPill}>
-          <Feather name="crosshair" size={13} color="rgba(255,255,255,0.9)" />
+          <Feather name="crosshair" size={13} color={Overlay.whiteAlmost} />
           <Text style={s.camHintTxt}>Align lesion in frame</Text>
         </View>
         <View style={s.camTopRight}>
@@ -592,9 +635,9 @@ const s = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: C.text,
+    backgroundColor: C.primary,
     marginTop: 7,
-    opacity: 0.35,
+    opacity: 0.85,
   },
   instructionText: {
     flex: 1,
@@ -662,6 +705,58 @@ const s = StyleSheet.create({
     fontFamily: FontFamily.body,
     color: C.textHint,
     lineHeight: 19,
+  },
+  regionList: {
+    marginBottom: 16,
+    gap: 10,
+  },
+  regionListTitle: {
+    fontSize: 13,
+    fontFamily: FontFamily.bodyBold,
+    color: C.text,
+    marginBottom: 2,
+    letterSpacing: 0.2,
+  },
+  regionCard: {
+    backgroundColor: C.surface,
+    borderRadius: Radius.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  regionCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  regionCardHeading: {
+    fontSize: 15,
+    fontFamily: FontFamily.bodyBold,
+    color: C.text,
+  },
+  regionTriagePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  regionTriageTxt: {
+    fontSize: 11,
+    fontFamily: FontFamily.bodyBold,
+    letterSpacing: 0.3,
+  },
+  regionCardPred: {
+    fontSize: 14,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.primary,
+  },
+  regionCardMeta: {
+    fontSize: 12,
+    fontFamily: FontFamily.body,
+    color: C.textHint,
+    marginTop: 4,
   },
   formCard: {
     backgroundColor: C.surface, borderRadius: 22,
@@ -751,9 +846,9 @@ const s = StyleSheet.create({
   },
   camCircleBtn: {
     width: 46, height: 46, borderRadius: 23,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: Overlay.scrimStrong,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1, borderColor: Overlay.whiteFaint,
   },
   camTopRight: {
     flexDirection: 'row',
@@ -762,20 +857,20 @@ const s = StyleSheet.create({
   },
   camHintPill: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: Overlay.photoHintPillBg,
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9999,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1, borderColor: Overlay.whiteFaint,
   },
   camHintTxt: {
     fontSize: 12,
     fontFamily: FontFamily.bodyMedium,
-    color: 'rgba(255,255,255,0.92)',
+    color: Overlay.whiteAlmost,
     letterSpacing: 0.3,
   },
   camBottomBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: Overlay.photoBarBg,
     paddingTop: 20,
   },
   camShutter: {
@@ -786,7 +881,7 @@ const s = StyleSheet.create({
     position: 'absolute',
     width: 116, height: 116, borderRadius: 58,
     borderWidth: 1.25,
-    borderColor: 'rgba(255,255,255,0.55)',
+    borderColor: Overlay.whiteMuted,
   },
   crosshairTick: {
     position: 'absolute',
@@ -801,7 +896,7 @@ const s = StyleSheet.create({
   camShutterBtn: {
     width: 70, height: 70, borderRadius: 35,
     borderWidth: 3, borderColor: '#fff',
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: Overlay.whiteGhost,
     alignItems: 'center', justifyContent: 'center',
   },
   camShutterInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff' },
