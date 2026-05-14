@@ -60,25 +60,6 @@ def blend_heatmap_on_roi(
     return cv2.addWeighted(roi_bgr, alpha_roi, heat, 1.0 - alpha_roi, 0)
 
 
-def draw_label_pill_below_roi(
-    roi_with_border: np.ndarray, text: str
-) -> np.ndarray:
-    """Append a dark strip under the ROI and draw white text (single line)."""
-    h, w = roi_with_border.shape[:2]
-    pad = 26
-    canvas = np.zeros((h + pad, w, 3), dtype=np.uint8)
-    canvas[:h, :w] = roi_with_border
-    canvas[h:, :] = (30, 30, 30)
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    scale = max(0.35, min(0.7, w / 400.0))
-    thickness = 1
-    (tw, th), _ = cv2.getTextSize(text, font, scale, thickness)
-    tx = max(4, (w - tw) // 2)
-    ty = h + pad - 8
-    cv2.putText(canvas, text, (tx, ty), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
-    return canvas
-
-
 def paint_lesion_on_canvas(
     canvas_bgr: np.ndarray,
     x1: int,
@@ -109,30 +90,7 @@ def paint_lesion_on_canvas(
     except Exception:
         pass
     cv2.rectangle(canvas_bgr, (x1, y1), (x2, y2), (255, 255, 255), 2)
-    text = f"{label} {score:.2f}"
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    bw = max(1, x2 - x1)
-    scale = float(max(0.35, min(0.75, bw / 220.0)))
-    thickness = 1
-    (tw, th), _ = cv2.getTextSize(text, font, scale, thickness)
-    tx = x1
-    ty = min(y2 + th + 10, canvas_bgr.shape[0] - 4)
-    pad_x, pad_y = 4, 3
-    x0 = max(0, tx - pad_x)
-    x1b = min(canvas_bgr.shape[1] - 1, tx + tw + pad_x)
-    y0 = max(0, ty - th - pad_y)
-    y1b = min(canvas_bgr.shape[0] - 1, ty + pad_y)
-    cv2.rectangle(canvas_bgr, (x0, y0), (x1b, y1b), (40, 40, 40), -1)
-    cv2.putText(
-        canvas_bgr,
-        text,
-        (tx, ty),
-        font,
-        scale,
-        (255, 255, 255),
-        thickness,
-        cv2.LINE_AA,
-    )
+    # No text label baked onto the canvas — classification is displayed in the app UI.
 
 
 def numpy_bgr_to_png_b64(img_bgr: np.ndarray) -> str:
@@ -159,26 +117,26 @@ class GradCAMExplainer:
         score: float,
     ) -> str | None:
         """
-        Build a PNG (base64) of the crop with CAM inside bbox, border, and label strip.
+        Build a PNG (base64) of the crop with the Grad-CAM heatmap blended in.
+
+        Output is always a clean square at `IMG_SIZE × IMG_SIZE` — the same
+        tensor shape the classifier consumes — so the UI displays exactly what
+        the model saw. No text labels are baked into the image; classification
+        is rendered as proper UI in the app.
         """
         try:
-            tensor = transform(crop_pil).unsqueeze(0).to(DEVICE)
+            size = config.IMG_SIZE
+            crop_square = crop_pil.convert("RGB")
+            if crop_square.size != (size, size):
+                crop_square = crop_square.resize((size, size), Image.LANCZOS)
+            tensor = transform(crop_square).unsqueeze(0).to(DEVICE)
             heatmap = compute_gradcam_heatmap(tensor, pred_idx)
-            heat224 = cv2.resize(
-                heatmap,
-                (config.IMG_SIZE, config.IMG_SIZE),
-                interpolation=cv2.INTER_CUBIC,
+            heat_sq = cv2.resize(
+                heatmap, (size, size), interpolation=cv2.INTER_CUBIC
             )
-            cw, ch = crop_pil.size
-            heat_roi = cv2.resize(
-                heat224, (cw, ch), interpolation=cv2.INTER_CUBIC
-            )
-            roi_bgr = cv2.cvtColor(np.array(crop_pil.convert("RGB")), cv2.COLOR_RGB2BGR)
-            blended = blend_heatmap_on_roi(roi_bgr, heat_roi, alpha_roi=0.55)
-            cv2.rectangle(blended, (0, 0), (cw - 1, ch - 1), (255, 255, 255), 2)
-            text = f"{label} {score:.2f}"
-            out = draw_label_pill_below_roi(blended, text)
-            return numpy_bgr_to_png_b64(out)
+            roi_bgr = cv2.cvtColor(np.array(crop_square), cv2.COLOR_RGB2BGR)
+            blended = blend_heatmap_on_roi(roi_bgr, heat_sq, alpha_roi=0.55)
+            return numpy_bgr_to_png_b64(blended)
         except Exception:
             return None
 

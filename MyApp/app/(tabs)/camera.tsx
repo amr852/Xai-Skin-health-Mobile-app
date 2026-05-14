@@ -69,6 +69,7 @@ export default function CameraScreen() {
   const carouselDragRef = useRef(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [captureBusy, setCaptureBusy] = useState(false);
+  const [permGranted, setPermGranted] = useState(false);
   const router    = useRouter();
   const insets    = useSafeAreaInsets();
   const { addLesion, analyzeImage } = useLesions();
@@ -130,9 +131,11 @@ export default function CameraScreen() {
       });
       return;
     }
-    if (!permission?.granted) {
+    let granted = !!permission?.granted;
+    if (!granted) {
       const r = await requestPermission();
-      if (!r.granted) {
+      granted = !!r?.granted;
+      if (!granted) {
         showAlert({
           title: 'Camera access',
           message: 'Camera permission is needed to take a lesion photo.',
@@ -141,6 +144,7 @@ export default function CameraScreen() {
         return;
       }
     }
+    setPermGranted(true);
     setIsFacingFront(false);
     setIsCameraReady(false);
     setScanPhase('camera');
@@ -394,7 +398,7 @@ export default function CameraScreen() {
   }
 
   // ── Camera permission gate (camera phase only) ─────────────────────────────
-  if (scanPhase === 'camera' && !permission?.granted) {
+  if (scanPhase === 'camera' && !permission?.granted && !permGranted) {
     return (
       <SafeAreaView style={s.safe} edges={['top']}>
         {alertNode}
@@ -405,7 +409,15 @@ export default function CameraScreen() {
           </View>
           <Text style={s.permTitle}>Camera Access Required</Text>
           <Text style={s.permMsg}>We need camera access to capture skin photos for analysis.</Text>
-          <AppButton label="Grant Permission" onPress={requestPermission} size="lg" style={s.permBtn} />
+          <AppButton
+            label="Grant Permission"
+            onPress={async () => {
+              const r = await requestPermission();
+              if (r?.granted) setPermGranted(true);
+            }}
+            size="lg"
+            style={s.permBtn}
+          />
           <AppButton label="Back to instructions" onPress={() => setScanPhase('intro')} variant="secondary" size="lg" style={{ marginTop: 12, width: '100%' }} />
         </View>
         <BottomTabBar active={activeNav} onPress={handleNav} />
@@ -628,7 +640,6 @@ export default function CameraScreen() {
         style={StyleSheet.absoluteFill}
         facing={isFacingFront ? 'front' : 'back'}
         mode="picture"
-        ratio="16:9"
         enableTorch={!isFacingFront && torchOn}
         onCameraReady={() => setIsCameraReady(true)}
         onMountError={event => {

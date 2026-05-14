@@ -21,8 +21,7 @@ import { StatusArc } from '@/components/decor/StatusArc';
 import { ImageWithBboxOverlay } from '@/components/ImageWithBboxOverlay';
 import { fetchScanSessionById, type ScanSession } from '@/hooks/useScanSessions';
 import { ApiError } from '@/lib/api';
-import { useLesions, type AnalyzeImageResult } from '@/hooks/useLesions';
-import { useAppAlert } from '@/components/ui/AppAlert';
+import { dedupeNestedDetections } from '@/lib/bboxDedupe';
 type StatusKey = 'Stable' | 'Check' | 'Urgent';
 
 function mapModelSeverityToStatus(s?: string): StatusKey {
@@ -45,12 +44,12 @@ export default function ScanSessionDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [heatmapUri, setHeatmapUri] = useState<string | null>(null);
-  const { addLesion } = useLesions();
-  const { showAlert, alertNode } = useAppAlert();
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [previewTitle, setPreviewTitle] = useState<string>('Region image');
 
   const load = useCallback(async () => {
     if (!id || typeof id !== 'string') {
-      setError('Missing session id');
+      setError('Missing scan id');
       setLoading(false);
       return;
     }
@@ -63,7 +62,7 @@ export default function ScanSessionDetailScreen() {
       const msg =
         e instanceof ApiError
           ? e.status === 404
-            ? 'This session was not found.'
+            ? 'This scan was not found.'
             : e.message
           : (e as Error).message;
       setError(msg);
@@ -79,8 +78,11 @@ export default function ScanSessionDetailScreen() {
     }, [load]),
   );
 
-  const regions = session?.lesions ?? [];
-  const arcStatus = mapModelSeverityToStatus(regions[0]?.severity);
+  const regionsRaw = session?.lesions ?? [];
+  const regions = dedupeNestedDetections(
+    regionsRaw.filter((L): L is typeof L & { bbox: NonNullable<typeof L.bbox> } => L.bbox != null),
+  );
+  const arcStatus = mapModelSeverityToStatus(regions[0]?.severity ?? regionsRaw[0]?.severity);
   const detections = regions
     .filter((L): L is typeof L & { bbox: NonNullable<typeof L.bbox> } => L.bbox != null)
     .map((L) => ({
@@ -89,76 +91,20 @@ export default function ScanSessionDetailScreen() {
       label: L.diagnosis?.label,
     }));
   const primaryHeatmap =
-    session?.annotatedImageUrl || regions.find((l) => l.overlayImageUrl)?.overlayImageUrl;
+    session?.annotatedImageUrl || regions[0]?.overlayImageUrl || regionsRaw.find((l) => l.overlayImageUrl)?.overlayImageUrl;
 
-  const saveRegionAsLesion = useCallback(
-    async (regionIndex: number) => {
-      if (!session) return;
-      const region = session.lesions?.[regionIndex];
-      if (!region?.bbox || !session.originalImageUrl) {
-        showAlert({
-          title: 'Save unavailable',
-          message: 'This region is missing required image data.',
-          variant: 'warning',
-        });
-        return;
-      }
-
-      const lesionsSummary = (session.lesions ?? [])
-        .filter((x): x is typeof x & { bbox: NonNullable<typeof x.bbox> } => x.bbox != null)
-        .map((x) => ({
-          lesion_id: x.lesionId,
-          bbox: x.bbox,
-          severity: x.severity,
-          cropUrl: x.cropImageUrl ?? null,
-          overlayUrl: x.overlayImageUrl ?? null,
-          diagnosis: x.diagnosis
-            ? {
-                label: x.diagnosis.label ?? '—',
-                score: typeof x.diagnosis.score === 'number' ? x.diagnosis.score : 0,
-              }
-            : undefined,
-        }));
-
-      const analysis: AnalyzeImageResult = {
-        label: region.diagnosis?.label ?? '—',
-        score: typeof region.diagnosis?.score === 'number' ? region.diagnosis.score : 0,
-        camImageUrl: region.overlayImageUrl || session.annotatedImageUrl || undefined,
-        imageUrl: session.originalImageUrl,
-        modelName: 'resnet50 + YOLO (Grad-CAM)',
-        xaiMethod: 'Grad-CAM',
-        enhancementsApplied: session.qualityMetadata?.enhancements_applied ?? [],
-        topPredictions: region.diagnosis?.top_k ?? [],
-        severity: region.severity,
-        bbox: region.bbox,
-        lesions: lesionsSummary,
-        lesionCount: typeof session.lesionCount === 'number' ? session.lesionCount : lesionsSummary.length,
-        noLesionFound: !!session.noLesionFound,
-        partialFailure: !!session.partialFailure,
-        sessionId: session._id,
-      };
-
-      const label = region.diagnosis?.label ?? `Region ${regionIndex + 1}`;
-      const status = mapModelSeverityToStatus(region.severity);
-      await addLesion(
-        {
-          title: `${label} (${new Date(session.createdAt).toLocaleDateString()})`,
-          description: 'Saved from scan session',
-          location: '',
-          status,
-          notes: `Session ${session._id} · Region ${regionIndex + 1}`,
-        },
-        undefined,
-        analysis,
-      );
-    },
-    [addLesion, session, showAlert],
-  );
+  const sessionTitle = session
+    ? `Scan · ${new Date(session.createdAt).toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })}`
+    : 'Scan';
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
-      {alertNode}
 
       <View style={s.topBar}>
         <TouchableOpacity
@@ -170,7 +116,7 @@ export default function ScanSessionDetailScreen() {
           <Feather name="arrow-left" size={22} color={C.text} />
         </TouchableOpacity>
         <Text style={s.topTitle} numberOfLines={1}>
-          Session results
+          {sessionTitle}
         </Text>
         <View style={{ width: 44 }} />
       </View>
@@ -178,14 +124,14 @@ export default function ScanSessionDetailScreen() {
       {loading ? (
         <View style={s.centered}>
           <ActivityIndicator size="large" color={C.primary} />
-          <Text style={s.loadingTxt}>Loading session…</Text>
+          <Text style={s.loadingTxt}>Loading scan…</Text>
         </View>
       ) : error ? (
         <View style={s.centered}>
           <View style={s.errorTile}>
             <Feather name="alert-circle" size={28} color={C.urgentText} />
           </View>
-          <Text style={s.errorTitle}>Could not load session</Text>
+          <Text style={s.errorTitle}>Could not load scan</Text>
           <Text style={s.errorMsg}>{error}</Text>
           <TouchableOpacity style={s.retryBtn} onPress={() => void load()} activeOpacity={0.85}>
             <Text style={s.retryBtnTxt}>Try again</Text>
@@ -201,10 +147,10 @@ export default function ScanSessionDetailScreen() {
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={s.heroBand}>
-            <Text style={s.heroEyebrow}>Scan session</Text>
+            <Text style={s.heroEyebrow}>Scan report</Text>
             <Text style={s.heroTitle}>
-              {session.lesionCount || regions.length}{' '}
-              {session.lesionCount === 1 || regions.length === 1 ? 'region' : 'regions'}
+              {regions.length || session.lesionCount || 0}{' '}
+              {regions.length === 1 || session.lesionCount === 1 ? 'region' : 'regions'}
             </Text>
             <Text style={s.heroSub}>
               {new Date(session.createdAt).toLocaleString(undefined, {
@@ -233,10 +179,11 @@ export default function ScanSessionDetailScreen() {
             ) : session.originalImageUrl ? (
               <View style={s.photoBlock}>
                 <Text style={s.blockLabel}>Original capture</Text>
-                <Image
+                <ImageWithBboxOverlay
                   source={{ uri: session.originalImageUrl }}
-                  style={s.fullImage}
-                  resizeMode="cover"
+                  height={240}
+                  borderRadius={Radius.lg}
+                  detections={[]}
                 />
               </View>
             ) : null}
@@ -292,10 +239,12 @@ export default function ScanSessionDetailScreen() {
               const meta = statusMeta[st];
               const label = L.diagnosis?.label ?? '—';
               const score = typeof L.diagnosis?.score === 'number' ? L.diagnosis.score : 0;
+              const topK = Array.isArray(L.diagnosis?.top_k) ? L.diagnosis!.top_k! : [];
+              const regionTitle = `Region ${i + 1}`;
               return (
                 <View key={L.lesionId ?? `r-${i}`} style={s.regionCard}>
                   <View style={s.regionTop}>
-                    <Text style={s.regionName}>Region {i + 1}</Text>
+                    <Text style={s.regionName}>{regionTitle}</Text>
                     <View style={[s.sevPill, { backgroundColor: meta.bg, borderColor: meta.color }]}>
                       <Text style={[s.sevPillTxt, { color: meta.color }]}>{st}</Text>
                     </View>
@@ -306,52 +255,67 @@ export default function ScanSessionDetailScreen() {
                   <Text style={s.regionMeta}>
                     Detector conf: {((L.bbox?.conf ?? 0) * 100).toFixed(1)}%
                   </Text>
-                  <TouchableOpacity
-                    style={s.saveBtn}
-                    activeOpacity={0.8}
-                    onPress={() =>
-                      showAlert({
-                        title: 'Save lesion',
-                        message: `Save Region ${i + 1} into your lesion records?`,
-                        variant: 'confirm',
-                        buttons: [
-                          { text: 'Cancel', style: 'cancel' },
-                          {
-                            text: 'Save',
-                            style: 'default',
-                            onPress: async () => {
-                              try {
-                                await saveRegionAsLesion(i);
-                                showAlert({
-                                  title: 'Lesion saved',
-                                  message: 'Region was added to your lesion records.',
-                                  variant: 'success',
-                                });
-                              } catch (e: any) {
-                                showAlert({
-                                  title: 'Save failed',
-                                  message: e.message || 'Could not save this region.',
-                                  variant: 'error',
-                                });
-                              }
-                            },
-                          },
-                        ],
-                      })
-                    }>
-                    <Feather name="bookmark" size={14} color={C.primary} />
-                    <Text style={s.saveBtnTxt}>Save as lesion</Text>
-                  </TouchableOpacity>
+
                   {(L.cropImageUrl || L.overlayImageUrl) && (
-                    <View style={s.regionThumbs}>
+                    <View style={s.regionImageRow}>
                       {L.cropImageUrl ? (
-                        <Image source={{ uri: L.cropImageUrl }} style={s.regionThumb} resizeMode="cover" />
+                        <TouchableOpacity
+                          style={s.regionImageBlock}
+                          activeOpacity={0.85}
+                          onPress={() => {
+                            setPreviewTitle(`${regionTitle} · detected lesion`);
+                            setPreviewUri(L.cropImageUrl!);
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open detected lesion image for ${regionTitle}`}>
+                          <View style={s.regionImageHeadRow}>
+                            <Feather name="image" size={12} color={C.textSub} />
+                            <Text style={s.regionImageLbl}>Detected lesion</Text>
+                          </View>
+                          <Image
+                            source={{ uri: L.cropImageUrl }}
+                            style={s.regionImageLarge}
+                            resizeMode="cover"
+                          />
+                        </TouchableOpacity>
                       ) : null}
                       {L.overlayImageUrl ? (
-                        <Image source={{ uri: L.overlayImageUrl }} style={s.regionThumb} resizeMode="cover" />
+                        <TouchableOpacity
+                          style={s.regionImageBlock}
+                          activeOpacity={0.85}
+                          onPress={() => {
+                            setPreviewTitle(`${regionTitle} · XAI heatmap`);
+                            setPreviewUri(L.overlayImageUrl!);
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open XAI heatmap for ${regionTitle}`}>
+                          <View style={s.regionImageHeadRow}>
+                            <Feather name="zap" size={12} color={C.primary} />
+                            <Text style={[s.regionImageLbl, { color: C.primary }]}>XAI heatmap</Text>
+                          </View>
+                          <Image
+                            source={{ uri: L.overlayImageUrl }}
+                            style={s.regionImageLarge}
+                            resizeMode="cover"
+                          />
+                        </TouchableOpacity>
                       ) : null}
                     </View>
                   )}
+
+                  {topK.length > 0 ? (
+                    <View style={s.topKBlock}>
+                      <Text style={s.topKHeader}>Top predictions</Text>
+                      {topK.slice(0, 5).map((p, j) => (
+                        <View key={`${p.label}-${j}`} style={s.topKRow}>
+                          <Text style={s.topKLabel} numberOfLines={1}>
+                            {p.label}
+                          </Text>
+                          <Text style={s.topKScore}>{(p.score * 100).toFixed(1)}%</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
                 </View>
               );
             })
@@ -380,6 +344,32 @@ export default function ScanSessionDetailScreen() {
             </View>
             {heatmapUri ? (
               <Image source={{ uri: heatmapUri }} style={s.modalImage} resizeMode="contain" />
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={!!previewUri}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setPreviewUri(null)}>
+        <View style={s.modalBackdrop}>
+          <View style={s.modalCard}>
+            <View style={s.modalHead}>
+              <Text style={s.modalTitle} numberOfLines={1}>
+                {previewTitle}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setPreviewUri(null)}
+                style={s.modalClose}
+                hitSlop={8}
+                accessibilityRole="button">
+                <Feather name="x" size={20} color={C.text} />
+              </TouchableOpacity>
+            </View>
+            {previewUri ? (
+              <Image source={{ uri: previewUri }} style={s.modalImage} resizeMode="contain" />
             ) : null}
           </View>
         </View>
@@ -654,30 +644,70 @@ const s = StyleSheet.create({
     color: C.textHint,
     marginTop: 6,
   },
-  regionThumbs: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  saveBtn: {
-    marginTop: 10,
+  regionImageRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  regionImageBlock: {
+    flex: 1,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    backgroundColor: C.surface,
+    padding: 8,
+    gap: 6,
+  },
+  regionImageHeadRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: C.borderFocus,
-    backgroundColor: C.primaryLight,
+    gap: 6,
   },
-  saveBtnTxt: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.bodySemibold,
-    color: C.primary,
+  regionImageLbl: {
+    fontSize: 11,
+    fontFamily: FontFamily.bodyBold,
+    color: C.textSub,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
-  regionThumb: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.md,
+  regionImageLarge: {
+    width: '100%',
+    height: 120,
+    borderRadius: Radius.sm,
     backgroundColor: C.surfaceAlt,
+  },
+  topKBlock: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: C.borderLight,
+    gap: 4,
+  },
+  topKHeader: {
+    fontSize: 11,
+    fontFamily: FontFamily.bodyBold,
+    color: C.textHint,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  topKRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  topKLabel: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.body,
+    color: C.text,
+  },
+  topKScore: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.bodyBold,
+    color: C.primary,
+    marginLeft: 8,
   },
   modalBackdrop: {
     flex: 1,

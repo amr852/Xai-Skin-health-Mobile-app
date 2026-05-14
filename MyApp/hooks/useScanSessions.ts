@@ -30,8 +30,21 @@ export type ScanSession = {
   qualityMetadata?: { enhancements_applied?: string[] };
   originalImageUrl?: string;
   annotatedImageUrl?: string | null;
+  /** User-editable metadata (added via PATCH /scan-sessions/:id). */
+  title?: string;
+  description?: string;
+  location?: string;
+  notes?: string;
   lesions: ScanSessionLesionStored[];
   createdAt: string;
+};
+
+/** Editable fields a user can supply for a scan via the EditScanModal. */
+export type ScanSessionFields = {
+  title?: string;
+  description?: string;
+  location?: string;
+  notes?: string;
 };
 
 function normalizeScanSessionMedia(session: ScanSession): ScanSession {
@@ -100,7 +113,28 @@ export function useScanSessions() {
     }
   }, []);
 
-  return { sessions, loading, error, fetchSessions, deleteSession };
+  const updateSession = useCallback(
+    async (id: string, fields: ScanSessionFields): Promise<void> => {
+      setLoading(true);
+      setError(null);
+      try {
+        const updated = await apiFetch<ScanSession>(
+          `/scan-sessions/${encodeURIComponent(id)}`,
+          { method: 'PATCH', json: fields },
+        );
+        const normalized = normalizeScanSessionMedia(updated);
+        setSessions((prev) => prev.map((s) => (s._id === id ? { ...s, ...normalized } : s)));
+      } catch (e) {
+        setError((e as Error).message);
+        throw e;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  return { sessions, loading, error, fetchSessions, deleteSession, updateSession };
 }
 
 export async function fetchScanSessionById(id: string): Promise<ScanSession> {

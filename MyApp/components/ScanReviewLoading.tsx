@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Image, Platform, StyleSheet, Text, View } from 'react-native';
 import { C, FontFamily, Radius, Shadow } from '@/constants/theme';
 
-const STATUS_STAGES = ['Analyzing image…', 'Detecting lesions…', 'Generating XAI map…'] as const;
+const STATUS_STAGES = [
+  'Uploading image…',
+  'Detecting lesions…',
+  'Classifying regions…',
+  'Generating XAI map…',
+  'Finalizing results…',
+] as const;
 
 type Props = {
   active: boolean;
@@ -11,6 +17,7 @@ type Props = {
 export function ScanReviewLoading({ active }: Props) {
   const pulse = useRef(new Animated.Value(0.5)).current;
   const [stage, setStage] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
     if (!active) return;
@@ -35,17 +42,23 @@ export function ScanReviewLoading({ active }: Props) {
   useEffect(() => {
     if (!active) {
       setStage(0);
+      setElapsed(0);
       return;
     }
-    const id = setInterval(() => {
-      setStage(s => (s + 1) % STATUS_STAGES.length);
-    }, 2200);
-    return () => clearInterval(id);
+    const stageId = setInterval(() => {
+      setStage(s => Math.min(s + 1, STATUS_STAGES.length - 1));
+    }, 4500);
+    const tickId = setInterval(() => setElapsed(e => e + 1), 1000);
+    return () => {
+      clearInterval(stageId);
+      clearInterval(tickId);
+    };
   }, [active]);
 
   if (!active) return null;
 
   const opacityAnim = pulse;
+  const slowHint = elapsed >= 25;
 
   return (
     <View style={styles.wrap}>
@@ -67,7 +80,14 @@ export function ScanReviewLoading({ active }: Props) {
           <View style={[styles.shimmerBlock, { flex: 1, height: 110, borderRadius: Radius.md }]} />
         </View>
       </Animated.View>
-      <Text style={styles.status}>{STATUS_STAGES[stage]}</Text>
+      <Text style={styles.status}>
+        {STATUS_STAGES[stage]} <Text style={styles.elapsed}>· {elapsed}s</Text>
+      </Text>
+      {slowHint ? (
+        <Text style={styles.subHint}>
+          Larger photos can take up to a minute to fully analyze. Keep this screen open.
+        </Text>
+      ) : null}
     </View>
   );
 }

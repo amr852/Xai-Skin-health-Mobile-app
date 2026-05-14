@@ -45,6 +45,10 @@ const scanLesionSchema = new mongoose.Schema(
 
 /**
  * One multi-lesion capture session (aligned with Flask POST /scan-multi).
+ *
+ * `title`, `description`, `location`, and `notes` are optional user-supplied
+ * metadata. They let users name a scan ("Mole near left elbow") and add
+ * context, instead of the UI relying on the generic auto-derived label.
  */
 const scanSessionSchema = new mongoose.Schema({
   userId: {
@@ -60,6 +64,14 @@ const scanSessionSchema = new mongoose.Schema({
   qualityMetadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   originalImageUrl: String,
   annotatedImageUrl: String,
+  /** User-editable name shown on history cards (overrides the derived label). */
+  title: { type: String, default: '' },
+  /** Free-form description (size, shape, colour, observations…). */
+  description: { type: String, default: '' },
+  /** Body location ("inner left forearm", "back of right ear", …). */
+  location: { type: String, default: '' },
+  /** Additional notes (sun exposure, tenderness, history, …). */
+  notes: { type: String, default: '' },
   lesions: [scanLesionSchema],
   createdAt: {
     type: Date,

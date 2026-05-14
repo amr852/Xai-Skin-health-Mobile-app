@@ -41,3 +41,21 @@ export function bboxToOverlayRect(bbox: LesionBbox, layout: ContainLayout) {
   const height = (bbox.y2 - bbox.y1) * scale;
   return { left, top, width, height };
 }
+
+export function resolveImagePreviewFrame({
+  width,
+  fallbackHeight,
+  imageW,
+  imageH,
+}: {
+  width: number | string;
+  fallbackHeight: number;
+  imageW?: number | null;
+  imageH?: number | null;
+}) {
+  if (typeof width !== 'number' && imageW && imageH && imageW > 0 && imageH > 0) {
+    return { aspectRatio: imageW / imageH };
+  }
+
+  return { height: fallbackHeight };
+}

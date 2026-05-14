@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import cv2
 import numpy as np
 from flask import Blueprint, current_app, jsonify, request
+from PIL import Image as PILImage
 
 import config
 from helpers import (
@@ -84,7 +85,13 @@ def scan_multi():
             partial_failure = True
             continue
 
-        crop_pil = full_pil.crop((x1, y1, x2, y2))
+        raw_crop = full_pil.crop((x1, y1, x2, y2))
+        # Resize to the model's expected input size so every crop is uniform:
+        # what the classifier sees is exactly what gets displayed and fed to
+        # Grad-CAM — no more variable-size wonky crops.
+        crop_pil = raw_crop.resize(
+            (config.IMG_SIZE, config.IMG_SIZE), PILImage.LANCZOS
+        )
         try:
             diag = lesion_classifier.predict(crop_pil)
         except Exception:

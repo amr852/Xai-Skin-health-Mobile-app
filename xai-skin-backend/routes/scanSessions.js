@@ -9,6 +9,10 @@ const ScanSession = require('../models/ScanSession');
 const { verifyToken } = require('../middleware/verifyToken');
 
 const MODEL_SERVER_URL = process.env.MODEL_SERVER_URL || 'http://localhost:5000';
+const SOFT_CONTAINMENT_THRESHOLD = 0.85;
+const AGGREGATE_CONTAINER_MIN_CHILDREN = 2;
+const AGGREGATE_CONTAINER_MAX_CHILD_AREA_RATIO = 0.4;
+const DISTINCT_CHILD_OVERLAP_THRESHOLD = 0.85;
 
 const uploadsDir = path.join(__dirname, '../public/uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -51,6 +55,89 @@ function publicUploadUrl(req, filename) {
   if (!filename) return null;
   const baseUrl = `${req.protocol}://${req.get('host')}`;
   return `${baseUrl}/uploads/${filename}`;
+}
+
+function bboxArea(box) {
+  if (!box) return 0;
+  const w = Math.max(0, Number(box.x2) - Number(box.x1));
+  const h = Math.max(0, Number(box.y2) - Number(box.y1));
+  return w * h;
+}
+
+function bboxIntersectionArea(a, b) {
+  if (!a || !b) return 0;
+  const w = Math.max(0, Math.min(Number(a.x2), Number(b.x2)) - Math.max(Number(a.x1), Number(b.x1)));
+  const h = Math.max(0, Math.min(Number(a.y2), Number(b.y2)) - Math.max(Number(a.y1), Number(b.y1)));
+  return w * h;
+}
+
+function smallerBoxOverlapRatio(a, b) {
+  const smallerArea = Math.min(bboxArea(a), bboxArea(b));
+  if (smallerArea <= 0) return 0;
+  return bboxIntersectionArea(a, b) / smallerArea;
+}
+
+function bboxSoftContains(outer, inner, threshold = SOFT_CONTAINMENT_THRESHOLD) {
+  const innerArea = bboxArea(inner);
+  if (innerArea <= 0) return false;
+  return bboxIntersectionArea(outer, inner) / innerArea >= threshold;
+}
+
+function isAggregateContainer(candidate, boxes) {
+  const candidateArea = bboxArea(candidate);
+  if (candidateArea <= 0) return false;
+
+  const contained = boxes.filter((box) => box !== candidate && bboxSoftContains(candidate, box));
+  const distinctContained = contained.reduce((distinct, box) => {
+    const duplicatesExisting = distinct.some(
+      (existing) => smallerBoxOverlapRatio(existing, box) >= DISTINCT_CHILD_OVERLAP_THRESHOLD,
+    );
+    if (!duplicatesExisting) distinct.push(box);
+    return distinct;
+  }, []);
+  if (distinctContained.length < AGGREGATE_CONTAINER_MIN_CHILDREN) return false;
+
+  const containedArea = distinctContained.reduce((sum, box) => sum + bboxArea(box), 0);
+  return containedArea / candidateArea <= AGGREGATE_CONTAINER_MAX_CHILD_AREA_RATIO;
+}
+
+function dedupeLesionsBySoftContainment(lesions) {
+  if (!Array.isArray(lesions) || lesions.length <= 1) return Array.isArray(lesions) ? [...lesions] : [];
+
+  const withBbox = [];
+  const withoutBbox = [];
+  for (let i = 0; i < lesions.length; i += 1) {
+    const lesion = lesions[i];
+    if (lesion?.bbox) withBbox.push({ lesion, idx: i });
+    else withoutBbox.push(lesion);
+  }
+  if (withBbox.length <= 1) return [...lesions];
+
+  const allBoxes = withBbox.map(({ lesion }) => lesion.bbox);
+  const candidates = withBbox.filter(({ lesion }) => !isAggregateContainer(lesion.bbox, allBoxes));
+
+  candidates.sort((a, b) => {
+    const areaDiff = bboxArea(b.lesion.bbox) - bboxArea(a.lesion.bbox);
+    if (areaDiff !== 0) return areaDiff;
+    const confA = Number(a.lesion?.bbox?.conf || 0);
+    const confB = Number(b.lesion?.bbox?.conf || 0);
+    if (confB !== confA) return confB - confA;
+    return a.idx - b.idx;
+  });
+
+  const kept = [];
+  for (const candidate of candidates) {
+    const redundant = kept.some((k) => bboxSoftContains(k.lesion.bbox, candidate.lesion.bbox));
+    if (!redundant) kept.push(candidate);
+  }
+
+  kept.sort((a, b) => {
+    const dy = Number(a.lesion.bbox.y1) - Number(b.lesion.bbox.y1);
+    if (Math.abs(dy) > 1) return dy;
+    return Number(a.lesion.bbox.x1) - Number(b.lesion.bbox.x1);
+  });
+
+  return [...kept.map((k) => k.lesion), ...withoutBbox];
 }
 
 async function removeUploadedFileFromUrl(url) {
@@ -99,7 +186,7 @@ router.post('/', verifyToken, (req, res) => {
       const annotatedImageUrl = publicUploadUrl(req, annotatedFilename);
 
       const lesionsPayload = [];
-      const lesions = Array.isArray(raw.lesions) ? raw.lesions : [];
+      const lesions = dedupeLesionsBySoftContainment(raw.lesions);
 
       for (let i = 0; i < lesions.length; i += 1) {
         const L = lesions[i];
@@ -122,7 +209,7 @@ router.post('/', verifyToken, (req, res) => {
       const doc = new ScanSession({
         userId: req.userId,
         flaskSessionId: raw.session_id || null,
-        lesionCount: typeof raw.lesion_count === 'number' ? raw.lesion_count : lesions.length,
+        lesionCount: lesionsPayload.length,
         noLesionFound: !!raw.no_lesion_found,
         partialFailure: !!raw.partial_failure,
         qualityMetadata: raw.quality_metadata || {},
@@ -213,6 +300,41 @@ router.get('/:id', verifyToken, async (req, res) => {
   } catch (error) {
     console.error('GET /scan-sessions/:id error:', error);
     res.status(500).json({ error: 'Failed to fetch scan session' });
+  }
+});
+
+/**
+ * PATCH /scan-sessions/:id — update user-editable metadata only
+ * (title, description, location, notes). Analysis fields are read-only.
+ */
+router.patch('/:id', verifyToken, async (req, res) => {
+  try {
+    const session = await ScanSession.findById(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: 'Scan session not found' });
+    }
+    if (String(session.userId) !== String(req.userId)) {
+      return res.status(404).json({ error: 'Scan session not found' });
+    }
+
+    const editable = ['title', 'description', 'location', 'notes'];
+    let touched = false;
+    for (const key of editable) {
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, key)) {
+        const v = req.body[key];
+        session[key] = typeof v === 'string' ? v.trim() : '';
+        touched = true;
+      }
+    }
+    if (!touched) {
+      return res.status(400).json({ error: 'No editable fields supplied' });
+    }
+    await session.save();
+
+    return res.status(200).json(session.toObject());
+  } catch (error) {
+    console.error('PATCH /scan-sessions/:id error:', error);
+    return res.status(500).json({ error: 'Failed to update scan session' });
   }
 });
 

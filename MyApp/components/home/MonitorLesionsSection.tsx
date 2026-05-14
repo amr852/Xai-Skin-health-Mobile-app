@@ -9,7 +9,8 @@ import {
 import Feather from '@expo/vector-icons/Feather';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { C, FontSize, Space, Radius, Shadow } from '@/constants/theme';
-import { useLesions, type Lesion } from '@/hooks/useLesions';
+import { useLesions } from '@/hooks/useLesions';
+import { useScanSessions, type ScanSession } from '@/hooks/useScanSessions';
 import { syncUrgentLesionAlerts } from '@/lib/notificationScheduler';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -18,14 +19,40 @@ import { SelfExamCard } from '@/components/home/SelfExamCard';
 
 type StatusKey = 'Stable' | 'Check' | 'Urgent';
 
+function mapModelSeverityToStatus(s?: string): StatusKey {
+  const k = (s || '').toLowerCase();
+  if (k === 'urgent') return 'Urgent';
+  if (k === 'stable') return 'Stable';
+  return 'Check';
+}
+
+function deriveScanTitle(item: ScanSession): string {
+  if (item.noLesionFound) return 'No lesion detected';
+  const top = item.lesions?.[0]?.diagnosis?.label;
+  if (typeof top === 'string' && top.trim()) {
+    const t = top.trim();
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  return 'Skin scan';
+}
+
+function scanStatus(item: ScanSession): StatusKey {
+  return mapModelSeverityToStatus(item.lesions?.[0]?.severity);
+}
+
 export function MonitorLesionsSection() {
   const router = useRouter();
-  const { lesions, loading, error, fetchLesions } = useLesions();
+  const { sessions, loading, error, fetchSessions } = useScanSessions();
+
+  // Saved-lesion records still drive Urgent push alerts. We fetch them here
+  // purely for that side effect — nothing from `useLesions` is rendered.
+  const { lesions, fetchLesions } = useLesions();
 
   useFocusEffect(
     useCallback(() => {
+      void fetchSessions();
       void fetchLesions();
-    }, [fetchLesions]),
+    }, [fetchSessions, fetchLesions]),
   );
 
   useEffect(() => {
@@ -33,40 +60,42 @@ export function MonitorLesionsSection() {
     void syncUrgentLesionAlerts(lesions);
   }, [lesions]);
 
-  const lesionStats = useMemo(() => {
+  const scanStats = useMemo(() => {
     const stats = { Stable: 0, Check: 0, Urgent: 0 } as Record<StatusKey, number>;
-    lesions.forEach(l => { stats[l.status] = (stats[l.status] ?? 0) + 1; });
+    sessions.forEach((s) => {
+      stats[scanStatus(s)] += 1;
+    });
     return stats;
-  }, [lesions]);
+  }, [sessions]);
 
-  const recentLesions = useMemo(
+  const recentScans = useMemo(
     () =>
-      [...lesions]
+      [...sessions]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 3),
-    [lesions],
+    [sessions],
   );
 
   return (
     <>
       <SectionHeader
-        title="Lesion Log"
-        subtitle="Track size, shape, and colour over time."
+        title="Skin Scans"
+        subtitle="Severity breakdown across every scan you've run."
         linkLabel="View all"
         onLinkPress={() => router.push('/history')}
       />
 
       <View style={ls.statsRow}>
-        <StatPill label="Stable" count={lesionStats.Stable} bg={C.stableBg} color={C.stableText} />
-        <StatPill label="Check"  count={lesionStats.Check}  bg={C.checkBg}  color={C.checkText} />
-        <StatPill label="Urgent" count={lesionStats.Urgent} bg={C.urgentBg} color={C.urgentText} />
+        <StatPill label="Stable" count={scanStats.Stable} bg={C.stableBg} color={C.stableText} />
+        <StatPill label="Check"  count={scanStats.Check}  bg={C.checkBg}  color={C.checkText} />
+        <StatPill label="Urgent" count={scanStats.Urgent} bg={C.urgentBg} color={C.urgentText} />
       </View>
 
       <SelfExamCard />
 
       {loading && (
         <View style={ls.stateWrap}>
-          <EmptyState icon="clock" title="Loading lesions…" />
+          <EmptyState icon="clock" title="Loading scans…" />
         </View>
       )}
 
@@ -74,38 +103,38 @@ export function MonitorLesionsSection() {
         <View style={ls.stateWrap}>
           <EmptyState
             icon="alert-circle"
-            title="Could not load lesions"
+            title="Could not load scans"
             message={error}
             actionLabel="Retry"
-            onAction={() => void fetchLesions()}
+            onAction={() => void fetchSessions()}
             variant="error"
           />
         </View>
       )}
 
-      {!loading && !error && recentLesions.length > 0 && (
+      {!loading && !error && recentScans.length > 0 && (
         <View style={ls.recentCard}>
           <View style={ls.recentHead}>
-            <Text style={ls.recentHeading}>Recent entries</Text>
+            <Text style={ls.recentHeading}>Recent scans</Text>
             <TouchableOpacity onPress={() => router.push('/history')} hitSlop={6}>
               <Text style={ls.recentLink}>See all</Text>
             </TouchableOpacity>
           </View>
-          {recentLesions.map((item, idx) => (
+          {recentScans.map((item, idx) => (
             <React.Fragment key={item._id}>
-              <LesionRow item={item} onPress={() => router.push('/history')} />
-              {idx < recentLesions.length - 1 && <View style={ls.rowDivider} />}
+              <ScanRow item={item} onPress={() => router.push('/history')} />
+              {idx < recentScans.length - 1 && <View style={ls.rowDivider} />}
             </React.Fragment>
           ))}
         </View>
       )}
 
-      {!loading && !error && lesions.length === 0 && (
+      {!loading && !error && sessions.length === 0 && (
         <View style={ls.stateWrap}>
           <EmptyState
             icon="inbox"
-            title="No lesions logged yet"
-            message="Start by logging a new check-in from your Self-Exam card above."
+            title="No scans logged yet"
+            message="Start by running a check-in from your Self-Exam card above."
           />
         </View>
       )}
@@ -124,16 +153,19 @@ function StatPill({
   );
 }
 
-function LesionRow({ item, onPress }: { item: Lesion; onPress: () => void }) {
+function ScanRow({ item, onPress }: { item: ScanSession; onPress: () => void }) {
   const dateStr = new Date(item.createdAt).toLocaleDateString('en-GB', {
     day: '2-digit', month: 'short', year: 'numeric',
   });
+  const title = deriveScanTitle(item);
+  const status = scanStatus(item);
+  const regionCount = item.lesionCount || item.lesions?.length || 0;
 
   return (
     <TouchableOpacity style={ls.lesRow} onPress={onPress} activeOpacity={0.75}>
       <View style={ls.thumbFrame}>
-        {item.imageUrl ? (
-          <Image source={{ uri: item.imageUrl }} style={ls.lesThumb} resizeMode="cover" />
+        {item.originalImageUrl ? (
+          <Image source={{ uri: item.originalImageUrl }} style={ls.lesThumb} resizeMode="cover" />
         ) : (
           <View style={[ls.lesThumb, ls.lesThumbPlaceholder]}>
             <Feather name="image" size={20} color={C.primary} />
@@ -142,21 +174,23 @@ function LesionRow({ item, onPress }: { item: Lesion; onPress: () => void }) {
       </View>
 
       <View style={ls.lesContent}>
-        <Text style={ls.lesName} numberOfLines={1}>{item.title || 'Untitled lesion'}</Text>
+        <Text style={ls.lesName} numberOfLines={1}>{title}</Text>
         <View style={ls.lesMetaRow}>
-          {!!item.location && (
+          {regionCount > 0 ? (
             <View style={ls.lesMetaItem}>
-              <Feather name="map-pin" size={11} color={C.muted} />
-              <Text style={ls.lesMeta} numberOfLines={1}>{item.location}</Text>
+              <Feather name="layers" size={11} color={C.muted} />
+              <Text style={ls.lesMeta}>
+                {regionCount} {regionCount === 1 ? 'region' : 'regions'}
+              </Text>
             </View>
-          )}
+          ) : null}
           <View style={ls.lesMetaItem}>
             <Feather name="calendar" size={11} color={C.muted} />
             <Text style={ls.lesMeta}>{dateStr}</Text>
           </View>
         </View>
         <View style={{ marginTop: 6 }}>
-          <StatusBadge status={item.status} size="sm" />
+          <StatusBadge status={status} size="sm" />
         </View>
       </View>
 

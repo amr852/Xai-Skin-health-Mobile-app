@@ -7,8 +7,10 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type ImageStyle,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
+  type StyleProp,
 } from 'react-native';
 import type { LesionDetection } from '@/hooks/useLesions';
 import { C, FontFamily, Radius, Shadow } from '@/constants/theme';
@@ -22,12 +24,9 @@ export type LesionXaiCarouselHandle = {
 
 type Props = {
   lesions: LesionCarouselItem[];
-  /** Full-frame annotated heatmap when per-lesion overlay is missing. */
   compositeUrl?: string | null;
   xaiMethod?: string;
-  /** Fires when the user finishes a swipe or when scroll settles (incl. programmatic). */
   onSlideIndexChange: (zeroBased: number) => void;
-  /** User began dragging the carousel — used to distinguish swipe vs programmatic scroll. */
   onScrollDragStart?: () => void;
 };
 
@@ -40,11 +39,75 @@ function mapSeverityToTriage(s?: string): TriageKey {
   return 'Check';
 }
 
-const triageStyle: Record<TriageKey, { bg: string; color: string; border: string }> = {
-  Stable: { bg: C.stableBg, color: C.stableText, border: C.stableBorder },
-  Check: { bg: C.checkBg, color: C.checkText, border: C.checkBorder },
-  Urgent: { bg: C.urgentBg, color: C.urgentText, border: C.urgentBorder },
+const triageColors: Record<TriageKey, { bg: string; color: string; border: string }> = {
+  Stable: { bg: C.stableBg,  color: C.stableText,  border: C.stableBorder  },
+  Check:  { bg: C.checkBg,   color: C.checkText,   border: C.checkBorder   },
+  Urgent: { bg: C.urgentBg,  color: C.urgentText,  border: C.urgentBorder  },
 };
+
+/**
+ * Renders crop / heatmap as a uniform 1:1 square. The model server now
+ * preprocesses every crop (and its Grad-CAM overlay) to `IMG_SIZE × IMG_SIZE`
+ * before the response is sent, so what we display here is exactly what the
+ * classifier sees. `cover` ensures any legacy assets whose bytes still carry
+ * a baked-in label strip get cropped flush to the square — no letterbox, no
+ * dangling caption.
+ */
+function PreprocessedImage({
+  uri,
+  style,
+  accessibilityLabel,
+}: {
+  uri: string;
+  style?: StyleProp<ImageStyle>;
+  accessibilityLabel?: string;
+}) {
+  return (
+    <Image
+      source={{ uri }}
+      accessibilityLabel={accessibilityLabel}
+      resizeMode="cover"
+      style={style}
+    />
+  );
+}
+
+/** Horizontal score bar for top-k classification rows. */
+function ScoreRow({ label, score, highlight }: { label: string; score: number; highlight?: boolean }) {
+  const pct = Math.max(0, Math.min(1, score));
+  return (
+    <View style={sr.row}>
+      <View style={sr.labelRow}>
+        <Text style={[sr.label, highlight && sr.labelBold]} numberOfLines={1}>{label}</Text>
+        <Text style={[sr.pct, highlight && sr.pctBold]}>{(pct * 100).toFixed(1)}%</Text>
+      </View>
+      <View style={sr.track}>
+        <View style={[sr.fill, highlight && sr.fillHighlight, { width: `${pct * 100}%` }]} />
+      </View>
+    </View>
+  );
+}
+
+const sr = StyleSheet.create({
+  row:         { marginBottom: 7 },
+  labelRow:    { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  label:       { fontSize: 12, fontFamily: FontFamily.body, color: C.textSub, flex: 1, marginRight: 6 },
+  labelBold:   { fontFamily: FontFamily.bodySemibold, color: C.text },
+  pct:         { fontSize: 12, fontFamily: FontFamily.body, color: C.textHint },
+  pctBold:     { fontFamily: FontFamily.bodyBold, color: C.text },
+  track:       { height: 5, backgroundColor: C.surfaceAlt, borderRadius: 99, overflow: 'hidden' },
+  fill:        { height: 5, backgroundColor: C.textHint, borderRadius: 99 },
+  fillHighlight:{ backgroundColor: C.primary },
+});
+
+/** A thin horizontal rule used to separate card sections. */
+function Divider() {
+  return <View style={{ height: 1, backgroundColor: C.borderLight, marginVertical: 14 }} />;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main carousel
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(function LesionXaiCarousel(
   { lesions, compositeUrl, xaiMethod, onSlideIndexChange, onScrollDragStart }: Props,
@@ -71,68 +134,109 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
 
   const onScrollToIndexFailed = useCallback(
     (info: { index: number }) => {
-      const offset = info.index * slideUnit;
-      listRef.current?.scrollToOffset({ offset, animated: true });
+      listRef.current?.scrollToOffset({ offset: info.index * slideUnit, animated: true });
     },
     [slideUnit],
   );
 
   const renderItem = useCallback(
     ({ item }: { item: LesionCarouselItem }) => {
-      const tri = mapSeverityToTriage(item.severity);
-      const meta = triageStyle[tri];
-      const label = item.diagnosis?.label ?? '—';
-      const score = typeof item.diagnosis?.score === 'number' ? item.diagnosis.score : 0;
-      const cropUri = item.cropUrl ?? undefined;
+      const tri     = mapSeverityToTriage(item.severity);
+      const meta    = triageColors[tri];
+      const label   = item.diagnosis?.label ?? '—';
+      const score   = typeof item.diagnosis?.score === 'number' ? item.diagnosis.score : 0;
+      const cropUri    = item.cropUrl    ?? undefined;
       const overlayUri = item.overlayUrl ?? compositeUrl ?? undefined;
-      const topK = item.diagnosis?.top_k;
+      const topK    = item.diagnosis?.top_k ?? [];
+      const detConf = ((item.bbox?.conf ?? 0) * 100).toFixed(1);
+      const method  = xaiMethod ?? 'Grad-CAM';
+
+      // Classify label into severity for the coloured diagnosis chip
+      const predStatus = statusFromPrediction(label);
+      const predMeta   = triageColors[predStatus];
 
       return (
-        <View style={[styles.slideCell, { width: slideUnit }]}>
-          <View style={[styles.card, { width: cardW }]}>
-            <View style={styles.cardTop}>
-              <Text style={styles.lesionTitle}>Lesion {item.displayIndex}</Text>
-              <View style={[styles.triagePill, { backgroundColor: meta.bg, borderColor: meta.border }]}>
-                <Text style={[styles.triageTxt, { color: meta.color }]}>{tri}</Text>
+        <View style={[s.slideCell, { width: slideUnit }]}>
+          <View style={[s.card, { width: cardW }]}>
+
+            {/* ── Header ─────────────────────────────────────────────── */}
+            <View style={s.header}>
+              <View>
+                <Text style={s.lesionNumLabel}>LESION</Text>
+                <Text style={s.lesionNum}>{item.displayIndex}</Text>
+              </View>
+              <View style={[s.triagePill, { backgroundColor: meta.bg, borderColor: meta.border }]}>
+                <Text style={[s.triageTxt, { color: meta.color }]}>{tri}</Text>
               </View>
             </View>
-            <Text style={styles.analysisSectionLabel}>Model analysis</Text>
-            <Text style={styles.triageLine}>
-              Triage (from prediction):{' '}
-              <Text style={styles.triageLineStrong}>{statusFromPrediction(label)}</Text>
-            </Text>
-            <Text style={styles.pred}>
-              {label} · {(score * 100).toFixed(1)}%
-            </Text>
-            <Text style={styles.meta}>Detector conf: {((item.bbox?.conf ?? 0) * 100).toFixed(1)}%</Text>
-            {topK && topK.length > 0 ? (
-              <View style={styles.topKBlock}>
-                <Text style={styles.blockLabel}>Top classes</Text>
-                {topK.map((row, idx) => (
-                  <Text key={`${row.label}-${idx}`} style={styles.topKRow}>
-                    {row.label}: {(row.score * 100).toFixed(1)}%
-                  </Text>
+
+            {/* ── Diagnosis result ───────────────────────────────────── */}
+            <View style={[s.diagBlock, { borderColor: predMeta.border, backgroundColor: predMeta.bg }]}>
+              <Text style={s.diagClassLabel}>Diagnosis</Text>
+              <Text style={[s.diagLabel, { color: predMeta.color }]} numberOfLines={2}>{label}</Text>
+              <View style={s.diagScoreRow}>
+                <Text style={[s.diagScore, { color: predMeta.color }]}>{(score * 100).toFixed(1)}%</Text>
+                <Text style={s.diagScoreSub}> confidence</Text>
+              </View>
+            </View>
+
+            {/* ── Top-K breakdown ────────────────────────────────────── */}
+            {topK.length > 0 && (
+              <>
+                <View style={s.sectionRow}>
+                  <Text style={s.sectionLabel}>Top predictions</Text>
+                </View>
+                {topK.map((row, i) => (
+                  <ScoreRow
+                    key={`${row.label}-${i}`}
+                    label={row.label}
+                    score={row.score}
+                    highlight={i === 0}
+                  />
                 ))}
-              </View>
-            ) : null}
-            <Text style={styles.xaiHint}>
-              Explainability: {xaiMethod ?? 'Grad-CAM'} (this crop)
-            </Text>
+              </>
+            )}
+
+            {/* ── Detection meta ─────────────────────────────────────── */}
+            <Text style={s.detMeta}>Detection confidence: {detConf}%</Text>
+
+            <Divider />
+
+            {/* ── Captured region image ──────────────────────────────── */}
+            <View style={s.sectionRow}>
+              <Text style={s.sectionLabel}>Captured region</Text>
+              <Text style={s.methodBadge}>{method}</Text>
+            </View>
             {cropUri ? (
-              <Image source={{ uri: cropUri }} style={styles.cropImg} resizeMode="cover" />
+              <PreprocessedImage
+                uri={cropUri}
+                style={s.squareImg}
+                accessibilityLabel="Detected lesion crop"
+              />
             ) : (
-              <View style={[styles.cropImg, styles.placeholder]}>
-                <Text style={styles.placeholderTxt}>Crop unavailable</Text>
+              <View style={[s.squareImg, s.imgPlaceholder]}>
+                <Text style={s.placeholderTxt}>Region crop unavailable</Text>
               </View>
             )}
-            <Text style={styles.blockLabel}>Grad-CAM (this region)</Text>
+
+            <Divider />
+
+            {/* ── Grad-CAM heatmap ───────────────────────────────────── */}
+            <View style={s.sectionRow}>
+              <Text style={s.sectionLabel}>Explainability heatmap</Text>
+            </View>
             {overlayUri ? (
-              <Image source={{ uri: overlayUri }} style={styles.overlayImg} resizeMode="cover" />
+              <PreprocessedImage
+                uri={overlayUri}
+                style={s.squareImg}
+                accessibilityLabel="Grad-CAM explainability heatmap"
+              />
             ) : (
-              <View style={[styles.overlayImg, styles.placeholder]}>
-                <Text style={styles.placeholderTxt}>Overlay unavailable</Text>
+              <View style={[s.squareImg, s.imgPlaceholder]}>
+                <Text style={s.placeholderTxt}>Heatmap unavailable</Text>
               </View>
             )}
+
           </View>
         </View>
       );
@@ -146,11 +250,7 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
   );
 
   const getItemLayout = useCallback(
-    (_: unknown, index: number) => ({
-      length: slideUnit,
-      offset: slideUnit * index,
-      index,
-    }),
+    (_: unknown, index: number) => ({ length: slideUnit, offset: slideUnit * index, index }),
     [slideUnit],
   );
 
@@ -158,8 +258,7 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const x = e.nativeEvent.contentOffset.x;
       const i = Math.round(x / slideUnit);
-      const clamped = Math.max(0, Math.min(lesions.length - 1, i));
-      onSlideIndexChange(clamped);
+      onSlideIndexChange(Math.max(0, Math.min(lesions.length - 1, i)));
     },
     [lesions.length, onSlideIndexChange, slideUnit],
   );
@@ -167,7 +266,7 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
   if (lesions.length === 0) return null;
 
   return (
-    <View style={styles.root}>
+    <View style={s.root}>
       <FlatList
         ref={listRef}
         data={lesions}
@@ -178,10 +277,7 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
         snapToInterval={slideUnit}
         snapToAlignment="start"
         decelerationRate="fast"
-        contentContainerStyle={{
-          paddingLeft: horizontalPad,
-          paddingRight: horizontalPad + peek,
-        }}
+        contentContainerStyle={{ paddingLeft: horizontalPad, paddingRight: horizontalPad + peek }}
         getItemLayout={getItemLayout}
         onScrollToIndexFailed={onScrollToIndexFailed}
         onScrollBeginDrag={onScrollDragStart}
@@ -191,7 +287,11 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
   );
 });
 
-const styles = StyleSheet.create({
+// ─────────────────────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
   root: {
     marginBottom: 6,
   },
@@ -203,98 +303,125 @@ const styles = StyleSheet.create({
     borderRadius: Radius['2xl'],
     borderWidth: 1,
     borderColor: C.border,
-    padding: 16,
-    ...(Platform.OS === 'ios' ? Shadow.xs : {}),
+    padding: 18,
+    ...(Platform.OS === 'ios' ? Shadow.sm : { elevation: 2 }),
   },
-  cardTop: {
+
+  // Header
+  header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 14,
   },
-  lesionTitle: {
-    fontSize: 17,
+  lesionNumLabel: {
+    fontSize: 10,
+    fontFamily: FontFamily.bodyBold,
+    color: C.textHint,
+    letterSpacing: 1.2,
+    marginBottom: 1,
+  },
+  lesionNum: {
+    fontSize: 28,
     fontFamily: FontFamily.displayBold,
     color: C.text,
-    letterSpacing: -0.3,
+    lineHeight: 30,
   },
   triagePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: Radius.full,
     borderWidth: 1,
+    marginTop: 4,
   },
   triageTxt: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: FontFamily.bodyBold,
     letterSpacing: 0.3,
   },
-  analysisSectionLabel: {
-    fontSize: 12,
+
+  // Diagnosis block
+  diagBlock: {
+    borderRadius: Radius.lg,
+    borderWidth: 1.5,
+    padding: 14,
+    marginBottom: 14,
+  },
+  diagClassLabel: {
+    fontSize: 10,
     fontFamily: FontFamily.bodyBold,
     color: C.textHint,
-    letterSpacing: 0.4,
+    letterSpacing: 1,
+    marginBottom: 4,
     textTransform: 'uppercase',
-    marginBottom: 6,
   },
-  triageLine: {
+  diagLabel: {
+    fontSize: 18,
+    fontFamily: FontFamily.displayBold,
+    letterSpacing: -0.3,
+    marginBottom: 4,
+    lineHeight: 22,
+  },
+  diagScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  diagScore: {
+    fontSize: 24,
+    fontFamily: FontFamily.displayBold,
+    letterSpacing: -0.5,
+  },
+  diagScoreSub: {
     fontSize: 13,
     fontFamily: FontFamily.body,
     color: C.textHint,
-    marginBottom: 6,
+    marginLeft: 2,
   },
-  triageLineStrong: {
-    fontFamily: FontFamily.bodySemibold,
-    color: C.text,
-  },
-  pred: {
-    fontSize: 16,
-    fontFamily: FontFamily.displayBold,
-    color: C.text,
-    marginBottom: 4,
-  },
-  meta: {
-    fontSize: 12,
-    fontFamily: FontFamily.body,
-    color: C.textHint,
-    marginBottom: 8,
-  },
-  topKBlock: {
+
+  // Section label row
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 10,
-    gap: 4,
+    gap: 8,
   },
-  topKRow: {
+  sectionLabel: {
+    fontSize: 11,
+    fontFamily: FontFamily.bodyBold,
+    color: C.textHint,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  methodBadge: {
+    fontSize: 10,
+    fontFamily: FontFamily.bodyBold,
+    color: C.primary,
+    backgroundColor: C.primaryLight,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    letterSpacing: 0.3,
+    overflow: 'hidden',
+  },
+
+  // Detection meta
+  detMeta: {
     fontSize: 12,
     fontFamily: FontFamily.body,
     color: C.textHint,
+    marginTop: 8,
   },
-  xaiHint: {
-    fontSize: 12,
-    fontFamily: FontFamily.bodyMedium,
-    color: C.primary,
-    marginBottom: 8,
-  },
-  blockLabel: {
-    fontSize: 12,
-    fontFamily: FontFamily.bodySemibold,
-    color: C.textHint,
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  cropImg: {
+
+  // Images — square 1:1 so captured region and heatmap line up at identical
+  // dimensions. The model returns both at IMG_SIZE × IMG_SIZE, so cover
+  // resizing here is a no-op for new data and a clean crop for legacy data.
+  squareImg: {
     width: '100%',
-    height: 140,
-    borderRadius: Radius.lg,
-    backgroundColor: C.surfaceAlt,
-    marginBottom: 4,
-  },
-  overlayImg: {
-    width: '100%',
-    height: 160,
-    borderRadius: Radius.lg,
+    aspectRatio: 1,
+    borderRadius: Radius.md,
     backgroundColor: C.surfaceAlt,
   },
-  placeholder: {
+  imgPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },

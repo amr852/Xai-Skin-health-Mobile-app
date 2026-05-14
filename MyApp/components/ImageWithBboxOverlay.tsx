@@ -3,6 +3,7 @@ import { ActivityIndicator, Image, StyleSheet, Text, View, type ImageSourcePropT
 import {
   bboxToOverlayRect,
   containLayout,
+  resolveImagePreviewFrame,
   type LesionBbox,
 } from '@/lib/bboxLayout';
 import { C, FontFamily, Overlay, Radius } from '@/constants/theme';
@@ -58,6 +59,7 @@ export function ImageWithBboxOverlay({
 
   useEffect(() => {
     setLoadingImage(true);
+    setNatural(null);
   }, [uri]);
 
   useEffect(() => {
@@ -81,17 +83,23 @@ export function ImageWithBboxOverlay({
   const contain = overlayReady
     ? containLayout(layout.w, layout.h, natural!.w, natural!.h)
     : null;
+  const frame = resolveImagePreviewFrame({
+    width,
+    fallbackHeight: height,
+    imageW: natural?.w,
+    imageH: natural?.h,
+  });
 
   return (
     <View
-      style={[styles.wrap, { height, width, borderRadius }]}
+      style={[styles.wrap, { width, borderRadius }, frame]}
       onLayout={e => {
         const { width: lw, height: lh } = e.nativeEvent.layout;
         setLayout({ w: lw, h: lh });
       }}>
       <Image
         source={source}
-        style={[styles.image, { height, width, borderRadius }]}
+        style={[styles.image, { width, borderRadius }, frame]}
         resizeMode="contain"
         onLoadStart={() => setLoadingImage(true)}
         onLoadEnd={() => setLoadingImage(false)}
@@ -145,11 +153,11 @@ const styles = StyleSheet.create({
     width: '100%',
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: C.text,
+    backgroundColor: C.surfaceAlt,
   },
   image: {
     width: '100%',
-    backgroundColor: C.text,
+    backgroundColor: C.surfaceAlt,
   },
   box: {
     position: 'absolute',

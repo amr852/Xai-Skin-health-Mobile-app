@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
 import { C, FontSize, Radius, Shadow, Space } from '@/constants/theme';
-import { useLesions } from '@/hooks/useLesions';
+import { useScanSessions } from '@/hooks/useScanSessions';
 
 function daysBetween(a: Date, b: Date): number {
   const msPerDay = 86_400_000;
@@ -14,21 +14,21 @@ function daysBetween(a: Date, b: Date): number {
 
 export function SelfExamCard() {
   const router = useRouter();
-  const { lesions, fetchLesions } = useLesions();
+  const { sessions, fetchSessions } = useScanSessions();
 
-  useEffect(() => { void fetchLesions(); }, [fetchLesions]);
+  useEffect(() => { void fetchSessions(); }, [fetchSessions]);
 
   const { daysSince, totalScans } = useMemo(() => {
-    if (lesions.length === 0) {
+    if (sessions.length === 0) {
       return { daysSince: null as number | null, totalScans: 0 };
     }
-    const sorted = [...lesions].sort(
+    const sorted = [...sessions].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
     const last = new Date(sorted[0].createdAt);
     const days = daysBetween(last, new Date());
-    return { daysSince: days, totalScans: lesions.length };
-  }, [lesions]);
+    return { daysSince: days, totalScans: sessions.length };
+  }, [sessions]);
 
   const headlineNum = daysSince == null ? '—' : daysSince === 0 ? 'Today' : daysSince;
   const headlineSub = daysSince == null
@@ -66,7 +66,7 @@ export function SelfExamCard() {
         onPress={() => router.push('/camera')}>
         <Feather name="aperture" size={14} color="#fff" />
         <Text style={s.ctaTxt}>
-          {daysSince == null ? 'Log first scan' : 'New lesion scan'}
+          {daysSince == null ? 'Log first scan' : 'New scan'}
         </Text>
       </Pressable>
     </View>
