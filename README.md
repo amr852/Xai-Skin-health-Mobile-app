@@ -10,6 +10,8 @@
 
 End-to-end scan: **App** `POST /scan-sessions` (multipart image) → **Node** persists session, forwards to **Flask** `POST /scan-multi` → JSON back with `lesions[]` (bbox, diagnosis, `crop_b64` / `overlay_b64` stored as files in Node). History is **scan-first** (every scan is shown, named, and editable); users can also save specific regions from a scan as tracked lesion records.
 
+**Live mode (in progress, see [`planning/realtime-lesion-detection-plan.md`](planning/realtime-lesion-detection-plan.md))**: the camera screen also supports a real-time detection mode where the app streams ~320 px frames at 3 fps to Flask **`POST /detect-fast`** (detector-only, no classifier, no Grad-CAM) and overlays bboxes on the live preview. Live frames are never persisted; tapping the shutter captures a fresh hi-res still and runs the full `/scan-sessions` pipeline as usual. Spec: [`planning/realtime-lesion-detection.md`](planning/realtime-lesion-detection.md).
+
 ## Quick start (human or agent)
 
 | Layer | Directory | Typical command | Default URL |
@@ -49,8 +51,8 @@ End-to-end scan: **App** `POST /scan-sessions` (multipart image) → **Node** pe
 
 ### Model server (`model-server/`)
 
-- **`routes/scan.py`** — `/scan-multi` pipeline (enhance for camera vs gallery, detect, **dedupe boxes**, classify, Grad-CAM, annotated canvas).
-- **`services/bbox_dedupe.py`** — Soft-containment dedupe: drop giant aggregate containers that cover multiple smaller boxes, then drop a box when ≥ `SOFT_CONTAINMENT_THRESHOLD` (0.85) of its area lies inside a larger box. Same logic mirrored client-side in `MyApp/lib/bboxDedupe.ts`.
+- **`routes/scan.py`** — `/scan-multi` pipeline (enhance for camera vs gallery, detect, **dedupe boxes**, classify, Grad-CAM, annotated canvas). Will also host **`POST /detect-fast`** (detector-only, used by mobile Live mode — see [`planning/realtime-lesion-detection.md`](planning/realtime-lesion-detection.md)).
+- **`services/bbox_dedupe.py`** — Soft-containment dedupe: drop giant aggregate containers that cover multiple smaller boxes, then drop a box when ≥ `SOFT_CONTAINMENT_THRESHOLD` (0.85) of its area lies inside a larger box. Same logic mirrored client-side in `MyApp/lib/bboxDedupe.ts`. Used by both `/scan-multi` and the upcoming `/detect-fast`.
 
 ## Conventions
 

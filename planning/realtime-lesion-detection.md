@@ -93,15 +93,32 @@ UI requirements:
 - Auth / user model changes.
 - Web client.
 
-## Open questions for the interview
+## Decisions (locked 2026-05-14)
 
-1. Should Live mode run **detector-only** server-side (proposed) or attempt **on-device TFLite** detection? On-device removes the network round-trip but means shipping a 6–15 MB model with the app and dealing with iOS/Android export quirks.
-2. Target frame rate cap — 3 fps (battery-friendly) vs 5 fps (smoother)?
-3. Privacy: send full frames to the server (current direction), or detect on device first and only upload crops?
-4. Should the framing reticle enforce a minimum/maximum bbox size before allowing capture, to discourage too-far / too-close photos?
-5. Should we add a quick **"What does this color mean?"** legend overlay, or keep the legend as a permanent chip strip?
-6. Do we need an "auto-capture on stable lesion" option (when the same box stays inside the reticle for 1.5 s, auto-trigger a Scan)?
-7. Where should the help bottom-sheet content live — `MyApp/constants/` JSON, or an MDX/markdown asset?
+1. **Inference**: server-side `POST /detect-fast` on Flask. Reuses existing `best.pt` YOLO12n weights and `services/bbox_dedupe.soft_dedupe`. No on-device TFLite this iteration.
+2. **Frame rate**: 3 fps hard cap. Backpressure = 1 in-flight request per device; drop frames when busy. Pause stream on background / tab-leave.
+3. **Privacy**: full frames sent to server (LAN). No on-device crop pre-pass. Same trust model as existing `/scan-sessions` uploads.
+4. **Reticle**: visual guide only. No min/max bbox-size gate. Sharpness gate (Laplacian variance via existing `laplacianVarianceForImageUri`) blocks capture instead — covers the "too far / blurry" failure mode.
+5. **Severity legend**: cut from scope. Overlay colors derive from `statusFromPrediction`; no legend strip, no on-demand explainer.
+6. **Auto-capture**: cut from scope. User taps shutter explicitly; live overlay is detection aid only.
+7. **Help content**: cut from scope this iteration. Reticle hint text lives inline in `camera.tsx` as a `const` string.
+
+### Capture trigger flow (clarification)
+
+When a live bbox appears, user taps the shutter. App captures a **fresh hi-res still** (not the streamed low-res frame) and submits via the existing `POST /scan-sessions` → classifier + Grad-CAM + history path. Live-stream frames are never persisted to history.
+
+### Overlay color
+
+Live bboxes use `statusFromPrediction` colors so they match the result-screen palette. Color is computed client-side from the per-box class label returned by `/detect-fast`; no extra server work.
+
+### Out of scope (deferred, not cancelled)
+
+- TFLite on-device detection.
+- Auto-capture on stable lesion.
+- Severity legend chip strip.
+- Dev-only FPS counter.
+- Adaptive frame-rate throttling.
+- Help bottom-sheet.
 
 ## Definition of done
 
