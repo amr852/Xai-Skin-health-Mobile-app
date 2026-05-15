@@ -30,6 +30,8 @@ import { BottomTabBar, type NavKey } from '@/components/ui/BottomTabBar';
 import { useAppAlert } from '@/components/ui/AppAlert';
 import { laplacianVarianceForImageUri, LAPLACIAN_VARIANCE_THRESHOLD } from '@/lib/imageSharpness';
 import { statusFromPrediction } from '@/lib/lesionSeverity';
+import { useLiveDetect, type LiveDetection } from '@/hooks/useLiveDetect';
+import { containLayout, bboxToOverlayRect } from '@/lib/bboxLayout';
 
 const DEFAULT_FORM: LesionFields = {
   title: '', description: '', location: '', status: 'Stable', notes: '',
@@ -43,7 +45,17 @@ const CAPTURE_INSTRUCTIONS = [
   'This tool is for personal tracking only — it is not a medical diagnosis.',
 ] as const;
 
+const RETICLE_CAPTION =
+  'Hold camera ~15 cm from skin. Use bright, even light. Keep the lesion inside the frame.';
+
 type ScanPhase = 'intro' | 'camera' | 'review';
+
+function liveSeverityColor(cls: string): string {
+  const status = statusFromPrediction(cls).toLowerCase();
+  if (status === 'urgent') return C.urgentBorder;
+  if (status === 'stable') return C.stableBorder;
+  return C.checkBorder;
+}
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -70,11 +82,21 @@ export default function CameraScreen() {
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [captureBusy, setCaptureBusy] = useState(false);
   const [permGranted, setPermGranted] = useState(false);
+  const [cameraLayout, setCameraLayout] = useState({ w: 0, h: 0 });
   const router    = useRouter();
   const insets    = useSafeAreaInsets();
   const { addLesion, analyzeImage } = useLesions();
   const { token } = useAuth();
   const { showAlert, alertNode } = useAppAlert();
+
+  /**
+   * Live mode: useLiveDetect owns the 3fps capture loop, sharing the same
+   * camera ref. It pauses automatically when `enabled` flips false (scan-phase
+   * exit, app background).
+   */
+  const liveEnabled =
+    scanPhase === 'camera' && isCameraReady && !captureBusy;
+  const liveDetect = useLiveDetect({ cameraRef, enabled: liveEnabled });
 
   const handleNav = (key: NavKey) => {
     if      (key === 'home')    router.push('/');
@@ -99,23 +121,25 @@ export default function CameraScreen() {
     setXaiCarouselIndex(0);
   };
 
-  /** Show blur warning only; allow analysis to proceed for testing. */
+  /**
+   * Block capture when Laplacian variance is below threshold. Surface a clear
+   * "try again" message; decode failures fall through (don't block on infra).
+   */
   const ensureSharpEnough = useCallback(
     async (uri: string): Promise<boolean> => {
       try {
         const variance = await laplacianVarianceForImageUri(uri);
         if (variance < LAPLACIAN_VARIANCE_THRESHOLD) {
           showAlert({
-            title: 'Image looks blurry',
+            title: 'Photo looks blurry',
             message:
-              'This photo may be blurry, but it will still be analyzed so you can test model behavior.',
+              'Photo looks blurry — try again with steadier hands and brighter light.',
             variant: 'warning',
           });
-          return true;
+          return false;
         }
         return true;
       } catch {
-        /** Manipulator / decode failure should not block capture */
         return true;
       }
     },
@@ -630,8 +654,32 @@ export default function CameraScreen() {
   }
 
   // ── Live camera ─────────────────────────────────────────────────────────────
+  const liveBoxes: Array<{ left: number; top: number; width: number; height: number; color: string; key: string }> =
+    (() => {
+      if (!liveDetect.frameSize) return [];
+      if (cameraLayout.w <= 0 || cameraLayout.h <= 0) return [];
+      const { width: fw, height: fh } = liveDetect.frameSize;
+      const layout = containLayout(cameraLayout.w, cameraLayout.h, fw, fh);
+      return liveDetect.detections.map((d: LiveDetection, i: number) => {
+        const r = bboxToOverlayRect(d.bbox, layout);
+        return {
+          left: r.left,
+          top: r.top,
+          width: Math.max(1, r.width),
+          height: Math.max(1, r.height),
+          color: liveSeverityColor(d.cls),
+          key: `live-${i}-${d.bbox.x1.toFixed(1)}-${d.bbox.y1.toFixed(1)}`,
+        };
+      });
+    })();
+
   return (
-    <View style={s.cameraRoot}>
+    <View
+      style={s.cameraRoot}
+      onLayout={e => {
+        const { width, height } = e.nativeEvent.layout;
+        setCameraLayout({ w: width, h: height });
+      }}>
       {alertNode}
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
@@ -652,14 +700,43 @@ export default function CameraScreen() {
         }}
       />
 
-        <View style={[s.camTopBar, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity style={s.camCircleBtn} onPress={() => setScanPhase('intro')} activeOpacity={0.8}>
+      {/* Centered framing reticle + caption — Live & Scan share this affordance */}
+      <View pointerEvents="none" style={s.reticleWrap}>
+        <View style={s.reticleBox} />
+        <Text style={s.reticleCaption}>{RETICLE_CAPTION}</Text>
+      </View>
+
+      {/* Live bbox overlays — rendered whenever detections present */}
+      {liveBoxes.length > 0 ? (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          {liveBoxes.map(box => (
+            <View
+              key={box.key}
+              style={[
+                s.liveBox,
+                {
+                  left: box.left,
+                  top: box.top,
+                  width: box.width,
+                  height: box.height,
+                  borderColor: box.color,
+                },
+              ]}
+            />
+          ))}
+        </View>
+      ) : null}
+
+      <View style={[s.camTopBar, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity
+          style={s.camCircleBtn}
+          onPress={() => setScanPhase('intro')}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Close camera">
           <Feather name="x" size={22} color="#fff" />
         </TouchableOpacity>
-        <View style={s.camHintPill}>
-          <Feather name="crosshair" size={13} color={Overlay.whiteAlmost} />
-          <Text style={s.camHintTxt}>Align lesion in frame</Text>
-        </View>
+
         <View style={s.camTopRight}>
           <TouchableOpacity
             style={s.camCircleBtn}
@@ -685,34 +762,62 @@ export default function CameraScreen() {
                 return next;
               })}
             activeOpacity={0.8}
+            accessibilityRole="button"
             accessibilityLabel="Flip camera">
             <Feather name="refresh-cw" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
 
+      {/* Offline banner */}
+      {liveDetect.offline ? (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => setScanPhase('intro')}
+          style={[s.offlineBanner, { top: insets.top + 72 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Offline. Tap to return to camera intro.">
+          <Feather name="wifi-off" size={14} color={C.urgentText} />
+          <Text style={s.offlineBannerTxt}>Offline — tap to return to intro</Text>
+        </TouchableOpacity>
+      ) : null}
+
       <View style={[s.camBottomBar, { paddingBottom: insets.bottom + 24 }]}>
-        <View style={s.camShutter}>
-          <View pointerEvents="none" style={s.crosshairRing} />
-          <View pointerEvents="none" style={[s.crosshairTick, s.tickTop]} />
-          <View pointerEvents="none" style={[s.crosshairTick, s.tickRight]} />
-          <View pointerEvents="none" style={[s.crosshairTick, s.tickBottom]} />
-          <View pointerEvents="none" style={[s.crosshairTick, s.tickLeft]} />
+        <View style={s.camBottomRow}>
           <TouchableOpacity
-            style={[s.camShutterBtn, (!isCameraReady || captureBusy) && s.camShutterDisabled]}
-            onPress={handleTakePhoto}
+            style={s.camCircleBtn}
+            onPress={pickFromLibrary}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel="Capture photo"
-            accessibilityState={{ disabled: !isCameraReady || captureBusy }}
-            disabled={!isCameraReady || captureBusy}
-            hitSlop={12}>
-            {captureBusy ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <View style={s.camShutterInner} />
-            )}
+            accessibilityLabel="Upload photo from library">
+            <Feather name="image" size={22} color="#fff" />
           </TouchableOpacity>
+
+          <View style={s.camShutter}>
+            <View pointerEvents="none" style={s.crosshairRing} />
+            <View pointerEvents="none" style={[s.crosshairTick, s.tickTop]} />
+            <View pointerEvents="none" style={[s.crosshairTick, s.tickRight]} />
+            <View pointerEvents="none" style={[s.crosshairTick, s.tickBottom]} />
+            <View pointerEvents="none" style={[s.crosshairTick, s.tickLeft]} />
+            <TouchableOpacity
+              style={[s.camShutterBtn, (!isCameraReady || captureBusy) && s.camShutterDisabled]}
+              onPress={handleTakePhoto}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Capture photo"
+              accessibilityState={{ disabled: !isCameraReady || captureBusy }}
+              disabled={!isCameraReady || captureBusy}
+              hitSlop={12}>
+              {captureBusy ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <View style={s.camShutterInner} />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Spacer mirrors the upload button so the shutter stays centered */}
+          <View style={s.camCircleBtnSpacer} />
         </View>
       </View>
     </View>
@@ -984,6 +1089,73 @@ const s = StyleSheet.create({
     fontFamily: FontFamily.bodyMedium,
     color: Overlay.whiteAlmost,
     letterSpacing: 0.3,
+  },
+  reticleWrap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    paddingHorizontal: 32,
+  },
+  reticleBox: {
+    width: 220,
+    height: 220,
+    borderRadius: Radius.lg,
+    borderWidth: 2,
+    borderColor: Overlay.whiteSoft,
+    backgroundColor: 'transparent',
+  },
+  reticleCaption: {
+    fontSize: 12,
+    fontFamily: FontFamily.bodyMedium,
+    color: Overlay.whiteAlmost,
+    textAlign: 'center',
+    lineHeight: 17,
+    maxWidth: 280,
+  },
+  liveBox: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderRadius: Radius.xs,
+    backgroundColor: 'transparent',
+  },
+  offlineBanner: {
+    position: 'absolute',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: C.urgentBg,
+    borderColor: C.urgentBorder,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    minHeight: 36,
+  },
+  offlineBannerTxt: {
+    fontSize: 12,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.urgentText,
+    letterSpacing: 0.2,
+  },
+  camBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 32,
+  },
+  camCircleBtnSpacer: {
+    width: 46,
+    height: 46,
+  },
+  camShutterInnerLive: {
+    backgroundColor: C.primary,
   },
   camBottomBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
