@@ -116,7 +116,7 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
   const { width: winW } = useWindowDimensions();
   const listRef = useRef<FlatList<LesionCarouselItem>>(null);
   const horizontalPad = 16;
-  const peek = 22;
+  const peek = 10;
   const cardW = Math.max(220, winW - horizontalPad * 2 - peek);
   const gap = 10;
   const slideUnit = cardW + gap;
@@ -303,7 +303,8 @@ const s = StyleSheet.create({
     borderRadius: Radius['2xl'],
     borderWidth: 1,
     borderColor: C.border,
-    padding: 18,
+    padding: 14,
+    paddingHorizontal: 12,
     ...(Platform.OS === 'ios' ? Shadow.sm : { elevation: 2 }),
   },
 
