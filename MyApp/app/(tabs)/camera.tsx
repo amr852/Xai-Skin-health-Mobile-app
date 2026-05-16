@@ -32,7 +32,7 @@ import { useAppAlert } from '@/components/ui/AppAlert';
 import { laplacianVarianceForImageUri, LAPLACIAN_VARIANCE_THRESHOLD } from '@/lib/imageSharpness';
 import { statusFromPrediction } from '@/lib/lesionSeverity';
 import { useLiveDetect, type LiveDetection } from '@/hooks/useLiveDetect';
-import { containLayout, bboxToOverlayRect } from '@/lib/bboxLayout';
+import { containLayout, bboxToOverlayRect, reticleCropInPhotoPx } from '@/lib/bboxLayout';
 
 const DEFAULT_FORM: LesionFields = {
   title: '', description: '', location: '', status: 'Stable', notes: '',
@@ -53,33 +53,41 @@ const RETICLE_SIZE = 220; // Reticle box width/height in display coordinates
 type ScanPhase = 'intro' | 'camera' | 'review';
 
 /**
- * Crop image to the reticle region (centered 220x220).
- * Requires layout dimensions to calculate pixel coords.
+ * Crop the source photo to the on-screen reticle region.
+ *
+ * The reticle is RETICLE_SIZE px in *layout* coordinates, but
+ * ImageManipulator.crop operates in *source-photo* pixels — so we map through
+ * the camera preview's aspect-fill scale. Skips if any dimension is missing.
  */
 async function cropToReticle(
   imageUri: string,
   layoutWidth: number,
   layoutHeight: number,
+  photoWidth: number | undefined,
+  photoHeight: number | undefined,
 ): Promise<string> {
-  if (layoutWidth <= 0 || layoutHeight <= 0) return imageUri;
+  if (
+    layoutWidth <= 0 ||
+    layoutHeight <= 0 ||
+    !photoWidth ||
+    !photoHeight
+  ) {
+    return imageUri;
+  }
 
-  const reticleSize = RETICLE_SIZE;
-  const left = Math.max(0, (layoutWidth - reticleSize) / 2);
-  const top = Math.max(0, (layoutHeight - reticleSize) / 2);
+  const { originX, originY, size } = reticleCropInPhotoPx(
+    layoutWidth,
+    layoutHeight,
+    photoWidth,
+    photoHeight,
+    RETICLE_SIZE,
+  );
+  if (size <= 0) return imageUri;
 
   try {
     const cropped = await ImageManipulator.manipulateAsync(
       imageUri,
-      [
-        {
-          crop: {
-            originX: left,
-            originY: top,
-            width: Math.min(reticleSize, layoutWidth - left),
-            height: Math.min(reticleSize, layoutHeight - top),
-          },
-        },
-      ],
+      [{ crop: { originX, originY, width: size, height: size } }],
       { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
     );
     return cropped.uri ?? imageUri;
@@ -271,11 +279,13 @@ export default function CameraScreen() {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
       if (!photo?.uri) return;
 
-      // Crop to reticle region using current layout
+      // Crop to reticle region using current layout + photo dims (cover-fit map)
       const croppedUri = await cropToReticle(
         photo.uri,
         cameraLayout.w,
         cameraLayout.h,
+        photo.width,
+        photo.height,
       );
 
       const ok = await ensureSharpEnough(croppedUri);
@@ -703,17 +713,22 @@ export default function CameraScreen() {
   }
 
   // ── Live camera ─────────────────────────────────────────────────────────────
+  // Server bboxes are normalized against the uploaded *reticle-cropped* frame,
+  // so project onto the on-screen reticle box (centered RETICLE_SIZE square),
+  // not the full preview.
   const liveBoxes: Array<{ left: number; top: number; width: number; height: number; color: string; key: string }> =
     (() => {
       if (!liveDetect.frameSize) return [];
       if (cameraLayout.w <= 0 || cameraLayout.h <= 0) return [];
       const { width: fw, height: fh } = liveDetect.frameSize;
-      const layout = containLayout(cameraLayout.w, cameraLayout.h, fw, fh);
+      const reticleLeft = Math.max(0, (cameraLayout.w - RETICLE_SIZE) / 2);
+      const reticleTop = Math.max(0, (cameraLayout.h - RETICLE_SIZE) / 2);
+      const layout = containLayout(RETICLE_SIZE, RETICLE_SIZE, fw, fh);
       return liveDetect.detections.map((d: LiveDetection, i: number) => {
         const r = bboxToOverlayRect(d.bbox, layout);
         return {
-          left: r.left,
-          top: r.top,
+          left: reticleLeft + r.left,
+          top: reticleTop + r.top,
           width: Math.max(1, r.width),
           height: Math.max(1, r.height),
           color: liveSeverityColor(d.cls),

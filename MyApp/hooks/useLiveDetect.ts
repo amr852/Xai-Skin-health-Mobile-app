@@ -5,7 +5,9 @@ import type { CameraView } from 'expo-camera';
 
 import { API_URL, ApiError } from '@/lib/api';
 import { getStoredToken } from '@/context/AuthContext';
-import type { LesionBbox } from '@/lib/bboxLayout';
+import { reticleCropInPhotoPx, type LesionBbox } from '@/lib/bboxLayout';
+
+const RETICLE_SIZE_PX = 220;
 
 /**
  * Server normalizes coordinates 0..1 against the *uploaded* frame size; we
@@ -78,6 +80,8 @@ export function useLiveDetect({
     if (!cam) return false;
 
     let uri: string | null = null;
+    let photoW: number | undefined;
+    let photoH: number | undefined;
     try {
       const photo = await cam.takePictureAsync({
         quality: 0.6,
@@ -86,6 +90,8 @@ export function useLiveDetect({
         shutterSound: false,
       } as any);
       uri = photo?.uri ?? null;
+      photoW = photo?.width;
+      photoH = photo?.height;
     } catch {
       return false;
     }
@@ -93,20 +99,25 @@ export function useLiveDetect({
 
     let processedUri = uri;
     try {
-      const ops = [];
-      // Crop to reticle if layout provided
-      if (layoutSize && layoutSize.width > 0 && layoutSize.height > 0) {
-        const reticleSize = 220;
-        const left = Math.max(0, (layoutSize.width - reticleSize) / 2);
-        const top = Math.max(0, (layoutSize.height - reticleSize) / 2);
-        ops.push({
-          crop: {
-            originX: left,
-            originY: top,
-            width: Math.min(reticleSize, layoutSize.width - left),
-            height: Math.min(reticleSize, layoutSize.height - top),
-          },
-        });
+      const ops: ImageManipulator.Action[] = [];
+      // Reticle crop maps screen-space reticle → photo-pixel rect via cover-fit
+      if (
+        layoutSize &&
+        layoutSize.width > 0 &&
+        layoutSize.height > 0 &&
+        photoW &&
+        photoH
+      ) {
+        const { originX, originY, size } = reticleCropInPhotoPx(
+          layoutSize.width,
+          layoutSize.height,
+          photoW,
+          photoH,
+          RETICLE_SIZE_PX,
+        );
+        if (size > 0) {
+          ops.push({ crop: { originX, originY, width: size, height: size } });
+        }
       }
       // Resize for bandwidth
       ops.push({ resize: { width: maxSide } });
