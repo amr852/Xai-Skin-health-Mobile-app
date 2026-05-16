@@ -9,6 +9,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -47,8 +48,45 @@ const CAPTURE_INSTRUCTIONS = [
 
 const RETICLE_CAPTION =
   'Hold camera ~15 cm from skin. Use bright, even light. Keep the lesion inside the frame.';
+const RETICLE_SIZE = 220; // Reticle box width/height in display coordinates
 
 type ScanPhase = 'intro' | 'camera' | 'review';
+
+/**
+ * Crop image to the reticle region (centered 220x220).
+ * Requires layout dimensions to calculate pixel coords.
+ */
+async function cropToReticle(
+  imageUri: string,
+  layoutWidth: number,
+  layoutHeight: number,
+): Promise<string> {
+  if (layoutWidth <= 0 || layoutHeight <= 0) return imageUri;
+
+  const reticleSize = RETICLE_SIZE;
+  const left = Math.max(0, (layoutWidth - reticleSize) / 2);
+  const top = Math.max(0, (layoutHeight - reticleSize) / 2);
+
+  try {
+    const cropped = await ImageManipulator.manipulateAsync(
+      imageUri,
+      [
+        {
+          crop: {
+            originX: left,
+            originY: top,
+            width: Math.min(reticleSize, layoutWidth - left),
+            height: Math.min(reticleSize, layoutHeight - top),
+          },
+        },
+      ],
+      { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
+    );
+    return cropped.uri ?? imageUri;
+  } catch {
+    return imageUri;
+  }
+}
 
 function liveSeverityColor(cls: string): string {
   const status = statusFromPrediction(cls).toLowerCase();
@@ -96,7 +134,11 @@ export default function CameraScreen() {
    */
   const liveEnabled =
     scanPhase === 'camera' && isCameraReady && !captureBusy;
-  const liveDetect = useLiveDetect({ cameraRef, enabled: liveEnabled });
+  const liveDetect = useLiveDetect({
+    cameraRef,
+    enabled: liveEnabled,
+    layoutSize: cameraLayout.w > 0 && cameraLayout.h > 0 ? { width: cameraLayout.w, height: cameraLayout.h } : undefined,
+  });
 
   const handleNav = (key: NavKey) => {
     if      (key === 'home')    router.push('/');
@@ -229,7 +271,14 @@ export default function CameraScreen() {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
       if (!photo?.uri) return;
 
-      const ok = await ensureSharpEnough(photo.uri);
+      // Crop to reticle region using current layout
+      const croppedUri = await cropToReticle(
+        photo.uri,
+        cameraLayout.w,
+        cameraLayout.h,
+      );
+
+      const ok = await ensureSharpEnough(croppedUri);
       if (!ok) return;
 
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -245,7 +294,7 @@ export default function CameraScreen() {
       setAnalysisLoading(true);
 
       InteractionManager.runAfterInteractions(() => {
-        setCapturedPhoto(photo.uri);
+        setCapturedPhoto(croppedUri);
         setScanPhase('review');
       });
     } catch (e: unknown) {

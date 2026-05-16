@@ -76,9 +76,12 @@ class LesionDetector:
 
     def detect(self, image_bgr: np.ndarray) -> list[dict]:
         results = self.model(image_bgr, conf=self.conf, verbose=False)
+        names = getattr(self.model, "names", {}) or {}
         boxes: list[dict] = []
         for box in results[0].boxes:
             x1, y1, x2, y2 = box.xyxy[0].tolist()
+            cls_idx = int(box.cls[0]) if getattr(box, "cls", None) is not None else 0
+            cls_label = str(names.get(cls_idx, cls_idx)) if isinstance(names, dict) else str(cls_idx)
             boxes.append(
                 {
                     "x1": int(x1),
@@ -86,6 +89,7 @@ class LesionDetector:
                     "x2": int(x2),
                     "y2": int(y2),
                     "conf": float(box.conf[0]),
+                    "cls": cls_label,
                 }
             )
         return boxes
