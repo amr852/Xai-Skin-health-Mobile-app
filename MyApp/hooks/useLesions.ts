@@ -5,7 +5,20 @@ import { getStoredToken } from '@/context/AuthContext';
 import type { LesionBbox } from '@/lib/bboxLayout';
 import { normalizeApiMediaUrl } from '@/lib/mediaUrl';
 
-export type TopPrediction = { label: string; score: number };
+export type TopPrediction = { label: string; display?: string; score: number };
+
+export type PrimaryVerdict = {
+  label: 'benign' | 'malignant' | string;
+  display?: string;
+  score: number;
+};
+
+export type SpecialistDiagnosis = {
+  label: string;
+  display?: string;
+  score: number;
+  top_k?: TopPrediction[];
+};
 
 export type LesionAnalysis = {
   label: string;
@@ -20,6 +33,8 @@ export type LesionAnalysis = {
   recordId?: string | null;
   severity?: string;
   bbox?: LesionBbox;
+  primary?: PrimaryVerdict;
+  specialist?: SpecialistDiagnosis;
 };
 
 export type LesionDetection = {
@@ -28,9 +43,12 @@ export type LesionDetection = {
   severity?: string;
   diagnosis?: {
     label: string;
+    display?: string;
     score: number;
-    top_k?: { label: string; score: number }[];
+    top_k?: TopPrediction[];
   };
+  primary?: PrimaryVerdict;
+  specialist?: SpecialistDiagnosis;
   cropUrl?: string | null;
   overlayUrl?: string | null;
 };
@@ -47,7 +65,9 @@ export type StoredLesionFinding = {
   lesion_id?: string;
   bbox: LesionBbox;
   severity?: string;
-  diagnosis?: { label: string; score: number };
+  diagnosis?: { label: string; display?: string; score: number; top_k?: TopPrediction[] };
+  primary?: PrimaryVerdict;
+  specialist?: SpecialistDiagnosis;
   cropUrl?: string | null;
   overlayUrl?: string | null;
 };
@@ -196,7 +216,9 @@ export function useLesions() {
         lesion_id: string;
         bbox?: LesionDetection['bbox'];
         severity?: string;
-        diagnosis?: { label?: string; score?: number; top_k?: { label: string; score: number }[] };
+        diagnosis?: { label?: string; display?: string; score?: number; top_k?: TopPrediction[] };
+        primary?: PrimaryVerdict;
+        specialist?: SpecialistDiagnosis;
         cropUrl?: string | null;
         overlayUrl?: string | null;
       }>;
@@ -230,30 +252,47 @@ export function useLesions() {
       normalizeApiMediaUrl(body.annotatedImageUrl, API_URL) ?? body.annotatedImageUrl;
 
     const first = body.lesions?.[0];
+    const MODEL_NAME = 'EfficientNet-B0 hierarchical + YOLOv12n (Grad-CAM)';
     let analysis: Omit<LesionAnalysis, 'imageUrl'>;
     if (first) {
+      const specialist = first.specialist;
+      const diagLabel = specialist?.label ?? first.diagnosis?.label ?? '—';
+      const diagDisplay = specialist?.display ?? first.diagnosis?.display ?? diagLabel;
+      const diagScore =
+        typeof specialist?.score === 'number'
+          ? specialist!.score
+          : typeof first.diagnosis?.score === 'number'
+          ? first.diagnosis.score
+          : 0;
+      const topK = Array.isArray(specialist?.top_k)
+        ? specialist!.top_k!
+        : Array.isArray(first.diagnosis?.top_k)
+        ? first.diagnosis!.top_k!
+        : [];
       analysis = {
-        label: first.diagnosis?.label ?? '—',
-        score: typeof first.diagnosis?.score === 'number' ? first.diagnosis.score : 0,
+        label: diagDisplay || diagLabel,
+        score: diagScore,
         camImageUrl:
           normalizedAnnotatedImageUrl ||
           normalizeApiMediaUrl(first.overlayUrl, API_URL) ||
           undefined,
-        modelName: 'resnet50 + YOLO (Grad-CAM)',
+        modelName: MODEL_NAME,
         predictionIndex: undefined,
         xaiMethod: 'Grad-CAM',
         enhancementsApplied,
-        topPredictions: Array.isArray(first.diagnosis?.top_k) ? first.diagnosis!.top_k! : [],
+        topPredictions: topK,
         recordId: body.session_id || null,
         severity: first.severity,
         bbox: first.bbox,
+        primary: first.primary,
+        specialist,
       };
     } else if (body.no_lesion_found) {
       analysis = {
         label: 'No lesion detected',
         score: 0,
         camImageUrl: normalizedAnnotatedImageUrl || undefined,
-        modelName: 'resnet50 + YOLO (Grad-CAM)',
+        modelName: MODEL_NAME,
         predictionIndex: undefined,
         xaiMethod: 'Grad-CAM',
         enhancementsApplied,
@@ -265,7 +304,7 @@ export function useLesions() {
         label: body.partial_failure ? 'Detection without classification' : 'Analysis unavailable',
         score: 0,
         camImageUrl: normalizedAnnotatedImageUrl || undefined,
-        modelName: 'resnet50 + YOLO (Grad-CAM)',
+        modelName: MODEL_NAME,
         predictionIndex: undefined,
         xaiMethod: 'Grad-CAM',
         enhancementsApplied,
@@ -283,11 +322,21 @@ export function useLesions() {
             severity: L.severity,
             cropUrl: normalizeApiMediaUrl(L.cropUrl, API_URL) ?? null,
             overlayUrl: normalizeApiMediaUrl(L.overlayUrl, API_URL) ?? null,
+            primary: L.primary,
+            specialist: L.specialist,
             diagnosis: L.diagnosis
               ? {
                   label: L.diagnosis.label ?? '—',
+                  display: L.diagnosis.display,
                   score: L.diagnosis.score ?? 0,
                   top_k: Array.isArray(L.diagnosis.top_k) ? L.diagnosis.top_k : undefined,
+                }
+              : L.specialist
+              ? {
+                  label: L.specialist.label,
+                  display: L.specialist.display,
+                  score: L.specialist.score,
+                  top_k: L.specialist.top_k,
                 }
               : undefined,
           }))

@@ -66,7 +66,7 @@ function PreprocessedImage({
     <Image
       source={{ uri }}
       accessibilityLabel={accessibilityLabel}
-      resizeMode="cover"
+      resizeMode="contain"
       style={style}
     />
   );
@@ -143,17 +143,34 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
     ({ item }: { item: LesionCarouselItem }) => {
       const tri     = mapSeverityToTriage(item.severity);
       const meta    = triageColors[tri];
-      const label   = item.diagnosis?.label ?? '—';
-      const score   = typeof item.diagnosis?.score === 'number' ? item.diagnosis.score : 0;
+      const specialist = item.specialist;
+      const specialistLabelRaw = specialist?.label ?? item.diagnosis?.label ?? '—';
+      const specialistDisplay  = specialist?.display ?? item.diagnosis?.display ?? specialistLabelRaw;
+      const score   = typeof specialist?.score === 'number'
+        ? specialist.score
+        : typeof item.diagnosis?.score === 'number'
+          ? item.diagnosis.score
+          : 0;
       const cropUri    = item.cropUrl    ?? undefined;
       const overlayUri = item.overlayUrl ?? compositeUrl ?? undefined;
-      const topK    = item.diagnosis?.top_k ?? [];
+      const topK    = specialist?.top_k ?? item.diagnosis?.top_k ?? [];
       const detConf = ((item.bbox?.conf ?? 0) * 100).toFixed(1);
       const method  = xaiMethod ?? 'Grad-CAM';
 
-      // Classify label into severity for the coloured diagnosis chip
-      const predStatus = statusFromPrediction(label);
+      // Specialist label drives the severity-tier colour for the subtype chip.
+      const predStatus = statusFromPrediction(specialistLabelRaw);
       const predMeta   = triageColors[predStatus];
+
+      // Primary head verdict (benign|malignant) drives the top banner colour.
+      const primary = item.primary;
+      const primaryKey = (primary?.label || '').trim().toLowerCase();
+      const isMalignant = primaryKey === 'malignant';
+      const primaryMeta = isMalignant ? triageColors.Urgent : triageColors.Stable;
+      const primaryDisplay = primary?.display
+        ?? (isMalignant ? 'Malignant' : primaryKey ? 'Benign' : null);
+      const primaryScorePct = typeof primary?.score === 'number'
+        ? `${(primary.score * 100).toFixed(0)}%`
+        : null;
 
       return (
         <View style={[s.slideCell, { width: slideUnit }]}>
@@ -170,10 +187,31 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
               </View>
             </View>
 
-            {/* ── Diagnosis result ───────────────────────────────────── */}
+            {/* ── Primary verdict banner (benign / malignant) ───────── */}
+            {primaryDisplay && (
+              <View
+                style={[
+                  s.primaryBanner,
+                  { backgroundColor: primaryMeta.bg, borderColor: primaryMeta.border },
+                ]}
+              >
+                <Text style={[s.primaryBannerLabel, { color: primaryMeta.color }]}>
+                  {primaryDisplay.toUpperCase()}
+                </Text>
+                {primaryScorePct ? (
+                  <Text style={[s.primaryBannerScore, { color: primaryMeta.color }]}>
+                    {primaryScorePct}
+                  </Text>
+                ) : null}
+              </View>
+            )}
+
+            {/* ── Specialist subtype diagnosis ───────────────────────── */}
             <View style={[s.diagBlock, { borderColor: predMeta.border, backgroundColor: predMeta.bg }]}>
-              <Text style={s.diagClassLabel}>Diagnosis</Text>
-              <Text style={[s.diagLabel, { color: predMeta.color }]} numberOfLines={2}>{label}</Text>
+              <Text style={s.diagClassLabel}>Specialist diagnosis</Text>
+              <Text style={[s.diagLabel, { color: predMeta.color }]} numberOfLines={2}>
+                {specialistDisplay}
+              </Text>
               <View style={s.diagScoreRow}>
                 <Text style={[s.diagScore, { color: predMeta.color }]}>{(score * 100).toFixed(1)}%</Text>
                 <Text style={s.diagScoreSub}> confidence</Text>
@@ -189,7 +227,7 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
                 {topK.map((row, i) => (
                   <ScoreRow
                     key={`${row.label}-${i}`}
-                    label={row.label}
+                    label={(row as { display?: string }).display ?? row.label}
                     score={row.score}
                     highlight={i === 0}
                   />
@@ -338,6 +376,28 @@ const s = StyleSheet.create({
   triageTxt: {
     fontSize: 12,
     fontFamily: FontFamily.bodyBold,
+    letterSpacing: 0.3,
+  },
+
+  // Primary verdict banner (benign / malignant)
+  primaryBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: Radius.full,
+    borderWidth: 1.5,
+    marginBottom: 10,
+  },
+  primaryBannerLabel: {
+    fontSize: 15,
+    fontFamily: FontFamily.displayBold,
+    letterSpacing: 1.2,
+  },
+  primaryBannerScore: {
+    fontSize: 15,
+    fontFamily: FontFamily.displayBold,
     letterSpacing: 0.3,
   },
 

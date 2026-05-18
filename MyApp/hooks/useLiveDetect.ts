@@ -75,6 +75,11 @@ export function useLiveDetect({
 
   const minInterval = Math.max(1, Math.round(1000 / Math.max(1, fps)));
 
+  // Stabilize layoutSize as primitives so a new object literal each parent
+  // render doesn't churn captureAndDetect → useEffect → setState → re-render.
+  const layoutW = layoutSize?.width ?? 0;
+  const layoutH = layoutSize?.height ?? 0;
+
   const captureAndDetect = useCallback(async (): Promise<boolean> => {
     const cam = cameraRef.current;
     if (!cam) return false;
@@ -89,9 +94,9 @@ export function useLiveDetect({
         skipProcessing: true,
         shutterSound: false,
       } as any);
-      uri = photo?.uri ?? null;
-      photoW = photo?.width;
-      photoH = photo?.height;
+      uri = (photo as any)?.uri ?? null;
+      photoW = (photo as any)?.width;
+      photoH = (photo as any)?.height;
     } catch {
       return false;
     }
@@ -100,17 +105,15 @@ export function useLiveDetect({
     let processedUri = uri;
     try {
       const ops: ImageManipulator.Action[] = [];
-      // Reticle crop maps screen-space reticle → photo-pixel rect via cover-fit
       if (
-        layoutSize &&
-        layoutSize.width > 0 &&
-        layoutSize.height > 0 &&
+        layoutW > 0 &&
+        layoutH > 0 &&
         photoW &&
         photoH
       ) {
         const { originX, originY, size } = reticleCropInPhotoPx(
-          layoutSize.width,
-          layoutSize.height,
+          layoutW,
+          layoutH,
           photoW,
           photoH,
           RETICLE_SIZE_PX,
@@ -119,7 +122,6 @@ export function useLiveDetect({
           ops.push({ crop: { originX, originY, width: size, height: size } });
         }
       }
-      // Resize for bandwidth
       ops.push({ resize: { width: maxSide } });
 
       const manipulated = await ImageManipulator.manipulateAsync(
@@ -197,7 +199,7 @@ export function useLiveDetect({
     } finally {
       abortRef.current = null;
     }
-  }, [cameraRef, maxSide, layoutSize]);
+  }, [cameraRef, maxSide, layoutW, layoutH]);
 
   useEffect(() => {
     if (!enabled) {

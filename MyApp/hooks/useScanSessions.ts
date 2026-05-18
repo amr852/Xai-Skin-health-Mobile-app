@@ -4,16 +4,34 @@ import { getStoredToken } from '@/context/AuthContext';
 import type { LesionBbox } from '@/lib/bboxLayout';
 import { normalizeApiMediaUrl } from '@/lib/mediaUrl';
 
+export type ScanSessionTopPrediction = { label: string; display?: string; score: number };
+
 export type ScanSessionDiagnosis = {
   label?: string;
+  display?: string;
   score?: number;
-  top_k?: { label: string; score: number }[];
+  top_k?: ScanSessionTopPrediction[];
+};
+
+export type ScanSessionPrimary = {
+  label: 'benign' | 'malignant' | string;
+  display?: string;
+  score: number;
+};
+
+export type ScanSessionSpecialist = {
+  label: string;
+  display?: string;
+  score: number;
+  top_k?: ScanSessionTopPrediction[];
 };
 
 export type ScanSessionLesionStored = {
   lesionId: string;
   bbox?: LesionBbox;
   diagnosis?: ScanSessionDiagnosis;
+  primary?: ScanSessionPrimary;
+  specialist?: ScanSessionSpecialist;
   severity?: 'urgent' | 'check' | 'stable';
   cropImageUrl?: string;
   overlayImageUrl?: string;

@@ -60,14 +60,35 @@ function mapModelSeverityToStatus(s?: string): StatusKey {
 // modal) so each scan can be uniquely named ("Mole near left elbow"). When no
 // title has been saved we fall back to a label derived from the scan's own
 // analysis so cards are still distinct.
+// Prefer the model's human-readable display name (e.g. "Melanocytic Nevus")
+// over the raw shortcode label (e.g. "nv") so the history card surfaces the
+// real medical name. Falls back through specialist → diagnosis → primary →
+// shortcode → generic.
+function prettifyShortcode(raw: string): string {
+  const t = raw.trim();
+  if (!t) return '';
+  return t
+    .replace(/_/g, ' ')
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function deriveScanTitle(item: ScanSession): string {
   const userTitle = (item.title || '').trim();
   if (userTitle) return userTitle;
   if (item.noLesionFound) return 'No lesion detected';
-  const top = item.lesions?.[0]?.diagnosis?.label;
-  if (typeof top === 'string' && top.trim()) {
-    const t = top.trim();
-    return t.charAt(0).toUpperCase() + t.slice(1);
+  const top = item.lesions?.[0];
+  const candidates = [
+    top?.specialist?.display,
+    top?.diagnosis?.display,
+    top?.specialist?.label,
+    top?.diagnosis?.label,
+    top?.primary?.display,
+    top?.primary?.label,
+  ];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim()) return prettifyShortcode(c);
   }
   return 'Skin scan';
 }

@@ -1,4 +1,8 @@
-"""Grad-CAM utilities: legacy full-frame overlay and bbox-local overlays."""
+"""Grad-CAM utilities for the hierarchical pipeline.
+
+Grad-CAM is always run against the *specialist* model (benign or malignant
+head) — the one whose decision the user is being asked to trust.
+"""
 
 from __future__ import annotations
 
@@ -13,20 +17,28 @@ from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
 import config
-from services.classifier import model, target_layer, transform, DEVICE
+from services.classifier import DEVICE, lesion_classifier, transform
+
+
+def _pick_specialist(key: str):
+    if key == "malignant":
+        return lesion_classifier.malignant, lesion_classifier.target_layers["malignant"]
+    return lesion_classifier.benign, lesion_classifier.target_layers["benign"]
 
 
 def compute_gradcam_heatmap(
-    image_tensor: torch.Tensor, target_class: int
+    model: torch.nn.Module,
+    target_layer: torch.nn.Module,
+    image_tensor: torch.Tensor,
+    target_class: int,
 ) -> np.ndarray:
-    """Normalised H×W Grad-CAM heatmap in [0, 1]."""
+    """Normalised H×W Grad-CAM heatmap in [0, 1] for an arbitrary model."""
     tensor_in = image_tensor.clone().detach()
     with GradCAM(model=model, target_layers=[target_layer]) as cam:
         grayscale_cam = cam(
             input_tensor=tensor_in,
             targets=[ClassifierOutputTarget(target_class)],
         )[0, :]
-
     g = np.asarray(grayscale_cam, dtype=np.float32)
     g = np.maximum(g, 0)
     if g.max() > g.min():
@@ -40,7 +52,6 @@ def overlay_cam_on_pil(
     alpha_orig: float = 0.6,
     alpha_heat: float = 0.4,
 ) -> np.ndarray:
-    """Blend Grad-CAM over the full PIL image; returns BGR ndarray."""
     h, w = original_pil.height, original_pil.width
     cam_u8 = cv2.resize((heatmap * 255).astype(np.uint8), (w, h))
     heat = cv2.applyColorMap(cam_u8, cv2.COLORMAP_JET)
@@ -51,7 +62,6 @@ def overlay_cam_on_pil(
 def blend_heatmap_on_roi(
     roi_bgr: np.ndarray, heatmap_small: np.ndarray, alpha_roi: float = 0.55
 ) -> np.ndarray:
-    """Resize heatmap to ROI and JET-blend with alpha_heat = 1 - alpha_roi."""
     rh, rw = roi_bgr.shape[:2]
     cam_u8 = cv2.resize(
         (heatmap_small * 255).astype(np.uint8), (rw, rh), interpolation=cv2.INTER_CUBIC
@@ -67,17 +77,23 @@ def paint_lesion_on_canvas(
     x2: int,
     y2: int,
     crop_pil: Image.Image,
-    pred_idx: int,
-    label: str,
-    score: float,
+    classifier_result: dict,
 ) -> None:
-    """Blend CAM inside bbox, draw border and caption on full-frame BGR canvas."""
+    """Blend specialist Grad-CAM inside bbox; draw white border on canvas."""
     roi = canvas_bgr[y1:y2, x1:x2]
     if roi.size == 0:
         return
     try:
+        model, target_layer = _pick_specialist(
+            classifier_result.get("specialist_model_key", "benign")
+        )
         tensor = transform(crop_pil).unsqueeze(0).to(DEVICE)
-        heatmap = compute_gradcam_heatmap(tensor, pred_idx)
+        heatmap = compute_gradcam_heatmap(
+            model,
+            target_layer,
+            tensor,
+            int(classifier_result.get("specialist_pred_idx", 0)),
+        )
         cw, ch = crop_pil.size
         heat224 = cv2.resize(
             heatmap,
@@ -90,7 +106,6 @@ def paint_lesion_on_canvas(
     except Exception:
         pass
     cv2.rectangle(canvas_bgr, (x1, y1), (x2, y2), (255, 255, 255), 2)
-    # No text label baked onto the canvas — classification is displayed in the app UI.
 
 
 def numpy_bgr_to_png_b64(img_bgr: np.ndarray) -> str:
@@ -112,28 +127,25 @@ class GradCAMExplainer:
     def overlay_for_lesion(
         self,
         crop_pil: Image.Image,
-        pred_idx: int,
-        label: str,
-        score: float,
+        classifier_result: dict,
     ) -> str | None:
-        """
-        Build a PNG (base64) of the crop with the Grad-CAM heatmap blended in.
-
-        Output is always a clean square at `IMG_SIZE × IMG_SIZE` — the same
-        tensor shape the classifier consumes — so the UI displays exactly what
-        the model saw. No text labels are baked into the image; classification
-        is rendered as proper UI in the app.
-        """
+        """PNG (base64) of the crop with specialist Grad-CAM blended in."""
         try:
             size = config.IMG_SIZE
             crop_square = crop_pil.convert("RGB")
             if crop_square.size != (size, size):
                 crop_square = crop_square.resize((size, size), Image.LANCZOS)
-            tensor = transform(crop_square).unsqueeze(0).to(DEVICE)
-            heatmap = compute_gradcam_heatmap(tensor, pred_idx)
-            heat_sq = cv2.resize(
-                heatmap, (size, size), interpolation=cv2.INTER_CUBIC
+            model, target_layer = _pick_specialist(
+                classifier_result.get("specialist_model_key", "benign")
             )
+            tensor = transform(crop_square).unsqueeze(0).to(DEVICE)
+            heatmap = compute_gradcam_heatmap(
+                model,
+                target_layer,
+                tensor,
+                int(classifier_result.get("specialist_pred_idx", 0)),
+            )
+            heat_sq = cv2.resize(heatmap, (size, size), interpolation=cv2.INTER_CUBIC)
             roi_bgr = cv2.cvtColor(np.array(crop_square), cv2.COLOR_RGB2BGR)
             blended = blend_heatmap_on_roi(roi_bgr, heat_sq, alpha_roi=0.55)
             return numpy_bgr_to_png_b64(blended)

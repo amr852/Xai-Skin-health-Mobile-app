@@ -5,7 +5,14 @@ import { Platform } from 'react-native';
 const RESIZE_WIDTH = 288;
 
 /** Lenient cutoff so borderline photos are not over-flagged as blurry. */
-export const LAPLACIAN_VARIANCE_THRESHOLD = 45;
+export const LAPLACIAN_VARIANCE_THRESHOLD = 6;
+
+/**
+ * Gallery picks are often re-encoded (lower variance than raw camera captures)
+ * and the user already chose the image deliberately — only reject truly
+ * unusable shots.
+ */
+export const GALLERY_LAPLACIAN_VARIANCE_THRESHOLD = 2;
 
 /** Laplacian variance on resized JPEG (blur → low variance). */
 function laplacianVarianceGrayscaleGray(gray: Float32Array, w: number, h: number): number {

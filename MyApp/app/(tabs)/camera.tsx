@@ -29,7 +29,11 @@ import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { BottomTabBar, type NavKey } from '@/components/ui/BottomTabBar';
 import { useAppAlert } from '@/components/ui/AppAlert';
-import { laplacianVarianceForImageUri, LAPLACIAN_VARIANCE_THRESHOLD } from '@/lib/imageSharpness';
+import {
+  laplacianVarianceForImageUri,
+  LAPLACIAN_VARIANCE_THRESHOLD,
+  GALLERY_LAPLACIAN_VARIANCE_THRESHOLD,
+} from '@/lib/imageSharpness';
 import { statusFromPrediction } from '@/lib/lesionSeverity';
 import { useLiveDetect, type LiveDetection } from '@/hooks/useLiveDetect';
 import { containLayout, bboxToOverlayRect, reticleCropInPhotoPx } from '@/lib/bboxLayout';
@@ -176,14 +180,20 @@ export default function CameraScreen() {
    * "try again" message; decode failures fall through (don't block on infra).
    */
   const ensureSharpEnough = useCallback(
-    async (uri: string): Promise<boolean> => {
+    async (uri: string, source: 'camera' | 'gallery' = 'camera'): Promise<boolean> => {
       try {
         const variance = await laplacianVarianceForImageUri(uri);
-        if (variance < LAPLACIAN_VARIANCE_THRESHOLD) {
+        const threshold =
+          source === 'gallery'
+            ? GALLERY_LAPLACIAN_VARIANCE_THRESHOLD
+            : LAPLACIAN_VARIANCE_THRESHOLD;
+        if (variance < threshold) {
           showAlert({
             title: 'Photo looks blurry',
             message:
-              'Photo looks blurry — try again with steadier hands and brighter light.',
+              source === 'gallery'
+                ? 'This photo is too blurry to analyze. Pick a sharper image.'
+                : 'Photo looks blurry — try again with steadier hands and brighter light.',
             variant: 'warning',
           });
           return false;
@@ -265,7 +275,7 @@ export default function CameraScreen() {
     setAnalysisError(null);
     setUploadedImageUrl(null);
     setRetryNonce(0);
-    const ok = await ensureSharpEnough(uri);
+    const ok = await ensureSharpEnough(uri, 'gallery');
     if (!ok) return;
     setAnalysisLoading(true);
     setCapturedPhoto(uri);
@@ -279,7 +289,7 @@ export default function CameraScreen() {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
       if (!photo?.uri) return;
 
-      // Crop to reticle region using current layout + photo dims (cover-fit map)
+      // Reticle-region crop: capture only the lesion inside the framing box.
       const croppedUri = await cropToReticle(
         photo.uri,
         cameraLayout.w,
@@ -569,6 +579,41 @@ export default function CameraScreen() {
             {analysis && !analysisLoading && carouselLesions.length > 0 ? (
               <View style={s.xaiBlock}>
                 <Text style={s.xaiBlockTitle}>Model analysis & explainability</Text>
+                {(() => {
+                  const counts = carouselLesions.reduce(
+                    (acc, L) => {
+                      const k = (L.primary?.label || '').toLowerCase();
+                      if (k === 'malignant') acc.malignant += 1;
+                      else if (k === 'benign') acc.benign += 1;
+                      return acc;
+                    },
+                    { malignant: 0, benign: 0 },
+                  );
+                  if (counts.malignant === 0 && counts.benign === 0) return null;
+                  const anyMal = counts.malignant > 0;
+                  return (
+                    <View
+                      style={[
+                        s.primarySummaryBanner,
+                        {
+                          backgroundColor: anyMal ? C.urgentBg : C.stableBg,
+                          borderColor: anyMal ? C.urgentBorder : C.stableBorder,
+                        },
+                      ]}>
+                      <Text
+                        style={[
+                          s.primarySummaryText,
+                          { color: anyMal ? C.urgentText : C.stableText },
+                        ]}>
+                        {counts.malignant > 0
+                          ? `${counts.malignant} malignant`
+                          : null}
+                        {counts.malignant > 0 && counts.benign > 0 ? ' · ' : ''}
+                        {counts.benign > 0 ? `${counts.benign} benign` : null}
+                      </Text>
+                    </View>
+                  );
+                })()}
                 <LesionXaiCarousel
                   ref={xaiCarouselRef}
                   lesions={carouselLesions}
@@ -714,9 +759,8 @@ export default function CameraScreen() {
 
   // ── Live camera ─────────────────────────────────────────────────────────────
   // Server bboxes are normalized against the uploaded *reticle-cropped* frame,
-  // so project onto the on-screen reticle box (centered RETICLE_SIZE square),
-  // not the full preview.
-  const liveBoxes: Array<{ left: number; top: number; width: number; height: number; color: string; key: string }> =
+  // so project onto the on-screen reticle box only.
+  const liveBoxes: Array<{ left: number; top: number; width: number; height: number; color: string; label: string; conf: number; key: string }> =
     (() => {
       if (!liveDetect.frameSize) return [];
       if (cameraLayout.w <= 0 || cameraLayout.h <= 0) return [];
@@ -732,6 +776,8 @@ export default function CameraScreen() {
           width: Math.max(1, r.width),
           height: Math.max(1, r.height),
           color: liveSeverityColor(d.cls),
+          label: d.cls,
+          conf: d.bbox.conf ?? 0,
           key: `live-${i}-${d.bbox.x1.toFixed(1)}-${d.bbox.y1.toFixed(1)}`,
         };
       });
@@ -779,15 +825,62 @@ export default function CameraScreen() {
               style={[
                 s.liveBox,
                 {
-                  left: box.left,
-                  top: box.top,
-                  width: box.width,
-                  height: box.height,
+                  left: box.left - 2,
+                  top: box.top - 2,
+                  width: box.width + 4,
+                  height: box.height + 4,
                   borderColor: box.color,
+                  shadowColor: box.color,
                 },
-              ]}
-            />
+              ]}>
+              <View style={[s.liveBoxLabelWrap, { backgroundColor: box.color }]}>
+                <Text style={s.liveBoxLabelTxt} numberOfLines={1}>
+                  {box.label} {(box.conf * 100).toFixed(0)}%
+                </Text>
+              </View>
+            </View>
           ))}
+        </View>
+      ) : null}
+
+      {/* Detection status pill — always visible while camera screen open.
+          Drives off live detector state so text + color stay in sync with
+          the actual /detect-fast stream instead of a hardcoded label. */}
+      {scanPhase === 'camera' && !liveDetect.offline ? (
+        <View
+          pointerEvents="none"
+          style={[
+            s.liveStatusPill,
+            { top: insets.top + 72 },
+            liveBoxes.length > 0
+              ? s.liveStatusPillDetected
+              : isCameraReady && liveDetect.lastMs != null
+                ? s.liveStatusPillHealthy
+                : s.liveStatusPillScanning,
+          ]}>
+          <Text
+            style={[
+              s.liveStatusTxt,
+              liveBoxes.length > 0
+                ? s.liveStatusTxtDetected
+                : isCameraReady && liveDetect.lastMs != null
+                  ? s.liveStatusTxtHealthy
+                  : s.liveStatusTxtScanning,
+            ]}>
+            {liveBoxes.length > 0
+              ? (() => {
+                  const top = liveBoxes.reduce(
+                    (m, b) => (b.conf > m.conf ? b : m),
+                    liveBoxes[0],
+                  );
+                  return `Lesion Detected (${liveBoxes.length}) · ${top.label} ${(top.conf * 100).toFixed(0)}% — tap shutter`;
+                })()
+              : isCameraReady && liveDetect.lastMs != null
+                ? `Scanning live · clear (${liveDetect.lastMs.toFixed(0)} ms)`
+                : isCameraReady
+                  ? 'Scanning… place lesion inside the box'
+                  : 'Starting camera…'}
+          </Text>
         </View>
       ) : null}
 
@@ -1018,6 +1111,19 @@ const s = StyleSheet.create({
     color: C.text,
     marginBottom: 10,
   },
+  primarySummaryBanner: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: Radius.full,
+    borderWidth: 1.5,
+    marginBottom: 10,
+    alignSelf: 'flex-start',
+  },
+  primarySummaryText: {
+    fontSize: 13,
+    fontFamily: FontFamily.displayBold,
+    letterSpacing: 0.5,
+  },
   carouselMeta: {
     alignItems: 'center',
     gap: 10,
@@ -1183,9 +1289,62 @@ const s = StyleSheet.create({
   },
   liveBox: {
     position: 'absolute',
-    borderWidth: 2,
+    borderWidth: 3,
     borderRadius: Radius.xs,
     backgroundColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  liveBoxLabelWrap: {
+    position: 'absolute',
+    top: -18,
+    left: -1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderTopLeftRadius: Radius.xs,
+    borderTopRightRadius: Radius.xs,
+    maxWidth: 240,
+  },
+  liveBoxLabelTxt: {
+    color: '#fff',
+    fontSize: 11,
+    fontFamily: FontFamily.bodyBold,
+  },
+  liveStatusPill: {
+    position: 'absolute',
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  liveStatusPillScanning: {
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  liveStatusPillHealthy: {
+    backgroundColor: C.stableBg,
+    borderColor: C.stableBorder,
+  },
+  liveStatusPillDetected: {
+    backgroundColor: C.urgentBg,
+    borderColor: C.urgentBorder,
+  },
+  liveStatusTxt: {
+    fontSize: 13,
+    fontFamily: FontFamily.bodyBold,
+    letterSpacing: 0.3,
+  },
+  liveStatusTxtScanning: {
+    color: '#fff',
+  },
+  liveStatusTxtHealthy: {
+    color: C.stableText,
+  },
+  liveStatusTxtDetected: {
+    color: C.urgentText,
   },
   offlineBanner: {
     position: 'absolute',

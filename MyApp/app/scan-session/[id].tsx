@@ -237,9 +237,28 @@ export default function ScanSessionDetailScreen() {
             regions.map((L, i) => {
               const st = mapModelSeverityToStatus(L.severity);
               const meta = statusMeta[st];
-              const label = L.diagnosis?.label ?? '—';
-              const score = typeof L.diagnosis?.score === 'number' ? L.diagnosis.score : 0;
-              const topK = Array.isArray(L.diagnosis?.top_k) ? L.diagnosis!.top_k! : [];
+              const specialist = L.specialist;
+              const specialistLabel =
+                specialist?.display ?? specialist?.label ?? L.diagnosis?.display ?? L.diagnosis?.label ?? '—';
+              const score =
+                typeof specialist?.score === 'number'
+                  ? specialist.score
+                  : typeof L.diagnosis?.score === 'number'
+                  ? L.diagnosis.score
+                  : 0;
+              const topK = Array.isArray(specialist?.top_k)
+                ? specialist!.top_k!
+                : Array.isArray(L.diagnosis?.top_k)
+                ? L.diagnosis!.top_k!
+                : [];
+              const primary = L.primary;
+              const primaryKey = (primary?.label || '').toLowerCase();
+              const isMalignant = primaryKey === 'malignant';
+              const primaryMeta = isMalignant ? statusMeta.Urgent : statusMeta.Stable;
+              const primaryDisplay =
+                primary?.display ?? (isMalignant ? 'Malignant' : primaryKey ? 'Benign' : null);
+              const primaryScorePct =
+                typeof primary?.score === 'number' ? `${(primary.score * 100).toFixed(0)}%` : null;
               const regionTitle = `Region ${i + 1}`;
               return (
                 <View key={L.lesionId ?? `r-${i}`} style={s.regionCard}>
@@ -249,8 +268,24 @@ export default function ScanSessionDetailScreen() {
                       <Text style={[s.sevPillTxt, { color: meta.color }]}>{st}</Text>
                     </View>
                   </View>
+                  {primaryDisplay ? (
+                    <View
+                      style={[
+                        s.primaryBanner,
+                        { backgroundColor: primaryMeta.bg, borderColor: primaryMeta.color },
+                      ]}>
+                      <Text style={[s.primaryBannerLabel, { color: primaryMeta.color }]}>
+                        {primaryDisplay.toUpperCase()}
+                      </Text>
+                      {primaryScorePct ? (
+                        <Text style={[s.primaryBannerScore, { color: primaryMeta.color }]}>
+                          {primaryScorePct}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
                   <Text style={s.regionPred}>
-                    {label} · {(score * 100).toFixed(1)}%
+                    {specialistLabel} · {(score * 100).toFixed(1)}%
                   </Text>
                   <Text style={s.regionMeta}>
                     Detector conf: {((L.bbox?.conf ?? 0) * 100).toFixed(1)}%
@@ -309,7 +344,7 @@ export default function ScanSessionDetailScreen() {
                       {topK.slice(0, 5).map((p, j) => (
                         <View key={`${p.label}-${j}`} style={s.topKRow}>
                           <Text style={s.topKLabel} numberOfLines={1}>
-                            {p.label}
+                            {(p as { display?: string }).display ?? p.label}
                           </Text>
                           <Text style={s.topKScore}>{(p.score * 100).toFixed(1)}%</Text>
                         </View>
@@ -637,6 +672,25 @@ const s = StyleSheet.create({
     fontSize: FontSize.sm,
     fontFamily: FontFamily.bodySemibold,
     color: C.primary,
+  },
+  primaryBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: Radius.full,
+    borderWidth: 1.5,
+    marginVertical: 6,
+  },
+  primaryBannerLabel: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.displayBold,
+    letterSpacing: 1.1,
+  },
+  primaryBannerScore: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.displayBold,
   },
   regionMeta: {
     fontSize: FontSize.xs,

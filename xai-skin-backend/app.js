@@ -10,6 +10,7 @@ var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
 var lesionsRouter = require('./routes/lesions');
 var scanSessionsRouter = require('./routes/scanSessions');
+var detectFastRouter = require('./routes/detectFast');
 var healthRouter = require('./routes/health');
 
 var app = express();
@@ -43,6 +44,7 @@ app.use('/health', healthRouter);
 app.use('/users', usersRouter);
 app.use('/lesions', lesionsRouter);
 app.use('/scan-sessions', scanSessionsRouter);
+app.use('/detect-fast', detectFastRouter);
 
 // Global JSON error handler — prevents Express from returning HTML error pages
 app.use((err, req, res, next) => {

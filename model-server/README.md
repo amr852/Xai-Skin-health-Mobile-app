@@ -1,8 +1,8 @@
 # Model server (Flask + PyTorch)
 
-Skin lesion stack: **YOLOv12 nano (`yolo12n`)** detection (`best.pt` from your yolo12n training run) plus **ResNet-50** crops with **Grad-CAM**. Camera images are enhanced when blurry or low-light; gallery skips that step. Results can be stored in **MongoDB** when `userId` is supplied.
+Skin lesion stack: **YOLOv12 nano (`yolo12n`)** detection + **hierarchical EfficientNet-B0** classifier (primary `benign|malignant` → specialist 5-class benign OR 2-class malignant) with **Grad-CAM** on the specialist head. Camera images are enhanced when blurry or low-light; gallery skips that step. Results can be stored in **MongoDB** when `userId` is supplied.
 
-**Weights:** Put your Ultralytics **yolo12n** training **`best.pt`** in `model-server/` (default filename `best.pt`). At startup the server checks `train_args.model` in the checkpoint and warns (or aborts with `YOLO_STRICT_ARCH=1`) if it is not yolo12n-family.
+**Weights:** Put your Ultralytics **yolo12n** `best.pt` in `model-server/` (default filename `best.pt`). At startup the server checks `train_args.model` and warns (or aborts with `YOLO_STRICT_ARCH=1`) if it is not yolo12n-family. EfficientNet weights default to `C:\Users\admin\Desktop\Effnetb1\*.pth` and are overridable via env.
 
 ## Requirements
 
@@ -19,78 +19,79 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Place **`resnet50_best.pth`** (classifier) and **`best.pt`** (YOLOv12 **nano** detector) next to the app, or set `MODEL_PATH` / `YOLO_MODEL_PATH`.
+Place the three EfficientNet-B0 checkpoints (`primary`, `benign`, `malignant`) at the configured paths and **`best.pt`** (yolo12n) next to the app, or override via env vars below.
 
 ## Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MODEL_PATH` | `resnet50_best.pth` | Path to PyTorch state dict or checkpoint dict with `model_state_dict` / `state_dict`. |
-| `CLASS_NAMES` | _(unset)_ | Optional comma-separated label names in checkpoint index order. |
+| `PRIMARY_WEIGHTS` | `…\Effnetb1\primary_effnet_b0_best (2).pth` | 2-class benign\|malignant head. |
+| `BENIGN_WEIGHTS` | `…\Effnetb1\benign_effnet_b0_best (2).pth` | 5-class benign specialist. |
+| `MALIGNANT_WEIGHTS` | `…\Effnetb1\malignant_effnet_b0_best (2).pth` | 2-class malignant specialist. |
+| `PRIMARY_CLASSES` | `benign,malignant` | Index order **must** match the primary checkpoint. |
+| `BENIGN_CLASSES` | `akiec,bkl,df,nv,vasc` | Index order **must** match the benign checkpoint. If all crops are predicted as `nv`, the order is wrong — re-derive from your training script and override here. |
+| `MALIGNANT_CLASSES` | `melanoma,basal_cell_carcinoma` | Index order **must** match the malignant checkpoint. |
 | `IMG_SIZE` | `224` | Square resize side for inference. |
-| `NORMALIZE_INPUT` | `0` | Set to `1`/`true` if your checkpoint was trained with ImageNet normalization. |
-| `BLUR_THRESHOLD` | `70.0` | Lower value = less strict blur detection (fewer images sharpened). |
-| `LOW_LIGHT_THRESHOLD` | `50.0` | Brightness threshold for low-light enhancement. |
+| `NORMALIZE_INPUT` | `1` | EfficientNet-B0 expects ImageNet normalization; keep on. |
+| `BLUR_THRESHOLD` | `20.0` | Laplacian variance below this → sharpen pass. |
+| `LOW_LIGHT_THRESHOLD` | `10.0` | Mean HSV V below this → brightness/contrast pass. |
 | `MONGO_URI` | `mongodb://localhost:27017` | MongoDB connection string. |
-| `DB_NAME` | `skinsense` | Database name for `skin_analysis_results`. |
-| `UPLOAD_FOLDER` | `uploads` | Directory for saved originals, enhanced images, and CAM overlays. |
-| `YOLO_MODEL_PATH` | `best.pt` (in app dir) | Path to **yolo12n** Ultralytics `best.pt` weights. |
+| `DB_NAME` | `skinsense` | Database name. |
+| `UPLOAD_FOLDER` | `uploads` | Originals, enhanced images, CAM overlays. |
+| `YOLO_MODEL_PATH` | `best.pt` | Path to yolo12n Ultralytics weights. |
 | `YOLO_CONF_THRESHOLD` | `0.25` | Minimum detection confidence. |
-| `YOLO_STRICT_ARCH` | `0` | Set to `1` to **exit** if the checkpoint is not trained from yolo12n. |
+| `YOLO_STRICT_ARCH` | `0` | `1` aborts startup if checkpoint isn't yolo12n. |
 | `PORT` | `5000` | HTTP port when running `python app.py`. |
 
-Class labels are defined in `app.py` as `CLASS_NAMES` and can be overridden via the `CLASS_NAMES` env variable.
-If the checkpoint’s `fc` output size does not match the active label list, the server falls back to numeric labels (`class_0`, …) and logs a warning.
+Checkpoints carry **no embedded label metadata** — class order is supplied by `*_CLASSES` env vars. If predictions look stuck on one class, the most likely root cause is mismatched label order; verify against your training notebook and override.
 
 ## Run
 
 ```powershell
-set MODEL_PATH=resnet50_best.pth
-set MONGO_URI=mongodb://localhost:27017
 python app.py
 ```
 
-The Node proxy (`xai-skin-backend`) should set `MODEL_SERVER_URL` (e.g. `http://localhost:5000`) and call **`POST /scan-multi`** (multi-lesion) or legacy **`POST /scan`** with multipart `image` and optional `userId`.
+The Node proxy (`xai-skin-backend`) sets `MODEL_SERVER_URL` (e.g. `http://localhost:5000`) and calls:
 
-`GET /` returns `yolo_train_base` (e.g. `yolo12n.pt`) and `yolo_expected` so you can confirm the correct weights are loaded.
+- **`POST /scan-multi`** — full pipeline: detect → per-crop hierarchical predict → specialist Grad-CAM.
+- **`POST /detect-fast`** — detector-only (mobile Live mode, ~3 fps reticle crop).
+
+`GET /` returns model paths + yolo train base + quality thresholds.
 
 ## HTTP API (summary)
 
-| Method | Path | Body | Purpose |
-|--------|------|------|---------|
-| `GET` | `/` | — | Health: status + device. |
-| `POST` | `/scan` | multipart `image`, optional `userId` | Enhance → predict → Grad-CAM → JSON with `prediction`, `score`, `top_predictions`, `cam_base64`, etc. |
-| `POST` | `/analyze` | multipart `image`, form `userId` | Quality + enhancement only; inserts Mongo record without prediction. |
-| `POST` | `/predict` | JSON `{ "image_name": "…" }` | Classify an already saved enhanced filename. |
-| `POST` | `/predict-xai` | JSON `{ "image_name": "…" }` | Predict + Grad-CAM overlay; updates Mongo. |
-| `GET` | `/images/<user_id>` | — | List analysis documents for a user. |
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/` | Health + active config. |
+| `POST` | `/scan-multi` | multipart `image`, optional `userId` → JSON `{lesions[{primary, specialist, bbox, crop_b64, overlay_b64}]}`. |
+| `POST` | `/detect-fast` | multipart `image` (max 512 px long side) → normalized boxes only. |
+| `POST` | `/scan` (legacy) | Single-lesion shim; uses hierarchical heads under the hood. |
+| `POST` | `/analyze` (legacy) | Quality + enhancement only. |
+| `POST` | `/predict` (legacy) | Classify already-saved enhanced filename. |
+| `POST` | `/predict-xai` (legacy) | Classify + Grad-CAM. |
+| `GET` | `/images/<user_id>` | List analysis documents for a user. |
 
-### `POST /scan` (used by the mobile stack)
-
-**Form fields**
-
-- `image` (file, required)
-- `userId` (string, optional) — when set, inserts a document into `skin_analysis_results`.
-
-**Example JSON response**
+### `POST /scan-multi` example response
 
 ```json
 {
-  "prediction": "melanocytic nevi",
-  "prediction_index": 9,
-  "score": 0.87,
-  "top_predictions": [
-    { "label": "melanocytic nevi", "score": 0.87 },
-    { "label": "healthy", "score": 0.05 }
-  ],
-  "enhancements_applied": [],
-  "xai_method": "Grad-CAM",
-  "model_name": "resnet50_best",
-  "cam_base64": "<base64-png>",
-  "record_id": "…",
-  "enhanced_image_name": "enh_…"
+  "session_id": "…",
+  "lesion_count": 1,
+  "no_lesion_found": false,
+  "lesions": [{
+    "lesion_id": "…",
+    "bbox": {"x1": 12, "y1": 30, "x2": 240, "y2": 260, "conf": 0.81},
+    "primary": {"label": "benign", "display": "Benign", "score": 0.93},
+    "specialist": {
+      "label": "nv",
+      "display": "Melanocytic Nevus",
+      "score": 0.71,
+      "top_k": [{"label": "nv", "score": 0.71}, {"label": "bkl", "score": 0.18}]
+    },
+    "severity": "stable",
+    "crop_b64": "<base64-png>",
+    "overlay_b64": "<base64-png>"
+  }],
+  "annotated_image_b64": "<base64-png>"
 }
 ```
-
-Preprocessing defaults to plain resize + tensor conversion (**no ImageNet normalization**).  
-If your checkpoint was trained with ImageNet normalization, set `NORMALIZE_INPUT=1`.

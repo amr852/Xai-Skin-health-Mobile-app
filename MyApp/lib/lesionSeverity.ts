@@ -7,28 +7,33 @@ function norm(s: string): string {
 
 export type DerivedLesionStatus = LesionFields['status'];
 
+// Raw HAM10000 short codes (notebook-trained: 'mel','bcc','akiec','bkl','df','nv','vasc')
+// + display strings + legacy aliases. Backend may emit either raw or display.
 const URGENT = new Set(
-  ['melanoma', 'squamous cell carcinoma', 'basal cell carcinoma'].map(norm),
+  [
+    'melanoma', 'squamous cell carcinoma', 'basal cell carcinoma',
+    'mel', 'bcc', 'basal_cell_carcinoma',
+  ].map(norm),
 );
 
 const CHECK = new Set(
   [
-    'actinic keratoses',
-    'monkeypox',
-    'hfmd',
-    'vascular lesions',
+    'actinic keratoses', 'actinic keratosis',
+    'monkeypox', 'hfmd',
+    'vascular lesions', 'vascular lesion',
+    'akiec', 'vasc',
   ].map(norm),
 );
 
 const STABLE = new Set(
   [
-    'acne',
-    'eczema',
-    'benign keratosis-like lesions',
+    'acne', 'eczema',
+    'benign keratosis-like lesions', 'benign keratosis',
     'chickenpox',
     'dermatofibroma',
     'healthy',
-    'melanocytic nevi',
+    'melanocytic nevi', 'melanocytic nevus',
+    'bkl', 'df', 'nv',
   ].map(norm),
 );
 

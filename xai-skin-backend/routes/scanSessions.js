@@ -199,6 +199,8 @@ router.post('/', verifyToken, (req, res) => {
         lesionsPayload.push({
           lesionId: L.lesion_id,
           bbox: L.bbox,
+          primary: L.primary,
+          specialist: L.specialist,
           diagnosis: L.diagnosis,
           severity: L.severity,
           cropImageUrl: publicUploadUrl(req, cropName),
@@ -233,6 +235,8 @@ router.post('/', verifyToken, (req, res) => {
         lesions: doc.lesions.map((x) => ({
           lesion_id: x.lesionId,
           bbox: x.bbox,
+          primary: x.primary,
+          specialist: x.specialist,
           diagnosis: x.diagnosis,
           severity: x.severity,
           crop_b64: null,

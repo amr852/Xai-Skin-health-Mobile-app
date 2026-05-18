@@ -14,6 +14,7 @@ const bboxSchema = new mongoose.Schema(
 const topKSchema = new mongoose.Schema(
   {
     label: String,
+    display: String,
     score: Number,
   },
   { _id: false },
@@ -22,6 +23,26 @@ const topKSchema = new mongoose.Schema(
 const diagnosisSchema = new mongoose.Schema(
   {
     label: String,
+    display: String,
+    score: Number,
+    top_k: [topKSchema],
+  },
+  { _id: false },
+);
+
+const primarySchema = new mongoose.Schema(
+  {
+    label: String,
+    display: String,
+    score: Number,
+  },
+  { _id: false },
+);
+
+const specialistSchema = new mongoose.Schema(
+  {
+    label: String,
+    display: String,
     score: Number,
     top_k: [topKSchema],
   },
@@ -32,6 +53,8 @@ const scanLesionSchema = new mongoose.Schema(
   {
     lesionId: { type: String, required: true },
     bbox: bboxSchema,
+    primary: primarySchema,
+    specialist: specialistSchema,
     diagnosis: diagnosisSchema,
     severity: {
       type: String,

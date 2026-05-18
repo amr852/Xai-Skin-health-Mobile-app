@@ -5,13 +5,38 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-import torch
 from flask import Blueprint, current_app, jsonify, request
 
 import config
 from helpers import load_pil, save_enhanced_pair_from_upload, save_image, to_base64
-from services.classifier import CLASS_NAMES, DEVICE, model, top_k_predictions, transform
+from services.classifier import DEVICE, lesion_classifier, transform
 from services.explainer import compute_gradcam_heatmap, overlay_cam_on_pil
+
+
+def _predict_pil(img_pil):
+    """Hierarchical predict shim → flat fields legacy callers expect."""
+    result = lesion_classifier.predict(img_pil)
+    return {
+        "pred_idx": result["specialist_pred_idx"],
+        "class_name": result["specialist"]["label"],
+        "score": result["specialist"]["score"],
+        "top_preds": result["specialist"]["top_k"],
+        "specialist_key": result["specialist_model_key"],
+        "primary": result["primary"],
+    }
+
+
+def _legacy_cam(img_pil, pred_idx: int, specialist_key: str):
+    """Run Grad-CAM against the specialist head for legacy /scan + /predict-xai."""
+    if specialist_key == "malignant":
+        net = lesion_classifier.malignant
+        layer = lesion_classifier.target_layers["malignant"]
+    else:
+        net = lesion_classifier.benign
+        layer = lesion_classifier.target_layers["benign"]
+    tensor = transform(img_pil).unsqueeze(0).to(DEVICE)
+    heatmap = compute_gradcam_heatmap(net, layer, tensor, pred_idx)
+    return overlay_cam_on_pil(img_pil, heatmap)
 
 legacy_bp = Blueprint("legacy", __name__)
 
@@ -25,7 +50,11 @@ def home():
             "status": "Skin Lesion Classifier API is running",
             "device": str(DEVICE),
             "model_name": config.MODEL_NAME,
-            "model_path": config.MODEL_PATH,
+            "model_paths": {
+                "primary": config.PRIMARY_WEIGHTS,
+                "benign": config.BENIGN_WEIGHTS,
+                "malignant": config.MALIGNANT_WEIGHTS,
+            },
             "normalize_input": config.NORMALIZE_INPUT,
             "yolo_model_path": yolo_detector.DETECTOR_WEIGHTS_PATH
             or config.YOLO_MODEL_PATH,
@@ -104,26 +133,21 @@ def scan_lesion():
         return jsonify({"error": str(e)}), 400
 
     img_pil = saved["img_pil"]
-    tensor = transform(img_pil).unsqueeze(0).to(DEVICE)
-
-    with torch.no_grad():
-        logits = model(tensor)
-    pred_idx = int(logits.argmax(dim=1).item())
-    probs = torch.softmax(logits, dim=1)[0]
-    pred_score = float(probs[pred_idx].item())
-    class_name = CLASS_NAMES[pred_idx] if pred_idx < len(CLASS_NAMES) else str(pred_idx)
-    top_preds = top_k_predictions(logits, k=3)
+    pred = _predict_pil(img_pil)
+    pred_idx = pred["pred_idx"]
+    class_name = pred["class_name"]
+    pred_score = pred["score"]
+    top_preds = pred["top_preds"]
     print(
-        f"[/scan] model prediction: {class_name} (idx={pred_idx}, "
-        f"score={pred_score:.4f}) | top3={top_preds} | "
+        f"[/scan] hierarchical: primary={pred['primary']['label']} -> "
+        f"{class_name} (idx={pred_idx}, score={pred_score:.4f}) | top3={top_preds} | "
         f"normalize_input={config.NORMALIZE_INPUT}"
     )
 
     cam_name = None
     cam_b64 = None
     try:
-        heatmap = compute_gradcam_heatmap(tensor, pred_idx)
-        overlay = overlay_cam_on_pil(img_pil, heatmap)
+        overlay = _legacy_cam(img_pil, pred_idx, pred["specialist_key"])
         base = os.path.splitext(saved["enhanced_image_name"])[0]
         cam_name = f"cam_{base}.png"
         cam_path = save_image(overlay, cam_name)
@@ -207,20 +231,14 @@ def predict():
 
     try:
         img_pil = load_pil(image_name)
-        tensor = transform(img_pil).unsqueeze(0).to(DEVICE)
-
-        with torch.no_grad():
-            outputs = model(tensor)
-            pred_idx = int(outputs.argmax(dim=1).item())
-            probs = torch.softmax(outputs, dim=1)[0]
-            pred_score = float(probs[pred_idx].item())
-            class_name = (
-                CLASS_NAMES[pred_idx] if pred_idx < len(CLASS_NAMES) else str(pred_idx)
-            )
-        top_preds = top_k_predictions(outputs, k=3)
+        pred = _predict_pil(img_pil)
+        pred_idx = pred["pred_idx"]
+        class_name = pred["class_name"]
+        pred_score = pred["score"]
+        top_preds = pred["top_preds"]
         print(
-            f"[/predict] model prediction: {class_name} (idx={pred_idx}, "
-            f"score={pred_score:.4f}) | top3={top_preds} | "
+            f"[/predict] hierarchical: primary={pred['primary']['label']} -> "
+            f"{class_name} (idx={pred_idx}, score={pred_score:.4f}) | top3={top_preds} | "
             f"normalize_input={config.NORMALIZE_INPUT}"
         )
 
@@ -255,27 +273,21 @@ def predict_with_xai():
 
     try:
         img_pil = load_pil(image_name)
-        tensor = transform(img_pil).unsqueeze(0).to(DEVICE)
-
-        with torch.no_grad():
-            logits = model(tensor)
-            pred_idx = int(logits.argmax(dim=1).item())
-            probs = torch.softmax(logits, dim=1)[0]
-            pred_score = float(probs[pred_idx].item())
-
-        class_name = CLASS_NAMES[pred_idx] if pred_idx < len(CLASS_NAMES) else str(pred_idx)
-        top_preds = top_k_predictions(logits, k=3)
+        pred = _predict_pil(img_pil)
+        pred_idx = pred["pred_idx"]
+        class_name = pred["class_name"]
+        pred_score = pred["score"]
+        top_preds = pred["top_preds"]
         print(
-            f"[/predict-xai] model prediction: {class_name} (idx={pred_idx}, "
-            f"score={pred_score:.4f}) | top3={top_preds} | "
+            f"[/predict-xai] hierarchical: primary={pred['primary']['label']} -> "
+            f"{class_name} (idx={pred_idx}, score={pred_score:.4f}) | top3={top_preds} | "
             f"normalize_input={config.NORMALIZE_INPUT}"
         )
 
         cam_name = None
         cam_b64 = None
         try:
-            heatmap = compute_gradcam_heatmap(tensor, pred_idx)
-            overlay = overlay_cam_on_pil(img_pil, heatmap)
+            overlay = _legacy_cam(img_pil, pred_idx, pred["specialist_key"])
             base = os.path.splitext(image_name)[0]
             cam_name = f"cam_{base}.png"
             cam_path = save_image(overlay, cam_name)

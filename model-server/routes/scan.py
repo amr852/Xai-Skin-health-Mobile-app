@@ -91,10 +91,10 @@ def scan_multi():
             partial_failure = True
             continue
 
+        # Crop = exact YOLO bbox, resized to model input. Matches notebook
+        # val_tf (Resize((224,224)) on a PIL image) — no padding, no hair
+        # removal, no post-hoc transforms.
         raw_crop = full_pil.crop((x1, y1, x2, y2))
-        # Resize to the model's expected input size so every crop is uniform:
-        # what the classifier sees is exactly what gets displayed and fed to
-        # Grad-CAM — no more variable-size wonky crops.
         crop_pil = raw_crop.resize(
             (config.IMG_SIZE, config.IMG_SIZE), PILImage.LANCZOS
         )
@@ -104,13 +104,17 @@ def scan_multi():
             partial_failure = True
             continue
 
-        lesion_id = str(uuid.uuid4())
-        overlay_b64 = gradcam_explainer.overlay_for_lesion(
-            crop_pil,
-            diag["pred_idx"],
-            diag["label"],
-            diag["score"],
+        print(
+            f"[/scan-multi] bbox=({x1},{y1},{x2},{y2}) "
+            f"primary={diag['primary']['label']}({diag['primary']['score']:.3f}) -> "
+            f"{diag['specialist_model_key']} -> "
+            f"{diag['specialist']['label']}({diag['specialist']['score']:.3f}) "
+            f"top_k={diag['specialist']['top_k']} "
+            f"normalize={config.NORMALIZE_INPUT}"
         )
+
+        lesion_id = str(uuid.uuid4())
+        overlay_b64 = gradcam_explainer.overlay_for_lesion(crop_pil, diag)
         crop_b64 = pil_to_png_b64(crop_pil)
 
         bbox_payload = {
@@ -120,16 +124,20 @@ def scan_multi():
             "y2": y2,
             "conf": box["conf"],
         }
-        severity = config.get_severity(diag["label"])
+        severity = config.get_severity(diag["specialist"]["label"])
+        diagnosis_payload = {
+            "label": diag["specialist"]["label"],
+            "display": diag["specialist"].get("display"),
+            "score": diag["specialist"]["score"],
+            "top_k": diag["specialist"]["top_k"],
+        }
         lesions_out.append(
             {
                 "lesion_id": lesion_id,
                 "bbox": bbox_payload,
-                "diagnosis": {
-                    "label": diag["label"],
-                    "score": diag["score"],
-                    "top_k": diag["top_k"],
-                },
+                "primary": diag["primary"],
+                "specialist": diag["specialist"],
+                "diagnosis": diagnosis_payload,
                 "severity": severity,
                 "crop_b64": crop_b64,
                 "overlay_b64": overlay_b64,
@@ -137,17 +145,7 @@ def scan_multi():
         )
 
         try:
-            paint_lesion_on_canvas(
-                canvas,
-                x1,
-                y1,
-                x2,
-                y2,
-                crop_pil,
-                diag["pred_idx"],
-                diag["label"],
-                diag["score"],
-            )
+            paint_lesion_on_canvas(canvas, x1, y1, x2, y2, crop_pil, diag)
         except Exception:
             pass
 
@@ -180,6 +178,8 @@ def scan_multi():
                 {
                     "lesion_id": x["lesion_id"],
                     "bbox": x["bbox"],
+                    "primary": x["primary"],
+                    "specialist": x["specialist"],
                     "diagnosis": x["diagnosis"],
                     "severity": x["severity"],
                 }
