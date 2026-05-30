@@ -48,6 +48,9 @@ SEVERITY: dict[str, str] = {
 # Classes considered malignant for primary/specialist split.
 MALIGNANT_LABELS: set[str] = {"mel", "bcc", "akiec"}
 
+# Fractional padding added to each side of a YOLO bbox before classifier crop.
+LESION_CROP_PADDING: float = float(os.environ.get("LESION_CROP_PADDING", "0.12"))
+
 IMG_SIZE = int(os.environ.get("IMG_SIZE", "224"))
 
 # Model weights.
