@@ -1,0 +1,827 @@
+[
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0030825.jpg",
+    "true": "actinic keratoses",
+    "pred": "squamous cell carcinoma",
+    "score": 0.6080254316329956,
+    "top_k": [
+      {
+        "label": "squamous cell carcinoma",
+        "display": "Squamous Cell Carcinoma",
+        "score": 0.6080254316329956
+      },
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.32516032457351685
+      },
+      {
+        "label": "dermatofibroma",
+        "display": "Dermatofibroma",
+        "score": 0.03029520995914936
+      },
+      {
+        "label": "Acne",
+        "display": "Acne",
+        "score": 0.027607005089521408
+      },
+      {
+        "label": "chickenpox",
+        "display": "Chickenpox",
+        "score": 0.003834376810118556
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0060230.jpg",
+    "true": "actinic keratoses",
+    "pred": "benign keratosis-like lesions",
+    "score": 0.815859854221344,
+    "top_k": [
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.815859854221344
+      },
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.13991227746009827
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.020452622324228287
+      },
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.01705954037606716
+      },
+      {
+        "label": "monkeypox",
+        "display": "Monkeypox",
+        "score": 0.004045263398438692
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0057986.jpg",
+    "true": "actinic keratoses",
+    "pred": "melanoma",
+    "score": 0.6841230988502502,
+    "top_k": [
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.6841230988502502
+      },
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.2634420692920685
+      },
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.02752727083861828
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.017539221793413162
+      },
+      {
+        "label": "hfmd",
+        "display": "Hand, Foot & Mouth Disease",
+        "score": 0.0035261574666947126
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0057135.jpg",
+    "true": "actinic keratoses",
+    "pred": "basal cell carcinoma",
+    "score": 0.5919732451438904,
+    "top_k": [
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.5919732451438904
+      },
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.38667482137680054
+      },
+      {
+        "label": "squamous cell carcinoma",
+        "display": "Squamous Cell Carcinoma",
+        "score": 0.010205531492829323
+      },
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.00565718486905098
+      },
+      {
+        "label": "melanocytic nevi",
+        "display": "Melanocytic Nevus",
+        "score": 0.0049894945695996284
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0072105.jpg",
+    "true": "basal cell carcinoma",
+    "pred": "benign keratosis-like lesions",
+    "score": 0.5715890526771545,
+    "top_k": [
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.5715890526771545
+      },
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.2906442880630493
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.1009024903178215
+      },
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.031129436567425728
+      },
+      {
+        "label": "chickenpox",
+        "display": "Chickenpox",
+        "score": 0.0020786947570741177
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0072776.jpg",
+    "true": "basal cell carcinoma",
+    "pred": "actinic keratoses",
+    "score": 0.6260764002799988,
+    "top_k": [
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.6260764002799988
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.3706607520580292
+      },
+      {
+        "label": "melanocytic nevi",
+        "display": "Melanocytic Nevus",
+        "score": 0.001931707956828177
+      },
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.0008359203930012882
+      },
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.000361506623448804
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0057117.jpg",
+    "true": "basal cell carcinoma",
+    "pred": "actinic keratoses",
+    "score": 0.5122954845428467,
+    "top_k": [
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.5122954845428467
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.48541730642318726
+      },
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.0013151465682312846
+      },
+      {
+        "label": "squamous cell carcinoma",
+        "display": "Squamous Cell Carcinoma",
+        "score": 0.00039498350815847516
+      },
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.00038081820821389556
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0032665.jpg",
+    "true": "benign keratosis-like lesions",
+    "pred": "melanoma",
+    "score": 0.8256586194038391,
+    "top_k": [
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.8256586194038391
+      },
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.1608891785144806
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.009347892366349697
+      },
+      {
+        "label": "hfmd",
+        "display": "Hand, Foot & Mouth Disease",
+        "score": 0.002357347169891
+      },
+      {
+        "label": "melanocytic nevi",
+        "display": "Melanocytic Nevus",
+        "score": 0.0013355833943933249
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0029107.jpg",
+    "true": "benign keratosis-like lesions",
+    "pred": "melanoma",
+    "score": 0.7975571751594543,
+    "top_k": [
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.7975571751594543
+      },
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.15008684992790222
+      },
+      {
+        "label": "melanocytic nevi",
+        "display": "Melanocytic Nevus",
+        "score": 0.04684163257479668
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.003149046329781413
+      },
+      {
+        "label": "chickenpox",
+        "display": "Chickenpox",
+        "score": 0.0010516209295019507
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0031650.jpg",
+    "true": "benign keratosis-like lesions",
+    "pred": "melanoma",
+    "score": 0.9692663550376892,
+    "top_k": [
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.9692663550376892
+      },
+      {
+        "label": "melanocytic nevi",
+        "display": "Melanocytic Nevus",
+        "score": 0.01746470481157303
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.008494081906974316
+      },
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.004410258028656244
+      },
+      {
+        "label": "hfmd",
+        "display": "Hand, Foot & Mouth Disease",
+        "score": 8.100214472506195e-05
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0057561.jpg",
+    "true": "benign keratosis-like lesions",
+    "pred": "actinic keratoses",
+    "score": 0.6264243125915527,
+    "top_k": [
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.6264243125915527
+      },
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.2769857943058014
+      },
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.06145743280649185
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.03434475138783455
+      },
+      {
+        "label": "hfmd",
+        "display": "Hand, Foot & Mouth Disease",
+        "score": 0.0004435724695213139
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0069885.jpg",
+    "true": "benign keratosis-like lesions",
+    "pred": "melanoma",
+    "score": 0.6871249079704285,
+    "top_k": [
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.6871249079704285
+      },
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.3113749027252197
+      },
+      {
+        "label": "monkeypox",
+        "display": "Monkeypox",
+        "score": 0.0005637072608806193
+      },
+      {
+        "label": "melanocytic nevi",
+        "display": "Melanocytic Nevus",
+        "score": 0.00040431524394080043
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.0001357548317173496
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0058080.jpg",
+    "true": "benign keratosis-like lesions",
+    "pred": "basal cell carcinoma",
+    "score": 0.5595090389251709,
+    "top_k": [
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.5595090389251709
+      },
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.41742464900016785
+      },
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.022123847156763077
+      },
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.00034702473203651607
+      },
+      {
+        "label": "squamous cell carcinoma",
+        "display": "Squamous Cell Carcinoma",
+        "score": 0.00015149766113609076
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0067627.jpg",
+    "true": "benign keratosis-like lesions",
+    "pred": "melanoma",
+    "score": 0.6776320338249207,
+    "top_k": [
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.6776320338249207
+      },
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.2897302806377411
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.0297230277210474
+      },
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.002384914318099618
+      },
+      {
+        "label": "monkeypox",
+        "display": "Monkeypox",
+        "score": 0.0003244226973038167
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0065859.jpg",
+    "true": "benign keratosis-like lesions",
+    "pred": "melanoma",
+    "score": 0.7590072154998779,
+    "top_k": [
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.7590072154998779
+      },
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.19386017322540283
+      },
+      {
+        "label": "melanocytic nevi",
+        "display": "Melanocytic Nevus",
+        "score": 0.033210013061761856
+      },
+      {
+        "label": "vascular lesions",
+        "display": "Vascular Lesion",
+        "score": 0.004540735390037298
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.004432966001331806
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0073193.jpg",
+    "true": "dermatofibroma",
+    "pred": "squamous cell carcinoma",
+    "score": 0.47135674953460693,
+    "top_k": [
+      {
+        "label": "squamous cell carcinoma",
+        "display": "Squamous Cell Carcinoma",
+        "score": 0.47135674953460693
+      },
+      {
+        "label": "dermatofibroma",
+        "display": "Dermatofibroma",
+        "score": 0.4464911222457886
+      },
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.057948239147663116
+      },
+      {
+        "label": "vascular lesions",
+        "display": "Vascular Lesion",
+        "score": 0.013394110836088657
+      },
+      {
+        "label": "Eczema",
+        "display": "Eczema",
+        "score": 0.006728321313858032
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0029967(1).jpg",
+    "true": "dermatofibroma",
+    "pred": "melanoma",
+    "score": 0.4884728193283081,
+    "top_k": [
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.4884728193283081
+      },
+      {
+        "label": "dermatofibroma",
+        "display": "Dermatofibroma",
+        "score": 0.48290959000587463
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.014925227500498295
+      },
+      {
+        "label": "melanocytic nevi",
+        "display": "Melanocytic Nevus",
+        "score": 0.011235345155000687
+      },
+      {
+        "label": "squamous cell carcinoma",
+        "display": "Squamous Cell Carcinoma",
+        "score": 0.0008261756738647819
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0063944.jpg",
+    "true": "dermatofibroma",
+    "pred": "squamous cell carcinoma",
+    "score": 0.5990334749221802,
+    "top_k": [
+      {
+        "label": "squamous cell carcinoma",
+        "display": "Squamous Cell Carcinoma",
+        "score": 0.5990334749221802
+      },
+      {
+        "label": "dermatofibroma",
+        "display": "Dermatofibroma",
+        "score": 0.3900250792503357
+      },
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.006765709258615971
+      },
+      {
+        "label": "vascular lesions",
+        "display": "Vascular Lesion",
+        "score": 0.0033006230369210243
+      },
+      {
+        "label": "Eczema",
+        "display": "Eczema",
+        "score": 0.00044129471643827856
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\dfskin_41.jpg",
+    "true": "dermatofibroma",
+    "pred": "actinic keratoses",
+    "score": 0.6226593255996704,
+    "top_k": [
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.6226593255996704
+      },
+      {
+        "label": "dermatofibroma",
+        "display": "Dermatofibroma",
+        "score": 0.23965109884738922
+      },
+      {
+        "label": "squamous cell carcinoma",
+        "display": "Squamous Cell Carcinoma",
+        "score": 0.07075925171375275
+      },
+      {
+        "label": "melanocytic nevi",
+        "display": "Melanocytic Nevus",
+        "score": 0.05265654996037483
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.004631303250789642
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0057868.jpg",
+    "true": "dermatofibroma",
+    "pred": "melanocytic nevi",
+    "score": 0.5410933494567871,
+    "top_k": [
+      {
+        "label": "melanocytic nevi",
+        "display": "Melanocytic Nevus",
+        "score": 0.5410933494567871
+      },
+      {
+        "label": "dermatofibroma",
+        "display": "Dermatofibroma",
+        "score": 0.3974035680294037
+      },
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.03446359187364578
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.00875228364020586
+      },
+      {
+        "label": "vascular lesions",
+        "display": "Vascular Lesion",
+        "score": 0.004722520709037781
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0025903(1).jpg",
+    "true": "dermatofibroma",
+    "pred": "benign keratosis-like lesions",
+    "score": 0.3494527041912079,
+    "top_k": [
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.3494527041912079
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.3386254608631134
+      },
+      {
+        "label": "healthy",
+        "display": "Healthy Skin",
+        "score": 0.14037519693374634
+      },
+      {
+        "label": "vascular lesions",
+        "display": "Vascular Lesion",
+        "score": 0.04464004561305046
+      },
+      {
+        "label": "monkeypox",
+        "display": "Monkeypox",
+        "score": 0.03370719403028488
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0061305.jpg",
+    "true": "dermatofibroma",
+    "pred": "melanocytic nevi",
+    "score": 0.9693946242332458,
+    "top_k": [
+      {
+        "label": "melanocytic nevi",
+        "display": "Melanocytic Nevus",
+        "score": 0.9693946242332458
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.015795959159731865
+      },
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.012632247991859913
+      },
+      {
+        "label": "dermatofibroma",
+        "display": "Dermatofibroma",
+        "score": 0.0009059940930455923
+      },
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.00036554172402247787
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\melanocytic nevi\\ISIC_0062418.jpg",
+    "true": "melanocytic nevi",
+    "pred": "squamous cell carcinoma",
+    "score": 0.3912927210330963,
+    "top_k": [
+      {
+        "label": "squamous cell carcinoma",
+        "display": "Squamous Cell Carcinoma",
+        "score": 0.3912927210330963
+      },
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.299677312374115
+      },
+      {
+        "label": "melanocytic nevi",
+        "display": "Melanocytic Nevus",
+        "score": 0.14228084683418274
+      },
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.08461936563253403
+      },
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.060781966894865036
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\melanoma\\ISIC_0068818.jpg",
+    "true": "melanoma",
+    "pred": "basal cell carcinoma",
+    "score": 0.6395708322525024,
+    "top_k": [
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.6395708322525024
+      },
+      {
+        "label": "benign keratosis-like lesions",
+        "display": "Benign Keratosis",
+        "score": 0.3588613271713257
+      },
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.0007433481514453888
+      },
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.0005949769401922822
+      },
+      {
+        "label": "monkeypox",
+        "display": "Monkeypox",
+        "score": 7.019267650321126e-05
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\melanoma\\ISIC_0065521.jpg",
+    "true": "melanoma",
+    "pred": "actinic keratoses",
+    "score": 0.48552924394607544,
+    "top_k": [
+      {
+        "label": "actinic keratoses",
+        "display": "Actinic Keratosis",
+        "score": 0.48552924394607544
+      },
+      {
+        "label": "basal cell carcinoma",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.36848893761634827
+      },
+      {
+        "label": "melanoma",
+        "display": "Melanoma",
+        "score": 0.0906173437833786
+      },
+      {
+        "label": "squamous cell carcinoma",
+        "display": "Squamous Cell Carcinoma",
+        "score": 0.04530181363224983
+      },
+      {
+        "label": "dermatofibroma",
+        "display": "Dermatofibroma",
+        "score": 0.0043851756490767
+      }
+    ]
+  }
+]

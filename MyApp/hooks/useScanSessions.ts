@@ -48,6 +48,14 @@ export type ScanSession = {
   qualityMetadata?: { enhancements_applied?: string[] };
   originalImageUrl?: string;
   annotatedImageUrl?: string | null;
+  /** Whole-image diagnosis (experimental whole-image-classification mode). */
+  wholeImage?: {
+    primary?: ScanSessionPrimary;
+    specialist?: ScanSessionSpecialist;
+    diagnosis?: ScanSessionDiagnosis;
+    severity?: 'urgent' | 'check' | 'stable';
+    overlayImageUrl?: string;
+  } | null;
   /** User-editable metadata (added via PATCH /scan-sessions/:id). */
   title?: string;
   description?: string;
@@ -71,6 +79,12 @@ function normalizeScanSessionMedia(session: ScanSession): ScanSession {
     originalImageUrl: normalizeApiMediaUrl(session.originalImageUrl, API_URL),
     annotatedImageUrl:
       normalizeApiMediaUrl(session.annotatedImageUrl, API_URL) ?? session.annotatedImageUrl ?? null,
+    wholeImage: session.wholeImage
+      ? {
+          ...session.wholeImage,
+          overlayImageUrl: normalizeApiMediaUrl(session.wholeImage.overlayImageUrl, API_URL),
+        }
+      : session.wholeImage ?? null,
     lesions: Array.isArray(session.lesions)
       ? session.lesions.map((lesion) => ({
           ...lesion,

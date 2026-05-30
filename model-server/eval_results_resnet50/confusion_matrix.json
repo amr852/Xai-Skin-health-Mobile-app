@@ -1,0 +1,76 @@
+{
+  "labels": [
+    "actinic keratoses",
+    "basal cell carcinoma",
+    "benign keratosis-like lesions",
+    "dermatofibroma",
+    "melanocytic nevi",
+    "melanoma",
+    "vascular lesions"
+  ],
+  "matrix": [
+    [
+      46,
+      1,
+      1,
+      0,
+      0,
+      1,
+      0
+    ],
+    [
+      2,
+      47,
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      1,
+      1,
+      42,
+      0,
+      0,
+      6,
+      0
+    ],
+    [
+      1,
+      0,
+      1,
+      43,
+      2,
+      1,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      49,
+      0,
+      0
+    ],
+    [
+      1,
+      1,
+      0,
+      0,
+      0,
+      48,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      50
+    ]
+  ]
+}

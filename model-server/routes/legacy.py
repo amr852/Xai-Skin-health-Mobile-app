@@ -1,4 +1,4 @@
-"""Original single-lesion API routes (preserved)."""
+"""Original single-lesion API routes (preserved for backwards compatibility)."""
 
 from __future__ import annotations
 
@@ -9,34 +9,35 @@ from flask import Blueprint, current_app, jsonify, request
 
 import config
 from helpers import load_pil, save_enhanced_pair_from_upload, save_image, to_base64
-from services.classifier import DEVICE, lesion_classifier, transform
-from services.explainer import compute_gradcam_heatmap, overlay_cam_on_pil
+from services.classifier import lesion_classifier
+from services.explainer import gradcam_explainer, numpy_bgr_to_png_b64
 
 
 def _predict_pil(img_pil):
-    """Hierarchical predict shim → flat fields legacy callers expect."""
     result = lesion_classifier.predict(img_pil)
     return {
-        "pred_idx": result["specialist_pred_idx"],
+        "pred_idx": result["pred_idx"],
         "class_name": result["specialist"]["label"],
         "score": result["specialist"]["score"],
         "top_preds": result["specialist"]["top_k"],
-        "specialist_key": result["specialist_model_key"],
-        "primary": result["primary"],
     }
 
 
-def _legacy_cam(img_pil, pred_idx: int, specialist_key: str):
-    """Run Grad-CAM against the specialist head for legacy /scan + /predict-xai."""
-    if specialist_key == "malignant":
-        net = lesion_classifier.malignant
-        layer = lesion_classifier.target_layers["malignant"]
-    else:
-        net = lesion_classifier.benign
-        layer = lesion_classifier.target_layers["benign"]
-    tensor = transform(img_pil).unsqueeze(0).to(DEVICE)
-    heatmap = compute_gradcam_heatmap(net, layer, tensor, pred_idx)
-    return overlay_cam_on_pil(img_pil, heatmap)
+def _legacy_cam(img_pil, classifier_result: dict):
+    """Grad-CAM using the Keras MobileNetV2 explainer."""
+    from services.explainer import (
+        compute_gradcam_heatmap,
+        blend_heatmap_on_rgb,
+    )
+    from services.preprocess import pil_to_array
+    import numpy as np
+
+    arr = pil_to_array(img_pil)
+    target_idx = int(classifier_result.get("pred_idx", 0))
+    heatmap = compute_gradcam_heatmap(gradcam_explainer._gradcam_model, arr, target_idx)
+    rgb_arr = np.array(img_pil.convert("RGB"))
+    return blend_heatmap_on_rgb(rgb_arr, heatmap)
+
 
 legacy_bp = Blueprint("legacy", __name__)
 
@@ -48,18 +49,12 @@ def home():
     return jsonify(
         {
             "status": "Skin Lesion Classifier API is running",
-            "device": str(DEVICE),
             "model_name": config.MODEL_NAME,
-            "model_paths": {
-                "primary": config.PRIMARY_WEIGHTS,
-                "benign": config.BENIGN_WEIGHTS,
-                "malignant": config.MALIGNANT_WEIGHTS,
-            },
-            "normalize_input": config.NORMALIZE_INPUT,
+            "model_path": config.KERAS_MODEL_PATH,
+            "num_classes": config.NUM_CLASSES,
             "yolo_model_path": yolo_detector.DETECTOR_WEIGHTS_PATH
             or config.YOLO_MODEL_PATH,
             "yolo_train_base": yolo_detector.DETECTOR_TRAIN_BASE,
-            "yolo_expected": "yolo12n (YOLOv12 nano)",
             "quality_thresholds": {
                 "blur_threshold": config.BLUR_THRESHOLD,
                 "low_light_threshold": config.LOW_LIGHT_THRESHOLD,
@@ -112,7 +107,6 @@ def analyze_image():
             "quality_thresholds": saved["quality_thresholds"],
             "userId": user_id,
             "model_name": config.MODEL_NAME,
-            "normalize_input": config.NORMALIZE_INPUT,
         }
     ), 200
 
@@ -133,29 +127,29 @@ def scan_lesion():
         return jsonify({"error": str(e)}), 400
 
     img_pil = saved["img_pil"]
-    pred = _predict_pil(img_pil)
+    full_result = lesion_classifier.predict(img_pil)
+    pred = {
+        "pred_idx": full_result["pred_idx"],
+        "class_name": full_result["specialist"]["label"],
+        "score": full_result["specialist"]["score"],
+        "top_preds": full_result["specialist"]["top_k"],
+    }
     pred_idx = pred["pred_idx"]
     class_name = pred["class_name"]
     pred_score = pred["score"]
     top_preds = pred["top_preds"]
-    print(
-        f"[/scan] hierarchical: primary={pred['primary']['label']} -> "
-        f"{class_name} (idx={pred_idx}, score={pred_score:.4f}) | top3={top_preds} | "
-        f"normalize_input={config.NORMALIZE_INPUT}"
-    )
+    print(f"[/scan] mobilenetv2: {class_name} (idx={pred_idx}, score={pred_score:.4f})")
 
     cam_name = None
     cam_b64 = None
     try:
-        overlay = _legacy_cam(img_pil, pred_idx, pred["specialist_key"])
+        overlay_bgr = _legacy_cam(img_pil, full_result)
         base = os.path.splitext(saved["enhanced_image_name"])[0]
         cam_name = f"cam_{base}.png"
-        cam_path = save_image(overlay, cam_name)
+        cam_path = save_image(overlay_bgr, cam_name)
         cam_b64 = to_base64(cam_path)
     except Exception as e:
         print("Grad-CAM failed (returning prediction without CAM):", e)
-        cam_name = None
-        cam_b64 = None
 
     record_id = None
     if user_id:
@@ -187,7 +181,6 @@ def scan_lesion():
             "quality_thresholds": saved["quality_thresholds"],
             "xai_method": "Grad-CAM",
             "model_name": config.MODEL_NAME,
-            "normalize_input": config.NORMALIZE_INPUT,
             "cam_base64": cam_b64,
             "cam_image_name": cam_name,
             "record_id": record_id,
@@ -231,16 +224,11 @@ def predict():
 
     try:
         img_pil = load_pil(image_name)
-        pred = _predict_pil(img_pil)
-        pred_idx = pred["pred_idx"]
-        class_name = pred["class_name"]
-        pred_score = pred["score"]
-        top_preds = pred["top_preds"]
-        print(
-            f"[/predict] hierarchical: primary={pred['primary']['label']} -> "
-            f"{class_name} (idx={pred_idx}, score={pred_score:.4f}) | top3={top_preds} | "
-            f"normalize_input={config.NORMALIZE_INPUT}"
-        )
+        full_result = lesion_classifier.predict(img_pil)
+        pred_idx = full_result["pred_idx"]
+        class_name = full_result["specialist"]["label"]
+        pred_score = full_result["specialist"]["score"]
+        top_preds = full_result["specialist"]["top_k"]
 
         results_col.update_one(
             {"enhanced_image_name": image_name},
@@ -273,29 +261,22 @@ def predict_with_xai():
 
     try:
         img_pil = load_pil(image_name)
-        pred = _predict_pil(img_pil)
-        pred_idx = pred["pred_idx"]
-        class_name = pred["class_name"]
-        pred_score = pred["score"]
-        top_preds = pred["top_preds"]
-        print(
-            f"[/predict-xai] hierarchical: primary={pred['primary']['label']} -> "
-            f"{class_name} (idx={pred_idx}, score={pred_score:.4f}) | top3={top_preds} | "
-            f"normalize_input={config.NORMALIZE_INPUT}"
-        )
+        full_result = lesion_classifier.predict(img_pil)
+        pred_idx = full_result["pred_idx"]
+        class_name = full_result["specialist"]["label"]
+        pred_score = full_result["specialist"]["score"]
+        top_preds = full_result["specialist"]["top_k"]
 
         cam_name = None
         cam_b64 = None
         try:
-            overlay = _legacy_cam(img_pil, pred_idx, pred["specialist_key"])
+            overlay_bgr = _legacy_cam(img_pil, full_result)
             base = os.path.splitext(image_name)[0]
             cam_name = f"cam_{base}.png"
-            cam_path = save_image(overlay, cam_name)
+            cam_path = save_image(overlay_bgr, cam_name)
             cam_b64 = to_base64(cam_path)
         except Exception as cam_err:
             print("Grad-CAM failed (returning prediction without CAM):", cam_err)
-            cam_name = None
-            cam_b64 = None
 
         update_set = {"prediction": class_name}
         if cam_name:

@@ -1,0 +1,3 @@
+# Place model weight file here:
+#   resnet50_best.pth  (14-class flat classifier, ~94MB)
+# *.pth files are gitignored — obtain from training or shared storage.

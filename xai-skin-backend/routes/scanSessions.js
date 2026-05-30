@@ -185,6 +185,20 @@ router.post('/', verifyToken, (req, res) => {
         : null;
       const annotatedImageUrl = publicUploadUrl(req, annotatedFilename);
 
+      const wholeImageOverlayFilename = raw.whole_image?.overlay_b64
+        ? await savePngBase64(raw.whole_image.overlay_b64, 'whole-overlay')
+        : null;
+      const wholeImageOverlayUrl = publicUploadUrl(req, wholeImageOverlayFilename);
+      const wholeImageDoc = raw.whole_image
+        ? {
+            primary: raw.whole_image.primary,
+            specialist: raw.whole_image.specialist,
+            diagnosis: raw.whole_image.diagnosis,
+            severity: raw.whole_image.severity,
+            overlayImageUrl: wholeImageOverlayUrl,
+          }
+        : undefined;
+
       const lesionsPayload = [];
       const lesions = dedupeLesionsBySoftContainment(raw.lesions);
 
@@ -217,6 +231,7 @@ router.post('/', verifyToken, (req, res) => {
         qualityMetadata: raw.quality_metadata || {},
         originalImageUrl: originalUrl,
         annotatedImageUrl,
+        wholeImage: wholeImageDoc,
         lesions: lesionsPayload,
       });
       await doc.save();
@@ -232,6 +247,7 @@ router.post('/', verifyToken, (req, res) => {
         annotatedImageUrl: doc.annotatedImageUrl,
         quality_metadata: doc.qualityMetadata,
         originalImageUrl: doc.originalImageUrl,
+        wholeImage: doc.wholeImage || null,
         lesions: doc.lesions.map((x) => ({
           lesion_id: x.lesionId,
           bbox: x.bbox,
@@ -359,6 +375,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
     const urlsToDelete = [
       session.originalImageUrl,
       session.annotatedImageUrl,
+      session.wholeImage?.overlayImageUrl,
       ...(Array.isArray(session.lesions)
         ? session.lesions.flatMap((x) => [x.cropImageUrl, x.overlayImageUrl])
         : []),

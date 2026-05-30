@@ -87,6 +87,15 @@ const scanSessionSchema = new mongoose.Schema({
   qualityMetadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   originalImageUrl: String,
   annotatedImageUrl: String,
+  /** Whole-image diagnosis (EXPERIMENTAL whole-image-classification branch).
+   *  All per-lesion diagnoses are copies of this single image-level verdict. */
+  wholeImage: {
+    primary: primarySchema,
+    specialist: specialistSchema,
+    diagnosis: diagnosisSchema,
+    severity: { type: String, enum: ['urgent', 'check', 'stable'] },
+    overlayImageUrl: String,
+  },
   /** User-editable name shown on history cards (overrides the derived label). */
   title: { type: String, default: '' },
   /** Free-form description (size, shape, colour, observations…). */

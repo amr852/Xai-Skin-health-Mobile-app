@@ -52,7 +52,7 @@ Login/register top-bar uses `router.replace('/(auth)/welcome')`, **not** `router
 For each crop, `services/classifier.py::HierarchicalClassifier.predict` returns `specialist_model_key ∈ {"benign","malignant"}` and `specialist_pred_idx`. `services/explainer.py::overlay_for_lesion` MUST resolve the model + target layer from that key (`features[-1]` of EfficientNet-B0). Never run Grad-CAM on the primary head — the user needs to see *why* the subtype was chosen, not just "is it bad".
 
 ### Hierarchical class label maps
-`PRIMARY_CLASSES = ["benign","malignant"]`, `BENIGN_CLASSES = ["akiec","bkl","df","nv","vasc"]`, `MALIGNANT_CLASSES = ["melanoma","basal_cell_carcinoma"]`. All env-overridable. Order matters — checkpoints carry no embedded labels, so re-order via env vars only after confirming with a known-label test image. EfficientNet-B0 needs ImageNet normalization (`NORMALIZE_INPUT=1`, now the default).
+`PRIMARY_CLASSES = ["benign","malignant"]`, `BENIGN_CLASSES = ["akiec","bkl","df","nv","vasc"]`, `MALIGNANT_CLASSES = ["bcc","mel"]` (HAM `dx` codes; sorted at train time). All env-overridable. Order matters — checkpoints carry no embedded labels, so re-order via env vars only after confirming with a known-label test image. EfficientNet-B0 needs ImageNet normalization (`NORMALIZE_INPUT=1`, now the default).
 
 ## Key files
 

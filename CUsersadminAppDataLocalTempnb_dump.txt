@@ -1,0 +1,1066 @@
+===CELL 0 ===
+ # Section 0: Backbone Configuration ───────────────────────────────
+# Toggle BACKBONE to test different models. All configs auto-adjust.
+
+BACKBONE = 'effnet_b0'  # 'effnet_b0' | 'effnet_b1' | 'effnet_b2' | 'resnet50' | 'mobilenetv2'
+
+BACKBONE_CONFIGS = {
+    'effnet_b0':   {'img_size': 224, 'batch_size': 32, 'lr_primary': 3e-4, 'lr_benign': 3e-4, 'lr_malig': 1e-3, 'dropout': 0.3},
+    'resnet50':    {'img_size': 224, 'batch_size': 32, 'lr_primary': 1e-4, 'lr_benign': 1e-4, 'lr_malig': 5e-4, 'dropout': 0.5},
+    'mobilenetv2': {'img_size': 224, 'batch_size': 32, 'lr_primary': 3e-4, 'lr_benign': 3e-4, 'lr_malig': 1e-3, 'dropout': 0.2},
+}
+
+assert BACKBONE in BACKBONE_CONFIGS, f"Unknown backbone: {BACKBONE}"
+CFG = BACKBONE_CONFIGS[BACKBONE]
+IMG_SIZE      = CFG['img_size']
+BATCH_SIZE    = CFG['batch_size']
+DROPOUT       = CFG['dropout']
+PRIMARY_LR    = CFG['lr_primary']
+BENIGN_LR     = CFG['lr_benign']
+MALIGNANT_LR  = CFG['lr_malig']
+
+# Training schedule (shared across backbones)
+PRIMARY_EPOCHS   = 25
+BENIGN_EPOCHS    = 25
+MALIGNANT_EPOCHS = 20
+WEIGHT_DECAY     = 1e-4
+LR_PATIENCE      = 2
+LR_FACTOR        = 0.5
+
+# Loss / metric controls
+USE_CLASS_WEIGHTS_PRIMARY = False
+USE_CLASS_WEIGHTS_BENIGN  = False
+CLASS_WEIGHT_POWER        = 0.5
+FOCAL_ALPHA               = 0.7
+FOCAL_GAMMA               = 1.5
+MONITOR_METRIC            = "val_mix"   # val_acc | val_bal_acc | val_f1 | val_mix
+VAL_MIX_WEIGHT            = 0.6
+
+# Retrain controls — flip to True to force overwrite
+FORCE_RETRAIN_PRIMARY   = False
+FORCE_RETRAIN_BENIGN    = False
+FORCE_RETRAIN_MALIGNANT = False
+
+# Paths — everything written to /kaggle/working (no external dependencies)
+import os
+WORK_DIR = '/kaggle/working'
+os.makedirs(WORK_DIR, exist_ok=True)
+
+PRIMARY_MODEL_NAME   = f'primary_{BACKBONE}'
+BENIGN_MODEL_NAME    = f'benign_{BACKBONE}'
+MALIGNANT_MODEL_NAME = f'malignant_{BACKBONE}'
+
+PRIMARY_MODEL_PATH   = f'{WORK_DIR}/{PRIMARY_MODEL_NAME}_best.pth'
+BENIGN_MODEL_PATH    = f'{WORK_DIR}/{BENIGN_MODEL_NAME}_best.pth'
+MALIGNANT_MODEL_PATH = f'{WORK_DIR}/{MALIGNANT_MODEL_NAME}_best.pth'
+
+print(f"=== Active Backbone: {BACKBONE.upper()} ===")
+print(f"Image: {IMG_SIZE}px | Batch: {BATCH_SIZE} | Dropout: {DROPOUT}")
+print(f"LR — primary: {PRIMARY_LR}, benign: {BENIGN_LR}, malig: {MALIGNANT_LR}")
+print(f"Save paths under: {WORK_DIR}")
+===CELL 1 ===
+ import numpy as np
+import subprocess
+import sys
+
+# Define the target version
+target_version = "1.26.4"
+
+if np.__version__ == target_version:
+    print(f"Already correct version: {np.__version__}")
+else:
+    print(f"Current version is {np.__version__}. Installing version {target_version}...")
+    
+    # Run the pip commands
+    # --force-reinstall ensures we downgrade/change even if a newer version exists
+    subprocess.check_call([sys.executable, "-m", "pip", "install", f"numpy=={target_version}", "--force-reinstall"])
+    
+    # Install captum without dependencies
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "captum", "--no-deps"])
+    
+    print("\n✅ Installation complete. Please restart the kernel to use the new version.")
+===CELL 2 ===
+ # Cell 1: Load HAM10000 data, build splits, and create base DataLoaders.
+import torch
+import numpy as np
+import pandas as pd
+import warnings
+from pathlib import Path
+from PIL import Image
+from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
+from torchvision import transforms
+from sklearn.model_selection import train_test_split
+
+warnings.filterwarnings("ignore")
+
+# ── 1. CONFIGURATION & PATH RESOLUTION ───────────────────────────
+base_path = Path("/kaggle/input/datasets/kmader/skin-cancer-mnist-ham10000")
+metadata_path = base_path / "HAM10000_metadata.csv"
+
+if not metadata_path.exists():
+    raise FileNotFoundError(f"Metadata not found at {metadata_path}")
+
+df = pd.read_csv(metadata_path)
+
+print("Mapping images... this may take a moment.")
+image_paths = list(base_path.rglob("*.jpg"))
+path_map = {p.stem: str(p) for p in image_paths}
+
+initial_len = len(df)
+df = df[df['image_id'].isin(path_map.keys())].reset_index(drop=True)
+print(f"✅ Found {len(image_paths)} images.")
+print(f"📊 Metadata rows: {initial_len} -> {len(df)} (Dropped {initial_len - len(df)} missing files)")
+
+active_classes = sorted(df['dx'].unique())
+cls_to_idx = {c: i for i, c in enumerate(active_classes)}
+df['label_idx'] = df['dx'].map(cls_to_idx)
+
+# ── 2. DATASET DEFINITION ────────────────────────────────────────
+class SkinDataset(Dataset):
+    def __init__(self, df, transform=None):
+        self.df = df.reset_index(drop=True)
+        self.transform = transform
+    def __len__(self):
+        return len(self.df)
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        img_path = path_map[row['image_id']]
+        image = Image.open(img_path).convert('RGB')
+        label = row['label_idx']
+        if self.transform:
+            image = self.transform(image)
+        return image, label
+
+# ── 3. CLASS BALANCING (SAMPLER) ─────────────────────────────────
+def get_weighted_sampler(df):
+    labels = df['label_idx'].values if 'label_idx' in df.columns else df.iloc[:, -1].values
+    class_counts = np.bincount(labels)
+    weights = 1. / class_counts
+    samples_weights = torch.from_numpy(weights[labels])
+    return WeightedRandomSampler(samples_weights, len(samples_weights), replacement=True)
+
+# ── 4. TRANSFORMS & DATALOADERS ──────────────────────────────────
+# ImageNet normalization — matches pretrained backbones (B0/B1/B2/R50/MNv2 all ImageNet)
+norm_mean, norm_std = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
+
+train_tf = transforms.Compose([
+    transforms.RandomResizedCrop(IMG_SIZE, scale=(0.8, 1.0)),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomVerticalFlip(),
+    transforms.RandomRotation(20),
+    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+    transforms.ToTensor(),
+    transforms.Normalize(norm_mean, norm_std)
+])
+
+val_tf = transforms.Compose([
+    transforms.Resize((IMG_SIZE, IMG_SIZE)),
+    transforms.ToTensor(),
+    transforms.Normalize(norm_mean, norm_std)
+])
+
+train_val_df, test_df = train_test_split(
+    df, test_size=0.15, stratify=df['label_idx'], random_state=42
+)
+train_df, val_df = train_test_split(
+    train_val_df, test_size=0.1765, stratify=train_val_df['label_idx'], random_state=42
+)
+
+train_loader = DataLoader(
+    SkinDataset(train_df, train_tf),
+    batch_size=BATCH_SIZE,
+    sampler=get_weighted_sampler(train_df),
+    num_workers=2, pin_memory=True
+)
+val_loader = DataLoader(
+    SkinDataset(val_df, val_tf),
+    batch_size=BATCH_SIZE, shuffle=False, num_workers=2, pin_memory=True
+)
+test_loader = DataLoader(
+    SkinDataset(test_df, val_tf),
+    batch_size=BATCH_SIZE, shuffle=False, num_workers=2, pin_memory=True
+)
+
+print(f"📦 Ready: {len(train_loader)} train, {len(val_loader)} val, {len(test_loader)} test batches @ {IMG_SIZE}px / batch {BATCH_SIZE}.")
+===CELL 3 ===
+ # Cell 2: Create Hierarchical Datasets for 3-Model System
+
+malignant_classes = ['bcc', 'mel']
+df['binary_label'] = df['dx'].apply(lambda x: 1 if x in malignant_classes else 0)
+
+benign_df_full    = df[df['binary_label'] == 0].copy()
+malignant_df_full = df[df['binary_label'] == 1].copy()
+
+benign_cls_to_sub_idx    = {cls: i for i, cls in enumerate(sorted(benign_df_full['dx'].unique()))}
+malignant_cls_to_sub_idx = {cls: i for i, cls in enumerate(sorted(malignant_df_full['dx'].unique()))}
+
+benign_df_full['sub_label']    = benign_df_full['dx'].map(benign_cls_to_sub_idx)
+malignant_df_full['sub_label'] = malignant_df_full['dx'].map(malignant_cls_to_sub_idx)
+
+
+class HierarchicalSkinDataset(Dataset):
+    def __init__(self, df, transform=None, label_col='label_idx'):
+        self.df = df.reset_index(drop=True)
+        self.transform = transform
+        self.label_col = label_col
+    def __len__(self):
+        return len(self.df)
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        img_path = path_map[row['image_id']]
+        image = Image.open(img_path).convert('RGB')
+        label = row[self.label_col]
+        if self.transform:
+            image = self.transform(image)
+        return image, label
+
+def _weighted_sampler_for_col(df, label_col):
+    labels = df[label_col].values
+    class_counts = np.bincount(labels)
+    weights = 1. / class_counts
+    samples_weights = torch.from_numpy(weights[labels])
+    return WeightedRandomSampler(samples_weights, len(samples_weights), replacement=True)
+
+def create_dataloaders(df, label_col, test_size=0.15, val_size_frac=0.1765, batch_size=BATCH_SIZE):
+    train_val_subset, test_subset = train_test_split(
+        df, test_size=test_size, stratify=df[label_col], random_state=42
+    )
+    train_subset, val_subset = train_test_split(
+        train_val_subset, test_size=val_size_frac, stratify=train_val_subset[label_col], random_state=42
+    )
+
+    train_ds = HierarchicalSkinDataset(train_subset, train_tf, label_col=label_col)
+    val_ds   = HierarchicalSkinDataset(val_subset,   val_tf,   label_col=label_col)
+    test_ds  = HierarchicalSkinDataset(test_subset,  val_tf,   label_col=label_col)
+
+    if len(df[label_col].unique()) > 1:
+        train_sampler = _weighted_sampler_for_col(train_subset, label_col)
+        train_loader = DataLoader(train_ds, batch_size=batch_size, sampler=train_sampler, num_workers=2, pin_memory=True)
+    else:
+        train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
+
+    val_loader  = DataLoader(val_ds,  batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
+    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
+    return train_loader, val_loader, test_loader
+
+primary_train_loader, primary_val_loader, primary_test_loader     = create_dataloaders(df, 'binary_label')
+print(f"📦 Primary Model:   {len(primary_train_loader)} train, {len(primary_val_loader)} val, {len(primary_test_loader)} test batches.")
+benign_train_loader, benign_val_loader, benign_test_loader        = create_dataloaders(benign_df_full, 'sub_label')
+print(f"📦 Benign Model:    {len(benign_train_loader)} train, {len(benign_val_loader)} val, {len(benign_test_loader)} test batches.")
+malignant_train_loader, malignant_val_loader, malignant_test_loader = create_dataloaders(malignant_df_full, 'sub_label')
+print(f"📦 Malignant Model: {len(malignant_train_loader)} train, {len(malignant_val_loader)} val, {len(malignant_test_loader)} test batches.")
+===CELL 4 ===
+ # Cell 3: Model Definition (multi-backbone dispatcher)
+import torch.nn as nn
+import torchvision.models as models
+import torch.optim as optim
+
+def create_model(num_classes, backbone=None, pretrained=True, dropout_rate=None):
+    """
+    Multi-backbone classifier head builder.
+    backbone: one of 'effnet_b0', 'effnet_b1', 'effnet_b2', 'resnet50', 'mobilenetv2'.
+              Defaults to global BACKBONE.
+    dropout_rate: defaults to backbone-specific DROPOUT from CFG.
+    """
+    if backbone is None:
+        backbone = BACKBONE
+    if dropout_rate is None:
+        dropout_rate = DROPOUT
+
+    if backbone == 'effnet_b0':
+        model = models.efficientnet_b0(pretrained=pretrained)
+        in_f = model.classifier[1].in_features
+        model.classifier = nn.Sequential(nn.Dropout(p=dropout_rate, inplace=True), nn.Linear(in_f, num_classes))
+
+    elif backbone == 'effnet_b1':
+        model = models.efficientnet_b1(pretrained=pretrained)
+        in_f = model.classifier[1].in_features
+        model.classifier = nn.Sequential(nn.Dropout(p=dropout_rate, inplace=True), nn.Linear(in_f, num_classes))
+
+    elif backbone == 'effnet_b2':
+        model = models.efficientnet_b2(pretrained=pretrained)
+        in_f = model.classifier[1].in_features
+        model.classifier = nn.Sequential(nn.Dropout(p=dropout_rate, inplace=True), nn.Linear(in_f, num_classes))
+
+    elif backbone == 'resnet50':
+        model = models.resnet50(pretrained=pretrained)
+        in_f = model.fc.in_features
+        model.fc = nn.Sequential(nn.Dropout(p=dropout_rate, inplace=True), nn.Linear(in_f, num_classes))
+
+    elif backbone == 'mobilenetv2':
+        model = models.mobilenet_v2(pretrained=pretrained)
+        in_f = model.classifier[1].in_features
+        model.classifier = nn.Sequential(nn.Dropout(p=dropout_rate, inplace=True), nn.Linear(in_f, num_classes))
+
+    else:
+        raise ValueError(f"Unknown backbone: {backbone}")
+
+    return model
+
+# Grad-CAM target layer helpers (used in Sections 11 & 12)
+def get_gradcam_layer(model, backbone=None):
+    backbone = backbone or BACKBONE
+    if backbone.startswith('effnet'):
+        return model.features[-1]
+    elif backbone == 'resnet50':
+        return model.layer4[-1]
+    elif backbone == 'mobilenetv2':
+        return model.features[-1]
+    raise ValueError(f"No gradcam layer mapping for: {backbone}")
+
+def get_multi_gradcam_layers(model, backbone=None):
+    backbone = backbone or BACKBONE
+    if backbone.startswith('effnet'):
+        return [model.features[1], model.features[4], model.features[-1]]
+    elif backbone == 'resnet50':
+        return [model.layer1[-1], model.layer2[-1], model.layer4[-1]]
+    elif backbone == 'mobilenetv2':
+        return [model.features[1], model.features[7], model.features[-1]]
+    raise ValueError(f"No multi gradcam mapping for: {backbone}")
+
+# --- Verification ---
+_p = create_model(num_classes=2)
+_b = create_model(num_classes=len(benign_df_full['sub_label'].unique()))
+_m = create_model(num_classes=len(malignant_df_full['sub_label'].unique()))
+print(f"✅ create_model OK for backbone '{BACKBONE}'.")
+print(f"   Primary head out: 2 | Benign out: {len(benign_df_full['sub_label'].unique())} | Malignant out: {len(malignant_df_full['sub_label'].unique())}")
+del _p, _b, _m
+===CELL 5 ===
+ # Cell 3: Model Definition (multi-backbone dispatcher)
+import torch.nn as nn
+import torchvision.models as models
+import torch.optim as optim
+
+def create_model(num_classes, backbone=None, pretrained=True, dropout_rate=None):
+    """
+    Multi-backbone classifier head builder.
+    backbone: one of 'effnet_b0', 'effnet_b1', 'effnet_b2', 'resnet50', 'mobilenetv2'.
+              Defaults to global BACKBONE.
+    dropout_rate: defaults to backbone-specific DROPOUT from CFG.
+    """
+    if backbone is None:
+        backbone = BACKBONE
+    if dropout_rate is None:
+        dropout_rate = DROPOUT
+
+    if backbone == 'effnet_b0':
+        model = models.efficientnet_b0(pretrained=pretrained)
+        in_f = model.classifier[1].in_features
+        model.classifier = nn.Sequential(nn.Dropout(p=dropout_rate, inplace=True), nn.Linear(in_f, num_classes))
+
+    elif backbone == 'effnet_b1':
+        model = models.efficientnet_b1(pretrained=pretrained)
+        in_f = model.classifier[1].in_features
+        model.classifier = nn.Sequential(nn.Dropout(p=dropout_rate, inplace=True), nn.Linear(in_f, num_classes))
+
+    elif backbone == 'effnet_b2':
+        model = models.efficientnet_b2(pretrained=pretrained)
+        in_f = model.classifier[1].in_features
+        model.classifier = nn.Sequential(nn.Dropout(p=dropout_rate, inplace=True), nn.Linear(in_f, num_classes))
+
+    elif backbone == 'resnet50':
+        model = models.resnet50(pretrained=pretrained)
+        in_f = model.fc.in_features
+        model.fc = nn.Sequential(nn.Dropout(p=dropout_rate, inplace=True), nn.Linear(in_f, num_classes))
+
+    elif backbone == 'mobilenetv2':
+        model = models.mobilenet_v2(pretrained=pretrained)
+        in_f = model.classifier[1].in_features
+        model.classifier = nn.Sequential(nn.Dropout(p=dropout_rate, inplace=True), nn.Linear(in_f, num_classes))
+
+    else:
+        raise ValueError(f"Unknown backbone: {backbone}")
+
+    return model
+
+# Grad-CAM target layer helpers (used in Sections 11 & 12)
+def get_gradcam_layer(model, backbone=None):
+    backbone = backbone or BACKBONE
+    if backbone.startswith('effnet'):
+        return model.features[-1]
+    elif backbone == 'resnet50':
+        return model.layer4[-1]
+    elif backbone == 'mobilenetv2':
+        return model.features[-1]
+    raise ValueError(f"No gradcam layer mapping for: {backbone}")
+
+def get_multi_gradcam_layers(model, backbone=None):
+    backbone = backbone or BACKBONE
+    if backbone.startswith('effnet'):
+        return [model.features[1], model.features[4], model.features[-1]]
+    elif backbone == 'resnet50':
+        return [model.layer1[-1], model.layer2[-1], model.layer4[-1]]
+    elif backbone == 'mobilenetv2':
+        return [model.features[1], model.features[7], model.features[-1]]
+    raise ValueError(f"No multi gradcam mapping for: {backbone}")
+
+# --- Verification ---
+_p = create_model(num_classes=2)
+_b = create_model(num_classes=len(benign_df_full['sub_label'].unique()))
+_m = create_model(num_classes=len(malignant_df_full['sub_label'].unique()))
+print(f"✅ create_model OK for backbone '{BACKBONE}'.")
+print(f"   Primary head out: 2 | Benign out: {len(benign_df_full['sub_label'].unique())} | Malignant out: {len(malignant_df_full['sub_label'].unique())}")
+del _p, _b, _m
+===CELL 6 ===
+ import torch.nn.functional as F
+
+class FocalLoss(nn.Module):
+    """
+    Focal Loss, as described in https://arxiv.org/abs/1708.02002.
+    It modifies the standard cross-entropy loss to focus learning on hard misclassified examples.
+    """
+    def __init__(self, alpha=1.0, gamma=2.0, class_weights=None):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.class_weights = class_weights
+
+    def forward(self, inputs, targets):
+        weight = self.class_weights
+        if weight is not None and weight.device != inputs.device:
+            weight = weight.to(inputs.device)
+        ce_loss = F.cross_entropy(inputs, targets, reduction='none', weight=weight)
+        pt = torch.exp(-ce_loss)
+        focal_loss = self.alpha * (1 - pt)**self.gamma * ce_loss
+        return focal_loss.mean()
+
+print("✅ Focal Loss function is ready.")
+# End of Cell 4
+
+# %% [markdown]
+# ## Section 6
+
+# %%
+# Cell 5: Training and Evaluation Loop
+# This cell defines the main function for training and validating a model.
+from tqdm.notebook import tqdm
+import time
+import json
+import os
+from sklearn.metrics import balanced_accuracy_score, f1_score
+
+def compute_class_weights(df, label_col, power=1.0):
+    """
+    Computes inverse-frequency class weights for the given label column.
+    """
+    counts = df[label_col].value_counts().sort_index()
+    weights = 1.0 / (counts ** power)
+    weights = weights / weights.sum() * len(weights)
+    return torch.tensor(weights.values, dtype=torch.float)
+
+def train_model(
+    model, train_loader, val_loader, model_name, criterion,
+    epochs=20, learning_rate=0.001, weight_decay=1e-4,
+    scheduler_patience=2, scheduler_factor=0.5, monitor_metric="val_bal_acc", mix_weight=0.5
+    ):
+    """
+    A complete function to train and evaluate a model.
+    
+    Args:
+        model (nn.Module): The model to train.
+        train_loader (DataLoader): DataLoader for the training set.
+        val_loader (DataLoader): DataLoader for the validation set.
+        model_name (str): A name for the model, used for saving the best weights.
+        criterion: The loss function to use.
+        epochs (int): Number of training epochs.
+        learning_rate (float): Learning rate for the optimizer.
+        weight_decay (float): Weight decay for AdamW.
+        scheduler_patience (int): Patience for ReduceLROnPlateau.
+        scheduler_factor (float): LR reduction factor for ReduceLROnPlateau.
+        monitor_metric (str): Metric used for checkpointing and scheduler.
+        mix_weight (float): Weight for val_acc in blended metric (val_mix).
+        
+    Returns:
+        A dictionary containing training history (loss, accuracy, balanced accuracy, f1).
+    """
+    # Setup: optimizer and device
+    optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="max", factor=scheduler_factor, patience=scheduler_patience
+    )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    if hasattr(criterion, "weight") and criterion.weight is not None:
+        criterion.weight = criterion.weight.to(device)
+    
+    # Create history directory
+    history_dir = "History"
+    os.makedirs(history_dir, exist_ok=True)
+    
+    print(f"🚀 Starting training for {model_name} on {device}...")
+    
+    best_val_metric = 0.0
+    history = {
+        'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': [],
+        'train_bal_acc': [], 'val_bal_acc': [], 'train_f1': [], 'val_f1': []
+    }
+
+    for epoch in range(epochs):
+        start_time = time.time()
+        
+        # --- Training Phase ---
+        model.train()
+        running_loss = 0.0
+        correct_predictions = 0
+        total_samples = 0
+        train_preds, train_labels = [], []
+        
+        for images, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs} [Train]"):
+            images, labels = images.to(device), labels.to(device)
+            
+            optimizer.zero_grad()
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            
+            running_loss += loss.item() * images.size(0)
+            _, predicted = torch.max(outputs.data, 1)
+            total_samples += labels.size(0)
+            correct_predictions += (predicted == labels).sum().item()
+            train_preds.extend(predicted.detach().cpu().numpy())
+            train_labels.extend(labels.detach().cpu().numpy())
+            
+        epoch_train_loss = running_loss / total_samples
+        epoch_train_acc = correct_predictions / total_samples
+        epoch_train_bal_acc = balanced_accuracy_score(train_labels, train_preds)
+        epoch_train_f1 = f1_score(train_labels, train_preds, average='macro')
+        history['train_loss'].append(epoch_train_loss)
+        history['train_acc'].append(epoch_train_acc)
+        history['train_bal_acc'].append(epoch_train_bal_acc)
+        history['train_f1'].append(epoch_train_f1)
+
+        # --- Validation Phase ---
+        model.eval()
+        running_loss = 0.0
+        correct_predictions = 0
+        total_samples = 0
+        val_preds, val_labels = [], []
+        
+        with torch.no_grad():
+            for images, labels in tqdm(val_loader, desc=f"Epoch {epoch+1}/{epochs} [Val]"):
+                images, labels = images.to(device), labels.to(device)
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                
+                running_loss += loss.item() * images.size(0)
+                _, predicted = torch.max(outputs.data, 1)
+                total_samples += labels.size(0)
+                correct_predictions += (predicted == labels).sum().item()
+                val_preds.extend(predicted.detach().cpu().numpy())
+                val_labels.extend(labels.detach().cpu().numpy())
+
+        epoch_val_loss = running_loss / total_samples
+        epoch_val_acc = correct_predictions / total_samples
+        epoch_val_bal_acc = balanced_accuracy_score(val_labels, val_preds)
+        epoch_val_f1 = f1_score(val_labels, val_preds, average='macro')
+        history['val_loss'].append(epoch_val_loss)
+        history['val_acc'].append(epoch_val_acc)
+        history['val_bal_acc'].append(epoch_val_bal_acc)
+        history['val_f1'].append(epoch_val_f1)
+        
+        # --- Scheduler, Log, and Save Best Model ---
+        if monitor_metric == "val_acc":
+            monitor_value = epoch_val_acc
+        elif monitor_metric == "val_f1":
+            monitor_value = epoch_val_f1
+        elif monitor_metric == "val_mix":
+            monitor_value = (mix_weight * epoch_val_acc) + ((1 - mix_weight) * epoch_val_bal_acc)
+        else:
+            monitor_value = epoch_val_bal_acc
+        scheduler.step(monitor_value)
+        elapsed_time = time.time() - start_time
+        current_lr = optimizer.param_groups[0]['lr']
+        print(
+            f"Epoch {epoch+1}/{epochs} - {elapsed_time:.2f}s - LR: {current_lr:.2e} - "
+            f"Train Loss: {epoch_train_loss:.4f}, Train Acc: {epoch_train_acc:.4f}, "
+            f"Train Bal Acc: {epoch_train_bal_acc:.4f}, Train F1: {epoch_train_f1:.4f} | "
+            f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}, "
+            f"Val Bal Acc: {epoch_val_bal_acc:.4f}, Val F1: {epoch_val_f1:.4f}"
+        )
+
+        if monitor_value > best_val_metric:
+            best_val_metric = monitor_value
+            # Save the model's state dictionary
+            torch.save(model.state_dict(), f'{model_name}_best.pth')
+            print(f"✨ New best model saved with {monitor_metric}: {best_val_metric:.4f}")
+            
+    print(f"🏁 Finished training for {model_name}.")
+    
+    # Save history to a JSON file
+    history_path = os.path.join(history_dir, f'{model_name}_history.json')
+    with open(history_path, 'w') as f:
+        json.dump(history, f)
+    print(f"💾 Training history saved to {history_path}")
+    
+    return history
+
+print("✅ Training loop function is ready.")
+===CELL 7 ===
+ # Cell 5b: All training config moved to Section 0 (BACKBONE_CONFIGS).
+# This cell intentionally minimal — kept as a notebook-section anchor.
+print(f"Config sourced from Section 0. Backbone: {BACKBONE}")
+print(f"Epochs — primary: {PRIMARY_EPOCHS}, benign: {BENIGN_EPOCHS}, malig: {MALIGNANT_EPOCHS}")
+print(f"Force retrain — primary: {FORCE_RETRAIN_PRIMARY}, benign: {FORCE_RETRAIN_BENIGN}, malig: {FORCE_RETRAIN_MALIGNANT}")
+===CELL 8 ===
+ # Cell 6: Train Primary Model (Benign vs Malignant) with Focal Loss
+
+if os.path.exists(PRIMARY_MODEL_PATH) and not FORCE_RETRAIN_PRIMARY:
+    print(f"✅ Found pre-trained primary at: {PRIMARY_MODEL_PATH}  (skip; set FORCE_RETRAIN_PRIMARY=True to retrain)")
+else:
+    print(f"⚠️ Training primary model [{BACKBONE}]...")
+    primary_model = create_model(num_classes=2)
+
+    primary_class_weights = None
+    if USE_CLASS_WEIGHTS_PRIMARY:
+        primary_class_weights = compute_class_weights(
+            primary_train_loader.dataset.df, label_col='binary_label', power=CLASS_WEIGHT_POWER
+        )
+    focal_loss_criterion = FocalLoss(alpha=FOCAL_ALPHA, gamma=FOCAL_GAMMA, class_weights=primary_class_weights)
+
+    primary_history = train_model(
+        primary_model, primary_train_loader, primary_val_loader,
+        model_name=PRIMARY_MODEL_NAME,
+        criterion=focal_loss_criterion,
+        epochs=PRIMARY_EPOCHS,
+        learning_rate=PRIMARY_LR,
+        weight_decay=WEIGHT_DECAY,
+        scheduler_patience=LR_PATIENCE,
+        scheduler_factor=LR_FACTOR,
+        monitor_metric=MONITOR_METRIC,
+        mix_weight=VAL_MIX_WEIGHT,
+    )
+
+# Final save verification
+assert os.path.exists(PRIMARY_MODEL_PATH), f"Primary weights missing at {PRIMARY_MODEL_PATH}"
+print(f"💾 Primary best weights: {PRIMARY_MODEL_PATH}  ({os.path.getsize(PRIMARY_MODEL_PATH)/1e6:.2f} MB)")
+===CELL 9 ===
+ # Cell 7: Train Benign Specialist (5 sub-classes)
+
+if os.path.exists(BENIGN_MODEL_PATH) and not FORCE_RETRAIN_BENIGN:
+    print(f"✅ Found pre-trained benign at: {BENIGN_MODEL_PATH}  (skip; set FORCE_RETRAIN_BENIGN=True to retrain)")
+else:
+    print(f"⚠️ Training benign specialist [{BACKBONE}]...")
+    num_benign_classes = len(benign_df_full['sub_label'].unique())
+    benign_model = create_model(num_classes=num_benign_classes)
+
+    benign_class_weights = None
+    if USE_CLASS_WEIGHTS_BENIGN:
+        benign_class_weights = compute_class_weights(
+            benign_train_loader.dataset.df, label_col='sub_label', power=CLASS_WEIGHT_POWER
+        )
+    benign_criterion = nn.CrossEntropyLoss(weight=benign_class_weights)
+
+    benign_history = train_model(
+        benign_model, benign_train_loader, benign_val_loader,
+        model_name=BENIGN_MODEL_NAME,
+        criterion=benign_criterion,
+        epochs=BENIGN_EPOCHS,
+        learning_rate=BENIGN_LR,
+        weight_decay=WEIGHT_DECAY,
+        scheduler_patience=LR_PATIENCE,
+        scheduler_factor=LR_FACTOR,
+        monitor_metric=MONITOR_METRIC,
+        mix_weight=VAL_MIX_WEIGHT,
+    )
+
+assert os.path.exists(BENIGN_MODEL_PATH), f"Benign weights missing at {BENIGN_MODEL_PATH}"
+print(f"💾 Benign best weights: {BENIGN_MODEL_PATH}  ({os.path.getsize(BENIGN_MODEL_PATH)/1e6:.2f} MB)")
+===CELL 10 ===
+ # Cell 8: Train Malignant Specialist (2 sub-classes)
+
+if os.path.exists(MALIGNANT_MODEL_PATH) and not FORCE_RETRAIN_MALIGNANT:
+    print(f"✅ Found pre-trained malignant at: {MALIGNANT_MODEL_PATH}  (skip; set FORCE_RETRAIN_MALIGNANT=True to retrain)")
+else:
+    print(f"⚠️ Training malignant specialist [{BACKBONE}]...")
+    num_malignant_classes = len(malignant_df_full['sub_label'].unique())
+    malignant_model = create_model(num_classes=num_malignant_classes)
+
+    malignant_history = train_model(
+        malignant_model, malignant_train_loader, malignant_val_loader,
+        model_name=MALIGNANT_MODEL_NAME,
+        criterion=nn.CrossEntropyLoss(),
+        epochs=MALIGNANT_EPOCHS,
+        learning_rate=MALIGNANT_LR,
+        weight_decay=WEIGHT_DECAY,
+        scheduler_patience=LR_PATIENCE,
+        scheduler_factor=LR_FACTOR,
+        monitor_metric="val_bal_acc",
+    )
+
+assert os.path.exists(MALIGNANT_MODEL_PATH), f"Malignant weights missing at {MALIGNANT_MODEL_PATH}"
+print(f"💾 Malignant best weights: {MALIGNANT_MODEL_PATH}  ({os.path.getsize(MALIGNANT_MODEL_PATH)/1e6:.2f} MB)")
+===CELL 11 ===
+ # Cell 11: XAI with Grad-CAM (backbone-aware)
+import torch
+from captum.attr import LayerGradCam
+from captum.attr import visualization as viz
+import numpy as np
+import matplotlib.pyplot as plt
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+class UnNormalize:
+    def __init__(self, mean, std):
+        self.mean, self.std = mean, std
+    def __call__(self, tensor):
+        t = tensor.clone()
+        for t_i, m, s in zip(t, self.mean, self.std):
+            t_i.mul_(s).add_(m)
+        return t
+
+unorm = UnNormalize(mean=norm_mean, std=norm_std)
+
+# Load best primary weights (from Section 0 path)
+xai_primary_model = create_model(num_classes=2)
+try:
+    state_dict = torch.load(PRIMARY_MODEL_PATH, map_location=DEVICE)
+    xai_primary_model.load_state_dict(state_dict)
+    xai_primary_model.to(DEVICE).eval()
+    print(f"✅ Loaded {BACKBONE} primary from {PRIMARY_MODEL_PATH}")
+
+    target_layer = get_gradcam_layer(xai_primary_model, BACKBONE)
+    layer_grad_cam = LayerGradCam(xai_primary_model, target_layer)
+except Exception as e:
+    print(f"⚠️ Error loading model: {e}")
+    layer_grad_cam = None
+
+
+def visualize_grad_cam(model, dataloader, num_images=5):
+    if layer_grad_cam is None:
+        return
+    data_iter = iter(dataloader)
+    for i in range(num_images):
+        try:
+            images, labels = next(data_iter)
+        except StopIteration:
+            break
+
+        img_tensor = images[0:1].to(DEVICE)
+        output = model(img_tensor)
+        pred_idx = torch.argmax(output, dim=1).item()
+
+        attribution = layer_grad_cam.attribute(img_tensor, target=pred_idx)
+        attr_raw = attribution.detach().cpu()
+        if attr_raw.ndim == 4:
+            attr_raw = attr_raw.squeeze(0)
+        if attr_raw.ndim == 3:
+            heatmap_2d = torch.mean(attr_raw, dim=0).numpy()
+            attr_for_viz = attr_raw.permute(1, 2, 0).numpy()
+        else:
+            heatmap_2d = attr_raw.numpy()
+            attr_for_viz = np.expand_dims(heatmap_2d, axis=-1)
+
+        heatmap_2d = (heatmap_2d - heatmap_2d.min()) / (heatmap_2d.max() - heatmap_2d.min() + 1e-8)
+
+        img_unnorm = unorm(img_tensor.squeeze(0).cpu())
+        img_display = img_unnorm.permute(1, 2, 0).clamp(0, 1).detach().numpy()
+
+        fig, axs = plt.subplots(1, 3, figsize=(18, 6))
+        axs[0].imshow(img_display)
+        axs[0].set_title(f"Actual: {'Malignant' if labels[0].item()==1 else 'Benign'}")
+        axs[0].axis('off')
+
+        axs[1].imshow(heatmap_2d, cmap='jet')
+        axs[1].set_title("Raw Feature Map Focus")
+        axs[1].axis('off')
+
+        viz.visualize_image_attr(
+            attr_for_viz, img_display, method='blended_heat_map',
+            sign='all', show_colorbar=True,
+            title=f"Pred: {'Malignant' if pred_idx==1 else 'Benign'} [{BACKBONE}]",
+            plt_fig_axis=(fig, axs[2]),
+        )
+        plt.show()
+
+
+print("\n--- Generating Grad-CAM Interpretations ---")
+visualize_grad_cam(xai_primary_model, primary_test_loader)
+===CELL 12 ===
+ # Cell 15: Multi-Layer Grad-CAM (early / mid / deep)
+from captum.attr import LayerGradCam
+import torch.nn.functional as F
+
+def visualize_comprehensive_layers_v2(model, dataloader, num_images=3):
+    target_layers = get_multi_gradcam_layers(model, BACKBONE)
+    interpreters = [LayerGradCam(model, layer) for layer in target_layers]
+
+    dataset = dataloader.dataset
+    random_indices = np.random.choice(len(dataset), num_images, replace=False)
+
+    for idx in random_indices:
+        tensor_image, label_idx = dataset[idx]
+        input_tensor = tensor_image.unsqueeze(0).to(DEVICE)
+
+        with torch.no_grad():
+            output = model(input_tensor)
+            probs = torch.softmax(output, dim=1)
+            confidence, pred_idx = torch.max(probs, 1)
+
+        fig, axs = plt.subplots(1, 5, figsize=(26, 7))
+
+        img_unnorm = unorm(tensor_image.cpu()).permute(1, 2, 0).clamp(0, 1).numpy()
+        axs[0].imshow(img_unnorm)
+        actual_label = 'Malignant' if label_idx == 1 else 'Benign'
+        axs[0].set_title(f"Original\n(Actual: {actual_label})", fontsize=12)
+        axs[0].axis('off')
+
+        titles = ["Early: Edges/Hairs", "Mid: Texture/Pigment", "Deep: Shape/Borders"]
+        for i, (interpreter, title) in enumerate(zip(interpreters, titles)):
+            attr = interpreter.attribute(input_tensor, target=pred_idx.item())
+            heatmap = torch.mean(attr.squeeze(0), dim=0).cpu().detach()
+            heatmap = (heatmap - heatmap.min()) / (heatmap.max() - heatmap.min() + 1e-8)
+            heatmap_resized = F.interpolate(
+                heatmap.unsqueeze(0).unsqueeze(0),
+                size=(IMG_SIZE, IMG_SIZE), mode='bilinear', align_corners=False,
+            ).squeeze().numpy()
+            axs[i + 1].imshow(img_unnorm)
+            axs[i + 1].imshow(heatmap_resized, cmap='jet_r', alpha=0.4)
+            axs[i + 1].set_title(title, fontsize=12, fontweight='bold')
+            axs[i + 1].axis('off')
+
+        axs[4].axis('off')
+        pred_text = "Malignant" if pred_idx == 1 else "Benign"
+        is_correct = (pred_text == actual_label)
+        axs[4].text(0.05, 0.8, f"Backbone: {BACKBONE}", fontsize=14, fontweight='bold', color='navy')
+        axs[4].text(0.05, 0.6, f"Predicted: {pred_text}", fontsize=20, fontweight='bold')
+        conf_color = 'green' if confidence > 0.7 else 'orange'
+        axs[4].text(0.05, 0.4, f"Confidence: {confidence.item():.1%}", fontsize=20, color=conf_color)
+        status_text = "✓ Correct" if is_correct else "✗ Incorrect"
+        status_color = 'green' if is_correct else 'red'
+        axs[4].text(0.05, 0.2, status_text, fontsize=20, color=status_color, fontweight='bold',
+                    bbox=dict(facecolor='none', edgecolor=status_color, boxstyle='round,pad=0.5'))
+
+        plt.tight_layout()
+        plt.show()
+
+visualize_comprehensive_layers_v2(xai_primary_model, primary_test_loader)
+===CELL 13 ===
+ # Cell 9: Evaluate Triple Model — confusion matrices, history, TTA, and final summary
+import matplotlib.pyplot as plt
+from sklearn.metrics import (
+    confusion_matrix, ConfusionMatrixDisplay,
+    balanced_accuracy_score, accuracy_score, classification_report, f1_score
+)
+import numpy as np
+from tqdm.notebook import tqdm
+import torch
+import json
+import os
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+HISTORY_DIR = "History"
+
+# ---- Helpers --------------------------------------------------------
+def load_model_for_eval(model_path, num_classes):
+    model = create_model(num_classes=num_classes)
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model file not found: {model_path}")
+    model.load_state_dict(torch.load(model_path, map_location='cpu'))
+    model.eval()
+    print(f"✅ Loaded: {os.path.basename(model_path)}")
+    return model
+
+def tta_forward(model, images, n=4):
+    """Test-time aug: original + h-flip + v-flip + hv-flip. Avg logits."""
+    with torch.no_grad():
+        out  = model(images)
+        out += model(torch.flip(images, dims=[3]))
+        out += model(torch.flip(images, dims=[2]))
+        out += model(torch.flip(images, dims=[2, 3]))
+    return out / n
+
+def get_all_preds_and_labels(model, dataloader, use_tta=True):
+    model.to(DEVICE)
+    all_preds, all_labels = [], []
+    with torch.no_grad():
+        for images, labels in dataloader:
+            images = images.to(DEVICE)
+            outputs = tta_forward(model, images) if use_tta else model(images)
+            preds = torch.argmax(outputs, dim=1)
+            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+    model.to('cpu')
+    return np.array(all_preds), np.array(all_labels)
+
+def load_history(model_name):
+    history_path = os.path.join(HISTORY_DIR, f'{model_name}_history.json')
+    if os.path.exists(history_path):
+        with open(history_path, 'r') as f:
+            return json.load(f)
+    return None
+
+# ---- Load three trained models -------------------------------------
+print(f"Evaluation device: {DEVICE} | Backbone: {BACKBONE}\n")
+
+primary_model   = load_model_for_eval(PRIMARY_MODEL_PATH,   num_classes=2)
+num_benign_classes    = len(benign_df_full['sub_label'].unique())
+num_malignant_classes = len(malignant_df_full['sub_label'].unique())
+benign_model    = load_model_for_eval(BENIGN_MODEL_PATH,    num_classes=num_benign_classes)
+malignant_model = load_model_for_eval(MALIGNANT_MODEL_PATH, num_classes=num_malignant_classes)
+
+# ---- Hierarchical pipeline eval (with TTA on each stage) -----------
+print("\n--- Running Hierarchical Evaluation (with TTA) ---")
+final_predictions = []
+final_true_labels = []
+
+benign_keys = list(benign_cls_to_sub_idx.keys())
+malig_keys  = list(malignant_cls_to_sub_idx.keys())
+
+for images, true_7_class_labels in tqdm(test_loader, desc="Pipeline"):
+    images = images.to(DEVICE)
+
+    primary_model.to(DEVICE)
+    primary_outputs = tta_forward(primary_model, images)
+    primary_preds = torch.argmax(primary_outputs, dim=1).cpu()
+    primary_model.to('cpu')
+
+    batch_final_preds = torch.zeros_like(primary_preds, dtype=torch.long)
+
+    benign_mask = (primary_preds == 0)
+    if benign_mask.any():
+        benign_images = images[benign_mask.to(DEVICE)]
+        benign_model.to(DEVICE)
+        benign_outputs = tta_forward(benign_model, benign_images)
+        benign_sub_preds = torch.argmax(benign_outputs, dim=1).cpu().numpy()
+        original_labels = [cls_to_idx[benign_keys[p]] for p in benign_sub_preds]
+        batch_final_preds[benign_mask] = torch.tensor(original_labels, dtype=torch.long)
+        benign_model.to('cpu')
+
+    malignant_mask = (primary_preds == 1)
+    if malignant_mask.any():
+        malignant_images = images[malignant_mask.to(DEVICE)]
+        malignant_model.to(DEVICE)
+        malignant_outputs = tta_forward(malignant_model, malignant_images)
+        malignant_sub_preds = torch.argmax(malignant_outputs, dim=1).cpu().numpy()
+        original_labels = [cls_to_idx[malig_keys[p]] for p in malignant_sub_preds]
+        batch_final_preds[malignant_mask] = torch.tensor(original_labels, dtype=torch.long)
+        malignant_model.to('cpu')
+
+    final_predictions.extend(batch_final_preds.numpy())
+    final_true_labels.extend(true_7_class_labels.numpy())
+
+# ---- Per-stage stand-alone confusion matrices ----------------------
+p_preds, p_true = get_all_preds_and_labels(primary_model,   primary_test_loader)
+b_preds, b_true = get_all_preds_and_labels(benign_model,    benign_test_loader)
+m_preds, m_true = get_all_preds_and_labels(malignant_model, malignant_test_loader)
+
+fig, axes = plt.subplots(2, 2, figsize=(20, 18))
+fig.suptitle(f'Performance — Backbone: {BACKBONE.upper()}', fontsize=26, y=0.98, fontweight='bold')
+
+def plot_with_metrics(y_true, y_pred, labels, ax, title, cmap):
+    acc   = accuracy_score(y_true, y_pred)
+    b_acc = balanced_accuracy_score(y_true, y_pred)
+    ConfusionMatrixDisplay.from_predictions(y_true, y_pred, ax=ax, display_labels=labels, cmap=cmap, colorbar=False)
+    ax.set_title(f"{title}\nAccuracy: {acc:.2%} | Balanced: {b_acc:.2%}",
+                 fontsize=15, pad=12, fontweight='bold')
+
+plot_with_metrics(p_true, p_preds, ['Benign', 'Malignant'], axes[0, 0], '1. Primary Gatekeeper', 'Blues')
+plot_with_metrics(b_true, b_preds, benign_keys,             axes[0, 1], '2. Benign Specialist', 'Greens')
+plot_with_metrics(m_true, m_preds, malig_keys,              axes[1, 0], '3. Malignant Specialist', 'Reds')
+plot_with_metrics(final_true_labels, final_predictions, active_classes,
+                  axes[1, 1], '4. Final Combined Pipeline', 'Oranges')
+
+plt.tight_layout(rect=[0, 0, 1, 0.95])
+plt.show()
+
+# ---- Training history plots ----------------------------------------
+def plot_accuracy_history(history, ax, title):
+    if history:
+        ax.plot(history['train_acc'], label='Train Acc', color='blue', marker='o')
+        ax.plot(history['val_acc'],   label='Val Acc',   color='orange', marker='x')
+        ax.set_title(title, fontsize=14, fontweight='bold')
+        ax.set_xlabel('Epoch'); ax.set_ylabel('Accuracy')
+        ax.legend(); ax.grid(True, linestyle='--', alpha=0.6)
+    else:
+        ax.text(0.5, 0.5, 'History not available\n(model loaded from cache)',
+                ha='center', va='center', fontsize=12)
+        ax.set_title(title, fontsize=14, fontweight='bold')
+
+primary_hist   = load_history(PRIMARY_MODEL_NAME)
+benign_hist    = load_history(BENIGN_MODEL_NAME)
+malignant_hist = load_history(MALIGNANT_MODEL_NAME)
+
+fig_hist, axes_hist = plt.subplots(1, 3, figsize=(24, 7))
+fig_hist.suptitle(f'Training History — {BACKBONE.upper()}', fontsize=18, fontweight='bold')
+plot_accuracy_history(primary_hist,   axes_hist[0], 'Primary')
+plot_accuracy_history(benign_hist,    axes_hist[1], 'Benign Specialist')
+plot_accuracy_history(malignant_hist, axes_hist[2], 'Malignant Specialist')
+plt.tight_layout(rect=[0, 0, 1, 0.95])
+plt.show()
+
+# ---- Final summary banner ------------------------------------------
+primary_acc    = accuracy_score(p_true, p_preds)
+primary_bacc   = balanced_accuracy_score(p_true, p_preds)
+benign_acc     = accuracy_score(b_true, b_preds)
+malig_acc      = accuracy_score(m_true, m_preds)
+final_acc      = accuracy_score(final_true_labels, final_predictions)
+final_bacc     = balanced_accuracy_score(final_true_labels, final_predictions)
+final_macro_f1 = f1_score(final_true_labels, final_predictions, average='macro')
+
+print("\n" + "=" * 70)
+print(f"  FINAL RESULTS — BACKBONE: {BACKBONE.upper()}")
+print("=" * 70)
+print(f"  Primary (binary)          : acc {primary_acc:.2%}  | bal {primary_bacc:.2%}")
+print(f"  Benign specialist (5-way) : acc {benign_acc:.2%}")
+print(f"  Malignant specialist (2)  : acc {malig_acc:.2%}")
+print(f"  ── Combined 7-class pipeline ──")
+print(f"  Accuracy                  : {final_acc:.2%}   {'  ✅ ≥90%' if final_acc >= 0.90 else ''}")
+print(f"  Balanced accuracy         : {final_bacc:.2%}")
+print(f"  Macro F1                  : {final_macro_f1:.2%}")
+print("=" * 70)
+
+print("\nFINAL PIPELINE CLASSIFICATION REPORT")
+print("-" * 70)
+print(classification_report(final_true_labels, final_predictions, target_names=active_classes))
+
+# Save a tiny results JSON next to the weights for cross-backbone comparison
+results_path = f'{WORK_DIR}/results_{BACKBONE}.json'
+with open(results_path, 'w') as f:
+    json.dump({
+        'backbone': BACKBONE,
+        'primary_acc': primary_acc, 'primary_bal_acc': primary_bacc,
+        'benign_acc': benign_acc, 'malignant_acc': malig_acc,
+        'final_acc': final_acc, 'final_bal_acc': final_bacc, 'final_macro_f1': final_macro_f1,
+    }, f, indent=2)
+print(f"\n💾 Results JSON: {results_path}")
+===CELL 14 ===
+ # %%
+import os
+import pandas as pd
+import shutil
+from tqdm.notebook import tqdm
+
+# 1. Define and create the Export directory
+export_dir = '/kaggle/working/Export'
+images_export_dir = os.path.join(export_dir, 'images')
+
+os.makedirs(images_export_dir, exist_ok=True)
+
+print(f"📂 Created export folder at: {export_dir}")
+
+# 2. Save the metadata CSV to the Export folder
+csv_export_path = os.path.join(export_dir, 'validation_set_metadata.csv')
+test_df.to_csv(csv_export_path, index=False)
+print(f"📝 Metadata CSV saved: {csv_export_path}")
+
+# 3. Copy all images in the validation set (test_df) to the images subfolder
+print("🚀 Copying images... this may take a moment.")
+copy_count = 0
+
+for img_id in tqdm(test_df['image_id'], desc="Exporting Images"):
+    if img_id in path_map:
+        src_path = path_map[img_id]
+        # Define destination (keeping the .jpg extension)
+        dst_path = os.path.join(images_export_dir, f"{img_id}.jpg")
+        
+        # Copy the file
+        shutil.copy(src_path, dst_path)
+        copy_count += 1
+    else:
+        print(f"⚠️ Warning: Image ID {img_id} not found in path_map.")
+
+print(f"\n✅ Export Complete!")
+print(f"📊 Total images copied: {copy_count}")
+print(f"📂 All files are located in: {export_dir}")
+

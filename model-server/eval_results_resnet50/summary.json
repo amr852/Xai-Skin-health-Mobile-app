@@ -1,0 +1,38 @@
+{
+  "model": "resnet50_flat_14class",
+  "weights": "C:\\Users\\admin\\Desktop\\Xai-Skin-health-Mobile-app\\model-server\\weights\\resnet50_best.pth",
+  "n_samples": 350,
+  "accuracy": 0.9285714285714286,
+  "balanced_accuracy": 0.9285714285714285,
+  "mean_confidence": 0.9252070308583124,
+  "gradcam_pass": 5,
+  "gradcam_tested": 5,
+  "pred_distribution": {
+    "actinic keratoses": 51,
+    "squamous cell carcinoma": 4,
+    "benign keratosis-like lesions": 45,
+    "melanoma": 56,
+    "basal cell carcinoma": 50,
+    "dermatofibroma": 43,
+    "melanocytic nevi": 51,
+    "vascular lesions": 50
+  },
+  "per_class_correct": {
+    "actinic keratoses": 46,
+    "basal cell carcinoma": 47,
+    "benign keratosis-like lesions": 42,
+    "dermatofibroma": 43,
+    "melanocytic nevi": 49,
+    "melanoma": 48,
+    "vascular lesions": 50
+  },
+  "per_class_total": {
+    "actinic keratoses": 50,
+    "basal cell carcinoma": 50,
+    "benign keratosis-like lesions": 50,
+    "dermatofibroma": 50,
+    "melanocytic nevi": 50,
+    "melanoma": 50,
+    "vascular lesions": 50
+  }
+}

@@ -284,6 +284,16 @@ export default function CameraScreen() {
 
   const handleTakePhoto = async () => {
     if (!cameraRef.current || !isCameraReady || captureBusy) return;
+
+    if (liveDetect.detections.length === 0) {
+      showAlert({
+        title: 'No lesion in frame',
+        message: 'No skin lesion detected in the reticle. Point the camera at the area of concern and try again.',
+        variant: 'warning',
+      });
+      return;
+    }
+
     setCaptureBusy(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
@@ -352,6 +362,18 @@ export default function CameraScreen() {
           source: captureSource,
         });
         if (!cancelled) {
+          if (result.noLesionFound) {
+            setAnalysisLoading(false);
+            showAlert({
+              title: 'No lesions detected',
+              message: 'No lesions detected — you are well and healthy!',
+              variant: 'success',
+              buttons: [
+                { text: 'OK', style: 'default', onPress: () => handleRetake() },
+              ],
+            });
+            return;
+          }
           setAnalysis(result);
           setUploadedImageUrl(result.imageUrl);
           setForm(prev => ({ ...prev, status: statusFromPrediction(result.label) }));

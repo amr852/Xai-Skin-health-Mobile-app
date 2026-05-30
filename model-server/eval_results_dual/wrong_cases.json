@@ -1,0 +1,2762 @@
+[
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0067180.jpg",
+    "true": "akiec",
+    "pred": "bcc",
+    "primary": {
+      "label": "malignant",
+      "display": "Malignant",
+      "score": 0.6632815599441528
+    },
+    "score": 0.995048463344574,
+    "top_k": [
+      {
+        "label": "bcc",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.995048463344574
+      },
+      {
+        "label": "mel",
+        "display": "Melanoma",
+        "score": 0.0049515157006680965
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0056037.jpg",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9783420562744141
+    },
+    "score": 0.738135576248169,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.738135576248169
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.2602253258228302
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.0011298784520477057
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_1708_3153_799.png",
+    "true": "akiec",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.8952741622924805
+    },
+    "score": 0.6956647634506226,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.6956647634506226
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.2884599268436432
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.012658385559916496
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_2025_4229_541.png",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9762500524520874
+    },
+    "score": 0.9876212477684021,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9876212477684021
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.012353898026049137
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 1.273922771360958e-05
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_857_1628_916.png",
+    "true": "akiec",
+    "pred": "mel",
+    "primary": {
+      "label": "malignant",
+      "display": "Malignant",
+      "score": 0.9087265133857727
+    },
+    "score": 0.9986374974250793,
+    "top_k": [
+      {
+        "label": "mel",
+        "display": "Melanoma",
+        "score": 0.9986374974250793
+      },
+      {
+        "label": "bcc",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.0013624439015984535
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0071932.jpg",
+    "true": "akiec",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9980685114860535
+    },
+    "score": 0.9650862812995911,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.9650862812995911
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.0324627049267292
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.001974665094166994
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0030655.jpg",
+    "true": "akiec",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.995141863822937
+    },
+    "score": 0.7498000264167786,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.7498000264167786
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.2110832929611206
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.0382763110101223
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_851_1623_815.png",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9951453804969788
+    },
+    "score": 0.6882888078689575,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.6882888078689575
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.3109533190727234
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.00037742312997579575
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0069483.jpg",
+    "true": "akiec",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9910036325454712
+    },
+    "score": 0.6069057583808899,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.6069057583808899
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.3879265785217285
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.0033558495342731476
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_755_1430_681.png",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.5376120209693909
+    },
+    "score": 0.5190799236297607,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.5190799236297607
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.44531646370887756
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.028067542240023613
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0063068.jpg",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9537615776062012
+    },
+    "score": 0.4139462411403656,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.4139462411403656
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.31829145550727844
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.2643449306488037
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0058103.jpg",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9980456829071045
+    },
+    "score": 0.9400216937065125,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9400216937065125
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.05963359773159027
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.00014740080223418772
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0059874.jpg",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9977232813835144
+    },
+    "score": 0.9972378015518188,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9972378015518188
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.002386578358709812
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.0002026416186708957
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_1464_1612_284.png",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9999569654464722
+    },
+    "score": 0.5235020518302917,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.5235020518302917
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.4759075343608856
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.00021372725313995034
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_673_3928_888.png",
+    "true": "akiec",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9383065700531006
+    },
+    "score": 0.9507308006286621,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.9507308006286621
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.033347077667713165
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.01554220449179411
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0071313.jpg",
+    "true": "akiec",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9829030632972717
+    },
+    "score": 0.7451881170272827,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.7451881170272827
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.25364935398101807
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.0007142042741179466
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_304_4186_458.png",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9996877908706665
+    },
+    "score": 0.8061901330947876,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.8061901330947876
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.1730801910161972
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.01596086286008358
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0057986.jpg",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9964610934257507
+    },
+    "score": 0.6884698271751404,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.6884698271751404
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.25106847286224365
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.05962151661515236
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0057135.jpg",
+    "true": "akiec",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9855387210845947
+    },
+    "score": 0.6543281674385071,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.6543281674385071
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.23367807269096375
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.09618932008743286
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_1415_1440_629.png",
+    "true": "akiec",
+    "pred": "bcc",
+    "primary": {
+      "label": "malignant",
+      "display": "Malignant",
+      "score": 0.8765294551849365
+    },
+    "score": 0.986544668674469,
+    "top_k": [
+      {
+        "label": "bcc",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.986544668674469
+      },
+      {
+        "label": "mel",
+        "display": "Melanoma",
+        "score": 0.013455369509756565
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_1278_965_701.png",
+    "true": "akiec",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9822320938110352
+    },
+    "score": 0.6180434226989746,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.6180434226989746
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.38181421160697937
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 9.319830860476941e-05
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0064211.jpg",
+    "true": "akiec",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9903526902198792
+    },
+    "score": 0.6955838203430176,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.6955838203430176
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.2780593931674957
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.025742916390299797
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_306_1646_971.png",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.7835128307342529
+    },
+    "score": 0.9621937274932861,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9621937274932861
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.03777853772044182
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 1.8827762687578797e-05
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0065078.jpg",
+    "true": "akiec",
+    "pred": "bcc",
+    "primary": {
+      "label": "malignant",
+      "display": "Malignant",
+      "score": 0.5003324747085571
+    },
+    "score": 0.8624883890151978,
+    "top_k": [
+      {
+        "label": "bcc",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.8624883890151978
+      },
+      {
+        "label": "mel",
+        "display": "Melanoma",
+        "score": 0.13751161098480225
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_1006_53_716.png",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9986891150474548
+    },
+    "score": 0.964042603969574,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.964042603969574
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.03438034653663635
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.0011514956131577492
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_1347_1226_928.png",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.596499502658844
+    },
+    "score": 0.6274477243423462,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.6274477243423462
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.36677613854408264
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.00456260284408927
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0059561.jpg",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9998260140419006
+    },
+    "score": 0.9857373237609863,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9857373237609863
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.012624303810298443
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.0014932277845218778
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_207_3951_140.png",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.7753504514694214
+    },
+    "score": 0.7317930459976196,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.7317930459976196
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.25867506861686707
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.008705586194992065
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0066306.jpg",
+    "true": "akiec",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9956230521202087
+    },
+    "score": 0.7859424948692322,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.7859424948692322
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.2104368507862091
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.0019411796238273382
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\PAT_2079_4480_586.png",
+    "true": "akiec",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9918600916862488
+    },
+    "score": 0.8857733011245728,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.8857733011245728
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.10279236733913422
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.009134454652667046
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\actinic keratoses\\ISIC_0057280.jpg",
+    "true": "akiec",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.648878812789917
+    },
+    "score": 0.9499928951263428,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.9499928951263428
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.043811649084091187
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.005524010863155127
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0030721.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.8483384251594543
+    },
+    "score": 0.6373685598373413,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.6373685598373413
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.36077725887298584
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.0014181997394189239
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0062421.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.89650958776474
+    },
+    "score": 0.9892724752426147,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9892724752426147
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.010660214349627495
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 5.741238055634312e-05
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0027504.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.8857421875
+    },
+    "score": 0.950529158115387,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.950529158115387
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.03592875227332115
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.013286031782627106
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0065366.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9955730438232422
+    },
+    "score": 0.8058804869651794,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.8058804869651794
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.19358883798122406
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.0003752217744477093
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0029227.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 1.0
+    },
+    "score": 0.5453524589538574,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.5453524589538574
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.45424720644950867
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.0001873885776149109
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0072658.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.8916109204292297
+    },
+    "score": 0.9881840944290161,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9881840944290161
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.011485589668154716
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.00024645571829751134
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0024676.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9846578240394592
+    },
+    "score": 0.7923505902290344,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.7923505902290344
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.1982373148202896
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.00539794797077775
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0026042.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.5099321007728577
+    },
+    "score": 0.9082809686660767,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9082809686660767
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.09115415811538696
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.0002604022156447172
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0055755.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.999953031539917
+    },
+    "score": 0.9999794960021973,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9999794960021973
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 1.0591001228021923e-05
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 6.000568191666389e-06
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0062361.jpg",
+    "true": "bkl",
+    "pred": "akiec",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9028202891349792
+    },
+    "score": 0.5780274868011475,
+    "top_k": [
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.5780274868011475
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.34029340744018555
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.0793740525841713
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0034168.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.997687816619873
+    },
+    "score": 0.7224613428115845,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.7224613428115845
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.2771328091621399
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.0002038554521277547
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0072451.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9824862480163574
+    },
+    "score": 0.9998351335525513,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9998351335525513
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.0001008995168376714
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 3.7553538277279586e-05
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0031212.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9967275857925415
+    },
+    "score": 0.7515723705291748,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.7515723705291748
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.24201610684394836
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.003722399938851595
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0058044.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9647454023361206
+    },
+    "score": 0.5792843699455261,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.5792843699455261
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.4203792214393616
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.0003083564224652946
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0055097.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.806947648525238
+    },
+    "score": 0.9245128631591797,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9245128631591797
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.07199587672948837
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.0027835851069539785
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0026867.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9999955892562866
+    },
+    "score": 0.9997037053108215,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9997037053108215
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.0002836457279045135
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 1.1419613656471483e-05
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0062119.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9996616840362549
+    },
+    "score": 0.8934277296066284,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.8934277296066284
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.0998435914516449
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.0053802356123924255
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0054907.jpg",
+    "true": "bkl",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9806443452835083
+    },
+    "score": 0.9925687909126282,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9925687909126282
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.00485884677618742
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.0023759130854159594
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\benign keratosis-like lesions\\ISIC_0025716.jpg",
+    "true": "bkl",
+    "pred": "mel",
+    "primary": {
+      "label": "malignant",
+      "display": "Malignant",
+      "score": 0.667691171169281
+    },
+    "score": 0.9999079704284668,
+    "top_k": [
+      {
+        "label": "mel",
+        "display": "Melanoma",
+        "score": 0.9999079704284668
+      },
+      {
+        "label": "bcc",
+        "display": "Basal Cell Carcinoma",
+        "score": 9.201353532262146e-05
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0073215.jpg",
+    "true": "bcc",
+    "pred": "akiec",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.6253755688667297
+    },
+    "score": 0.9001473188400269,
+    "top_k": [
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.9001473188400269
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.05487468093633652
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.04106440022587776
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0071987.jpg",
+    "true": "bcc",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9144262671470642
+    },
+    "score": 0.8268887996673584,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.8268887996673584
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.1552579402923584
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.017313066869974136
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0061173.jpg",
+    "true": "bcc",
+    "pred": "mel",
+    "primary": {
+      "label": "malignant",
+      "display": "Malignant",
+      "score": 0.8104064464569092
+    },
+    "score": 0.8631964921951294,
+    "top_k": [
+      {
+        "label": "mel",
+        "display": "Melanoma",
+        "score": 0.8631964921951294
+      },
+      {
+        "label": "bcc",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.1368035227060318
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0067131.jpg",
+    "true": "bcc",
+    "pred": "akiec",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.8514817357063293
+    },
+    "score": 0.9798052906990051,
+    "top_k": [
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.9798052906990051
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.015584909357130527
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.0028329507913440466
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0054227.jpg",
+    "true": "bcc",
+    "pred": "akiec",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9968928098678589
+    },
+    "score": 0.8880520462989807,
+    "top_k": [
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.8880520462989807
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.07063701748847961
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.029303021728992462
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0066414.jpg",
+    "true": "bcc",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9951373934745789
+    },
+    "score": 0.8277000188827515,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.8277000188827515
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.1493445187807083
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.020942872390151024
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0058576.jpg",
+    "true": "bcc",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9869189858436584
+    },
+    "score": 0.6031897664070129,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.6031897664070129
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.31802940368652344
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.051762647926807404
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0061208.jpg",
+    "true": "bcc",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.912904679775238
+    },
+    "score": 0.9159327149391174,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.9159327149391174
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.028585325926542282
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.028043901547789574
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0054789.jpg",
+    "true": "bcc",
+    "pred": "akiec",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.829417884349823
+    },
+    "score": 0.4913018047809601,
+    "top_k": [
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.4913018047809601
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.4573025405406952
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.05117785930633545
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0068101.jpg",
+    "true": "bcc",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.7866765260696411
+    },
+    "score": 0.7259427309036255,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.7259427309036255
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.1927347332239151
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.06354836374521255
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0062945.jpg",
+    "true": "bcc",
+    "pred": "akiec",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9892340898513794
+    },
+    "score": 0.9112151265144348,
+    "top_k": [
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.9112151265144348
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.0472901277244091
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.03359844535589218
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0072431.jpg",
+    "true": "bcc",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9717450737953186
+    },
+    "score": 0.6220786571502686,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.6220786571502686
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.36718353629112244
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.009625432081520557
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0058264.jpg",
+    "true": "bcc",
+    "pred": "mel",
+    "primary": {
+      "label": "malignant",
+      "display": "Malignant",
+      "score": 0.9574052691459656
+    },
+    "score": 0.8030860424041748,
+    "top_k": [
+      {
+        "label": "mel",
+        "display": "Melanoma",
+        "score": 0.8030860424041748
+      },
+      {
+        "label": "bcc",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.1969139128923416
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0063059.jpg",
+    "true": "bcc",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.5185062885284424
+    },
+    "score": 0.8870725631713867,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.8870725631713867
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.10987499356269836
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.002930414630100131
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0070386.jpg",
+    "true": "bcc",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.7853063344955444
+    },
+    "score": 0.9621828198432922,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9621828198432922
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.03589557483792305
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.001817476935684681
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0028570.jpg",
+    "true": "bcc",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.683404266834259
+    },
+    "score": 0.8832061290740967,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.8832061290740967
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.11500782519578934
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.001522886217571795
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0062834.jpg",
+    "true": "bcc",
+    "pred": "akiec",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.8152855038642883
+    },
+    "score": 0.9156075716018677,
+    "top_k": [
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.9156075716018677
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.051298148930072784
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.022654924541711807
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0065662.jpg",
+    "true": "bcc",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9941405653953552
+    },
+    "score": 0.8351988792419434,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.8351988792419434
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.09792248159646988
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.06000036746263504
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0066841.jpg",
+    "true": "bcc",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9949535727500916
+    },
+    "score": 0.9996942281723022,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9996942281723022
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.000285864167381078
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 1.0408680282125715e-05
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0058392.jpg",
+    "true": "bcc",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9545764923095703
+    },
+    "score": 0.8917474746704102,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.8917474746704102
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.08942683041095734
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.01839515008032322
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0071603.jpg",
+    "true": "bcc",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.5160719156265259
+    },
+    "score": 0.9826517105102539,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9826517105102539
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.017171351239085197
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.00014965097943786532
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0054439.jpg",
+    "true": "bcc",
+    "pred": "df",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9613620638847351
+    },
+    "score": 0.8554199934005737,
+    "top_k": [
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.8554199934005737
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.12295108288526535
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.01112024299800396
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0071416.jpg",
+    "true": "bcc",
+    "pred": "akiec",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.7729895710945129
+    },
+    "score": 0.9988844990730286,
+    "top_k": [
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.9988844990730286
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.0008766123210079968
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.0002243701455881819
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0067812.jpg",
+    "true": "bcc",
+    "pred": "akiec",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9231303930282593
+    },
+    "score": 0.9994493126869202,
+    "top_k": [
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.9994493126869202
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.0002031004842137918
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.00017315437435172498
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0064788.jpg",
+    "true": "bcc",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9103521108627319
+    },
+    "score": 0.903615415096283,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.903615415096283
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.08729954808950424
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.007016347721219063
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0054133.jpg",
+    "true": "bcc",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.8266757726669312
+    },
+    "score": 0.9902247786521912,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9902247786521912
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.009592704474925995
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 6.908038631081581e-05
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0072759.jpg",
+    "true": "bcc",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.5880300402641296
+    },
+    "score": 0.6745533347129822,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.6745533347129822
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.20613552629947662
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.09779836237430573
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\basal cell carcinoma\\ISIC_0065624.jpg",
+    "true": "bcc",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9861835241317749
+    },
+    "score": 0.5564369559288025,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.5564369559288025
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.4418994188308716
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.0013645855942741036
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\seed0030.png",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9968851208686829
+    },
+    "score": 0.9969578981399536,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9969578981399536
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.002956266747787595
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 4.7393827117048204e-05
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\000223HB.jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9999997615814209
+    },
+    "score": 0.7706508040428162,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.7706508040428162
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.17126663029193878
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.03135174885392189
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0066239.jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9378083944320679
+    },
+    "score": 0.7265818119049072,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.7265818119049072
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.2483077049255371
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.01045267004519701
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\023143HB.jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9989988207817078
+    },
+    "score": 0.999955415725708,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.999955415725708
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 3.151114651700482e-05
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 1.0708813533710781e-05
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0053857.jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9989066123962402
+    },
+    "score": 0.8526021838188171,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.8526021838188171
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.12807995080947876
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.017779987305402756
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0061904.jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.8922150731086731
+    },
+    "score": 0.5551880598068237,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.5551880598068237
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.4179414212703705
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.020260922610759735
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0059494.jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9993550181388855
+    },
+    "score": 0.9721587300300598,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9721587300300598
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.024137701839208603
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.0030468686018139124
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\seed0047.png",
+    "true": "df",
+    "pred": "akiec",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9963124394416809
+    },
+    "score": 0.985785186290741,
+    "top_k": [
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.985785186290741
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.008193692192435265
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.0053986720740795135
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0058673.jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.8924850225448608
+    },
+    "score": 0.9162870645523071,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9162870645523071
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.04050629213452339
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.02240706980228424
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\023048HB.jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9043394327163696
+    },
+    "score": 0.9857693314552307,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9857693314552307
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.011615687981247902
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.0019580007065087557
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\0036_Dermatoscopic.png",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9780570864677429
+    },
+    "score": 0.7971687912940979,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.7971687912940979
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.18884457647800446
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.00861839298158884
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0063944.jpg",
+    "true": "df",
+    "pred": "bcc",
+    "primary": {
+      "label": "malignant",
+      "display": "Malignant",
+      "score": 0.6578277945518494
+    },
+    "score": 0.9997062087059021,
+    "top_k": [
+      {
+        "label": "bcc",
+        "display": "Basal Cell Carcinoma",
+        "score": 0.9997062087059021
+      },
+      {
+        "label": "mel",
+        "display": "Melanoma",
+        "score": 0.00029370724223554134
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\045240HB.jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9697520136833191
+    },
+    "score": 0.9966540336608887,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9966540336608887
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.001877821166999638
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.0012951747048646212
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0024994(1).jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 1.0
+    },
+    "score": 0.9449180364608765,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9449180364608765
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.05459952354431152
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.0002975777315441519
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0068078.jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9994848966598511
+    },
+    "score": 0.9997355341911316,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9997355341911316
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.00025543433730490506
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 4.168270152149489e-06
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\seed0091.png",
+    "true": "df",
+    "pred": "akiec",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9608649015426636
+    },
+    "score": 0.9845280051231384,
+    "top_k": [
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.9845280051231384
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.011917936615645885
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.0018859594129025936
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0056996.jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9996882677078247
+    },
+    "score": 0.9919918179512024,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9919918179512024
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.006132557522505522
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.0017254893900826573
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\dfskin_7.jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 1.0
+    },
+    "score": 0.9512090682983398,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9512090682983398
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.04775968939065933
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.0005461534019559622
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\seed0050.png",
+    "true": "df",
+    "pred": "akiec",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9892573952674866
+    },
+    "score": 0.8720362782478333,
+    "top_k": [
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.8720362782478333
+      },
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.12354187667369843
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.0035107904113829136
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\0031_Dermatoscopic.jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9999688863754272
+    },
+    "score": 0.9409166574478149,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.9409166574478149
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.058122940361499786
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.0008269936661235988
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0060129.jpg",
+    "true": "df",
+    "pred": "bkl",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9388405680656433
+    },
+    "score": 0.6642853617668152,
+    "top_k": [
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.6642853617668152
+      },
+      {
+        "label": "vasc",
+        "display": "Vascular Lesion",
+        "score": 0.22658637166023254
+      },
+      {
+        "label": "akiec",
+        "display": "Actinic Keratosis",
+        "score": 0.07129701972007751
+      }
+    ]
+  },
+  {
+    "path": "C:\\Users\\admin\\Downloads\\combined_skin_dataset-20260503T220222Z-3-001\\combined_skin_dataset\\dermatofibroma\\ISIC_0062455.jpg",
+    "true": "df",
+    "pred": "nv",
+    "primary": {
+      "label": "benign",
+      "display": "Benign",
+      "score": 0.9869924783706665
+    },
+    "score": 0.6974722146987915,
+    "top_k": [
+      {
+        "label": "nv",
+        "display": "Melanocytic Nevus",
+        "score": 0.6974722146987915
+      },
+      {
+        "label": "bkl",
+        "display": "Benign Keratosis",
+        "score": 0.3010191321372986
+      },
+      {
+        "label": "df",
+        "display": "Dermatofibroma",
+        "score": 0.0014481247635558248
+      }
+    ]
+  }
+]

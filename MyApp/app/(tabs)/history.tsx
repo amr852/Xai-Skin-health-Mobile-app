@@ -56,41 +56,14 @@ function mapModelSeverityToStatus(s?: string): StatusKey {
   return 'Check';
 }
 
-// Build a per-scan display title. Prefers a user-set title (from the edit
-// modal) so each scan can be uniquely named ("Mole near left elbow"). When no
-// title has been saved we fall back to a label derived from the scan's own
-// analysis so cards are still distinct.
-// Prefer the model's human-readable display name (e.g. "Melanocytic Nevus")
-// over the raw shortcode label (e.g. "nv") so the history card surfaces the
-// real medical name. Falls back through specialist → diagnosis → primary →
-// shortcode → generic.
-function prettifyShortcode(raw: string): string {
-  const t = raw.trim();
-  if (!t) return '';
-  return t
-    .replace(/_/g, ' ')
-    .split(/\s+/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(' ');
-}
-
+// Per-scan display title: user-set title from EditScanModal (persisted in
+// ScanSession.title). No date fallback — user explicitly wants the saved
+// title shown.
 function deriveScanTitle(item: ScanSession): string {
   const userTitle = (item.title || '').trim();
   if (userTitle) return userTitle;
   if (item.noLesionFound) return 'No lesion detected';
-  const top = item.lesions?.[0];
-  const candidates = [
-    top?.specialist?.display,
-    top?.diagnosis?.display,
-    top?.specialist?.label,
-    top?.diagnosis?.label,
-    top?.primary?.display,
-    top?.primary?.label,
-  ];
-  for (const c of candidates) {
-    if (typeof c === 'string' && c.trim()) return prettifyShortcode(c);
-  }
-  return 'Skin scan';
+  return 'Untitled scan';
 }
 
 // ── Edit Modal ────────────────────────────────────────────────────────────────
@@ -698,11 +671,27 @@ function SessionCard({
       severity: L.severity,
       label: L.diagnosis?.label,
     }));
-  const arcStatus = mapModelSeverityToStatus(dedupedRegions[0]?.severity ?? regions[0]?.severity);
+  const wholeImage = item.wholeImage ?? null;
+  const arcStatus = mapModelSeverityToStatus(
+    wholeImage?.severity ?? dedupedRegions[0]?.severity ?? regions[0]?.severity,
+  );
   const first = dedupedRegions[0] ?? regions[0];
   const scanTitle = deriveScanTitle(item);
-  const confidenceLine =
-    typeof first?.diagnosis?.score === 'number'
+  const wholeLabel =
+    wholeImage?.specialist?.display ??
+    wholeImage?.specialist?.label ??
+    wholeImage?.diagnosis?.display ??
+    wholeImage?.diagnosis?.label ??
+    null;
+  const wholeScore =
+    typeof wholeImage?.specialist?.score === 'number'
+      ? wholeImage.specialist.score
+      : typeof wholeImage?.diagnosis?.score === 'number'
+        ? wholeImage.diagnosis.score
+        : null;
+  const confidenceLine = wholeLabel
+    ? `${wholeLabel}${wholeScore != null ? ` · ${(wholeScore * 100).toFixed(1)}%` : ''}`
+    : typeof first?.diagnosis?.score === 'number'
       ? `Confidence ${((first.diagnosis!.score as number) * 100).toFixed(1)}%`
       : item.noLesionFound
         ? 'No lesion-like region detected'
@@ -767,6 +756,32 @@ function SessionCard({
               })}
             </Text>
           </View>
+
+          {wholeImage?.overlayImageUrl ? (
+            <TouchableOpacity
+              style={hs.wholeXaiRow}
+              onPress={() => onOpenDetail(item)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Open whole-image XAI heatmap">
+              <Image
+                source={{ uri: wholeImage.overlayImageUrl }}
+                style={hs.wholeXaiThumb}
+                resizeMode="contain"
+              />
+              <View style={hs.wholeXaiBody}>
+                <View style={hs.wholeXaiHeadRow}>
+                  <Feather name="zap" size={12} color={C.primary} />
+                  <Text style={hs.wholeXaiHead}>Whole-image XAI</Text>
+                </View>
+                {wholeLabel ? (
+                  <Text style={hs.wholeXaiLabel} numberOfLines={1}>
+                    {wholeLabel}
+                  </Text>
+                ) : null}
+              </View>
+            </TouchableOpacity>
+          ) : null}
 
           <TouchableOpacity
             style={hs.sessionReportLink}
@@ -1591,6 +1606,42 @@ const hs = StyleSheet.create({
     fontFamily: FontFamily.bodyMedium,
     color: C.textHint,
     letterSpacing: 0.2,
+  },
+  wholeXaiRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 8,
+    padding: 8,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    backgroundColor: C.surface,
+  },
+  wholeXaiThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.sm,
+    backgroundColor: C.surfaceAlt,
+  },
+  wholeXaiBody: { flex: 1, minWidth: 0 },
+  wholeXaiHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  wholeXaiHead: {
+    fontSize: 11,
+    fontFamily: FontFamily.bodyBold,
+    color: C.primary,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  wholeXaiLabel: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.bodySemibold,
+    color: C.text,
   },
   sessionReportLink: {
     flexDirection: 'row',

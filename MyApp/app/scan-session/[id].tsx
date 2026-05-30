@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Modal,
   StatusBar,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,8 +21,10 @@ import { Hairline } from '@/components/decor/Hairline';
 import { StatusArc } from '@/components/decor/StatusArc';
 import { ImageWithBboxOverlay } from '@/components/ImageWithBboxOverlay';
 import { fetchScanSessionById, type ScanSession } from '@/hooks/useScanSessions';
-import { ApiError } from '@/lib/api';
+import { ApiError, apiFetch } from '@/lib/api';
 import { dedupeNestedDetections } from '@/lib/bboxDedupe';
+import { AppInput } from '@/components/ui/AppInput';
+import { useAppAlert } from '@/components/ui/AppAlert';
 type StatusKey = 'Stable' | 'Check' | 'Urgent';
 
 function mapModelSeverityToStatus(s?: string): StatusKey {
@@ -46,6 +49,10 @@ export default function ScanSessionDetailScreen() {
   const [heatmapUri, setHeatmapUri] = useState<string | null>(null);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string>('Region image');
+  const [renaming, setRenaming] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [savingTitle, setSavingTitle] = useState(false);
+  const { showAlert, alertNode } = useAppAlert();
 
   const load = useCallback(async () => {
     if (!id || typeof id !== 'string') {
@@ -78,6 +85,49 @@ export default function ScanSessionDetailScreen() {
     }, [load]),
   );
 
+  const hasUserTitle = !!(session?.title || '').trim();
+
+  // Auto-prompt for a name the first time the user lands on an untitled scan
+  // that has lesions (skip "no lesion" cases where the default text is fine).
+  useEffect(() => {
+    if (!session || loading) return;
+    if (hasUserTitle) return;
+    if (session.noLesionFound) return;
+    if (renaming) return;
+    setTitleDraft('');
+    setRenaming(true);
+    // Only auto-open once per session load; subsequent renames go through the
+    // pencil button.
+  }, [session?._id, loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openRename = useCallback(() => {
+    setTitleDraft((session?.title || '').trim());
+    setRenaming(true);
+  }, [session?.title]);
+
+  const submitRename = useCallback(async () => {
+    if (!session) return;
+    const next = titleDraft.trim();
+    if (!next) return;
+    setSavingTitle(true);
+    try {
+      const updated = await apiFetch<ScanSession>(
+        `/scan-sessions/${encodeURIComponent(session._id)}`,
+        { method: 'PATCH', json: { title: next } },
+      );
+      setSession((prev) => (prev ? { ...prev, ...updated, title: updated.title ?? next } : prev));
+      setRenaming(false);
+    } catch (e) {
+      showAlert({
+        title: 'Rename failed',
+        message: (e as Error).message || 'Could not rename this scan.',
+        variant: 'error',
+      });
+    } finally {
+      setSavingTitle(false);
+    }
+  }, [session, titleDraft, showAlert]);
+
   const regionsRaw = session?.lesions ?? [];
   const regions = dedupeNestedDetections(
     regionsRaw.filter((L): L is typeof L & { bbox: NonNullable<typeof L.bbox> } => L.bbox != null),
@@ -90,16 +140,38 @@ export default function ScanSessionDetailScreen() {
       severity: L.severity,
       label: L.diagnosis?.label,
     }));
+  const wholeImageOverlay = session?.wholeImage?.overlayImageUrl ?? null;
   const primaryHeatmap =
-    session?.annotatedImageUrl || regions[0]?.overlayImageUrl || regionsRaw.find((l) => l.overlayImageUrl)?.overlayImageUrl;
+    wholeImageOverlay ||
+    session?.annotatedImageUrl ||
+    regions[0]?.overlayImageUrl ||
+    regionsRaw.find((l) => l.overlayImageUrl)?.overlayImageUrl;
+  const wholeImage = session?.wholeImage ?? null;
+  const wholeSpecialistLabel =
+    wholeImage?.specialist?.display ??
+    wholeImage?.specialist?.label ??
+    wholeImage?.diagnosis?.display ??
+    wholeImage?.diagnosis?.label ??
+    null;
+  const wholeScorePct =
+    typeof wholeImage?.specialist?.score === 'number'
+      ? `${(wholeImage.specialist.score * 100).toFixed(1)}%`
+      : typeof wholeImage?.diagnosis?.score === 'number'
+      ? `${(wholeImage.diagnosis.score * 100).toFixed(1)}%`
+      : null;
+  const wholePrimaryKey = (wholeImage?.primary?.label || '').toLowerCase();
+  const wholeIsMalignant = wholePrimaryKey === 'malignant';
+  const wholePrimaryDisplay =
+    wholeImage?.primary?.display ?? (wholeIsMalignant ? 'Malignant' : wholePrimaryKey ? 'Benign' : null);
+  const wholePrimaryScorePct =
+    typeof wholeImage?.primary?.score === 'number'
+      ? `${(wholeImage.primary.score * 100).toFixed(0)}%`
+      : null;
+  const wholePrimaryMeta = wholeIsMalignant ? statusMeta.Urgent : statusMeta.Stable;
 
   const sessionTitle = session
-    ? `Scan · ${new Date(session.createdAt).toLocaleString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      })}`
+    ? (session.title || '').trim() ||
+      (session.noLesionFound ? 'No lesion detected' : 'Untitled scan')
     : 'Scan';
 
   return (
@@ -115,10 +187,34 @@ export default function ScanSessionDetailScreen() {
           accessibilityLabel="Go back">
           <Feather name="arrow-left" size={22} color={C.text} />
         </TouchableOpacity>
-        <Text style={s.topTitle} numberOfLines={1}>
-          {sessionTitle}
-        </Text>
-        <View style={{ width: 44 }} />
+        <TouchableOpacity
+          style={s.topTitleWrap}
+          onPress={openRename}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={hasUserTitle ? `Rename scan ${sessionTitle}` : 'Name this scan'}
+          disabled={!session}>
+          <Text style={s.topTitle} numberOfLines={1}>
+            {sessionTitle}
+          </Text>
+          {session ? (
+            <Feather
+              name="edit-2"
+              size={13}
+              color={hasUserTitle ? C.textHint : C.primary}
+              style={s.topTitleIcon}
+            />
+          ) : null}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={s.renameBtn}
+          onPress={openRename}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Rename scan"
+          disabled={!session}>
+          <Feather name="edit-3" size={18} color={session ? C.primary : C.textHint} />
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -207,7 +303,56 @@ export default function ScanSessionDetailScreen() {
             </View>
           </View>
 
-          {primaryHeatmap ? (
+          {wholeImage ? (
+            <View style={s.wholeCard}>
+              <View style={s.heatmapCardHead}>
+                <Feather name="layers" size={16} color={C.primary} />
+                <Text style={s.heatmapCardTitle}>Whole-image diagnosis</Text>
+              </View>
+              {wholePrimaryDisplay ? (
+                <View
+                  style={[
+                    s.primaryBanner,
+                    { backgroundColor: wholePrimaryMeta.bg, borderColor: wholePrimaryMeta.color },
+                  ]}>
+                  <Text style={[s.primaryBannerLabel, { color: wholePrimaryMeta.color }]}>
+                    {wholePrimaryDisplay.toUpperCase()}
+                  </Text>
+                  {wholePrimaryScorePct ? (
+                    <Text style={[s.primaryBannerScore, { color: wholePrimaryMeta.color }]}>
+                      {wholePrimaryScorePct}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+              {wholeSpecialistLabel ? (
+                <Text style={s.regionPred}>
+                  {wholeSpecialistLabel}
+                  {wholeScorePct ? ` · ${wholeScorePct}` : ''}
+                </Text>
+              ) : null}
+              {wholeImageOverlay ? (
+                <TouchableOpacity
+                  style={s.wholeOverlayBtn}
+                  onPress={() => setHeatmapUri(wholeImageOverlay)}
+                  activeOpacity={0.9}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open whole-image Grad-CAM heatmap full screen">
+                  <View style={s.heatmapCardHead}>
+                    <Feather name="zap" size={14} color={C.primary} />
+                    <Text style={[s.regionImageLbl, { color: C.primary }]}>Whole-image XAI</Text>
+                    <Feather name="maximize-2" size={12} color={C.textHint} />
+                  </View>
+                  <Image
+                    source={{ uri: wholeImageOverlay }}
+                    style={s.heatmapThumb}
+                    resizeMode="contain"
+                  />
+                  <Text style={s.heatmapHint}>Tap to view full size</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : primaryHeatmap ? (
             <TouchableOpacity
               style={s.heatmapCard}
               onPress={() => setHeatmapUri(primaryHeatmap)}
@@ -219,7 +364,7 @@ export default function ScanSessionDetailScreen() {
                 <Text style={s.heatmapCardTitle}>Grad-CAM heatmap</Text>
                 <Feather name="maximize-2" size={14} color={C.textHint} />
               </View>
-              <Image source={{ uri: primaryHeatmap }} style={s.heatmapThumb} resizeMode="cover" />
+              <Image source={{ uri: primaryHeatmap }} style={s.heatmapThumb} resizeMode="contain" />
               <Text style={s.heatmapHint}>Tap to view full size</Text>
             </TouchableOpacity>
           ) : null}
@@ -409,6 +554,66 @@ export default function ScanSessionDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={renaming}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => (savingTitle ? null : setRenaming(false))}>
+        <SafeAreaView style={s.renameSafe}>
+          <View style={s.renameHeader}>
+            <TouchableOpacity
+              onPress={() => setRenaming(false)}
+              disabled={savingTitle}
+              hitSlop={10}
+              style={s.renameHeaderBtn}>
+              <Text style={[s.renameCancel, savingTitle && { opacity: 0.4 }]}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={s.renameTitle}>Name scan</Text>
+            <TouchableOpacity
+              onPress={() => void submitRename()}
+              disabled={savingTitle || !titleDraft.trim()}
+              hitSlop={10}
+              style={s.renameHeaderBtn}>
+              {savingTitle ? (
+                <ActivityIndicator size="small" color={C.primary} />
+              ) : (
+                <Text
+                  style={[
+                    s.renameSave,
+                    !titleDraft.trim() && { opacity: 0.4 },
+                  ]}>
+                  Save
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <View style={s.renameBody}>
+              <AppInput
+                label="Title"
+                required
+                value={titleDraft}
+                onChangeText={setTitleDraft}
+                placeholder="Mole near left elbow"
+                editable={!savingTitle}
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={() => {
+                  if (titleDraft.trim()) void submitRename();
+                }}
+              />
+              <Text style={s.renameHint}>
+                Give this scan a short, memorable name so it's easy to find later.
+              </Text>
+            </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
+
+      {alertNode}
     </SafeAreaView>
   );
 }
@@ -435,13 +640,71 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.borderLight,
   },
-  topTitle: {
+  topTitleWrap: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: Space[2],
+  },
+  topTitle: {
+    flexShrink: 1,
     textAlign: 'center',
     fontSize: FontSize.md,
     fontFamily: FontFamily.displayBold,
     color: C.text,
     letterSpacing: -0.2,
+  },
+  topTitleIcon: {
+    opacity: 0.85,
+  },
+  renameBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: C.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: C.borderLight,
+  },
+  renameSafe: { flex: 1, backgroundColor: C.bg },
+  renameHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+    backgroundColor: C.surface,
+  },
+  renameHeaderBtn: { minWidth: 64 },
+  renameTitle: {
+    fontSize: 17,
+    fontFamily: FontFamily.displayBold,
+    color: C.text,
+    letterSpacing: -0.3,
+  },
+  renameCancel: { fontSize: 16, fontFamily: FontFamily.body, color: C.muted },
+  renameSave: {
+    fontSize: 16,
+    fontFamily: FontFamily.bodyBold,
+    color: C.primary,
+    textAlign: 'right',
+  },
+  renameBody: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+  },
+  renameHint: {
+    marginTop: 10,
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.body,
+    color: C.textSub,
+    lineHeight: 20,
   },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: Space[10], paddingHorizontal: Space[5] },
@@ -595,6 +858,24 @@ const s = StyleSheet.create({
     padding: Space[4],
     marginBottom: Space[4],
     ...Shadow.sm,
+  },
+  wholeCard: {
+    backgroundColor: C.surface,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: Space[4],
+    marginBottom: Space[4],
+    gap: 8,
+    ...Shadow.sm,
+  },
+  wholeOverlayBtn: {
+    marginTop: 6,
+    padding: 8,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    gap: 6,
   },
   heatmapCardHead: {
     flexDirection: 'row',

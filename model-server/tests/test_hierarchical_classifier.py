@@ -1,6 +1,6 @@
 """Routing tests for HierarchicalClassifier.
 
-Skips entirely if the EfficientNet weights are not on disk — the classifier
+Skips entirely if the backbone weights are not on disk — the classifier
 loads three .pth files at import time, so without them no smoke test is
 possible. When weights exist, this asserts:
 
@@ -24,7 +24,7 @@ _WEIGHTS_PRESENT = all(
 
 pytestmark = pytest.mark.skipif(
     not _WEIGHTS_PRESENT,
-    reason="EfficientNet weight files not present on disk",
+    reason="Classifier weight files not present on disk",
 )
 
 

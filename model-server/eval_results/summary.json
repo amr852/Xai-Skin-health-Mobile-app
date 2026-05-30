@@ -1,0 +1,23 @@
+{
+  "n_samples": 560,
+  "accuracy": 0.5267857142857143,
+  "balanced_accuracy": 0.5267857142857143,
+  "primary_routing_accuracy": 0.7964285714285714,
+  "mean_confidence": 0.9104145348604237,
+  "mean_entropy": null,
+  "pred_distribution": {
+    "bcc": 46,
+    "bkl": 103,
+    "nv": 231,
+    "mel": 42,
+    "akiec": 42,
+    "df": 39,
+    "vasc": 57
+  },
+  "dual_inference": false,
+  "weights": {
+    "primary": "C:\\Users\\admin\\Desktop\\Xai-Skin-health-Mobile-app\\model-server\\weights\\primary_effnet_b0_best.pth",
+    "benign": "C:\\Users\\admin\\Desktop\\Xai-Skin-health-Mobile-app\\model-server\\weights\\benign_effnet_b0_best.pth",
+    "malignant": "C:\\Users\\admin\\Desktop\\Xai-Skin-health-Mobile-app\\model-server\\weights\\malignant_effnet_b0_best.pth"
+  }
+}

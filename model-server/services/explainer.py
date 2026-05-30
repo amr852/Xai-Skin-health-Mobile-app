@@ -1,7 +1,8 @@
-"""Grad-CAM utilities for the hierarchical pipeline.
+"""Keras Grad-CAM explainer for MobileNetV2 7-class classifier.
 
-Grad-CAM is always run against the *specialist* model (benign or malignant
-head) — the one whose decision the user is being asked to trust.
+Uses tf.GradientTape to compute gradients of the predicted class score
+w.r.t. out_relu (last feature map before global avg pool), then blends
+the resulting heatmap over the input image.
 """
 
 from __future__ import annotations
@@ -11,101 +12,74 @@ import io
 
 import cv2
 import numpy as np
-import torch
 from PIL import Image
-from pytorch_grad_cam import GradCAM
-from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
 import config
-from services.classifier import DEVICE, lesion_classifier, transform
+from services.preprocess import pil_to_array
 
 
-def _pick_specialist(key: str):
-    if key == "malignant":
-        return lesion_classifier.malignant, lesion_classifier.target_layers["malignant"]
-    return lesion_classifier.benign, lesion_classifier.target_layers["benign"]
+def _build_gradcam_model(keras_model):
+    """Sub-model outputting [conv_features, predictions] for GradCAM."""
+    import tensorflow as tf
+    conv_layer = keras_model.get_layer(config.GRADCAM_LAYER)
+    return tf.keras.Model(
+        inputs=keras_model.inputs,
+        outputs=[conv_layer.output, keras_model.output],
+    )
 
 
 def compute_gradcam_heatmap(
-    model: torch.nn.Module,
-    target_layer: torch.nn.Module,
-    image_tensor: torch.Tensor,
+    gradcam_model,
+    arr: np.ndarray,
     target_class: int,
 ) -> np.ndarray:
-    """Normalised H×W Grad-CAM heatmap in [0, 1] for an arbitrary model."""
-    tensor_in = image_tensor.clone().detach()
-    with GradCAM(model=model, target_layers=[target_layer]) as cam:
-        grayscale_cam = cam(
-            input_tensor=tensor_in,
-            targets=[ClassifierOutputTarget(target_class)],
-        )[0, :]
-    g = np.asarray(grayscale_cam, dtype=np.float32)
-    g = np.maximum(g, 0)
-    if g.max() > g.min():
-        g = (g - g.min()) / (g.max() - g.min() + 1e-8)
-    return g
+    """Return normalised H×W Grad-CAM in [0,1].
+
+    Uses tf.Variable (auto-watched) so gradients flow through the conv layer.
+    Keras 3.14 wraps multi-output models in a list — we unwrap as needed.
+    """
+    import tensorflow as tf
+
+    arr_var = tf.Variable(arr, dtype=tf.float32)
+    with tf.GradientTape() as tape:
+        result = gradcam_model(arr_var, training=False)
+        conv_out = result[0]
+        raw_preds = result[1]
+        # Keras 3.14 may nest the final output in a list
+        preds = raw_preds[0] if isinstance(raw_preds, list) else raw_preds
+        loss = preds[0, target_class]
+
+    grads = tape.gradient(loss, conv_out)           # (1, h, w, C)
+    if grads is None:
+        return np.zeros(conv_out.shape[1:3], dtype=np.float32)
+
+    pooled = tf.reduce_mean(grads, axis=(0, 1, 2))  # (C,)
+    features = conv_out[0]                           # (h, w, C)
+    heatmap = tf.reduce_sum(features * pooled, axis=-1)  # (h, w)
+    heatmap = tf.maximum(heatmap, 0).numpy()
+
+    vmin, vmax = heatmap.min(), heatmap.max()
+    if vmax > vmin:
+        heatmap = (heatmap - vmin) / (vmax - vmin + 1e-8)
+    return heatmap.astype(np.float32)
 
 
-def overlay_cam_on_pil(
-    original_pil: Image.Image,
+def upsample_heatmap(heatmap: np.ndarray, out_h: int, out_w: int) -> np.ndarray:
+    return cv2.resize(heatmap, (out_w, out_h), interpolation=cv2.INTER_LINEAR)
+
+
+def blend_heatmap_on_rgb(
+    rgb: np.ndarray,
     heatmap: np.ndarray,
-    alpha_orig: float = 0.6,
-    alpha_heat: float = 0.4,
+    alpha_img: float = 0.55,
 ) -> np.ndarray:
-    h, w = original_pil.height, original_pil.width
-    cam_u8 = cv2.resize((heatmap * 255).astype(np.uint8), (w, h))
-    heat = cv2.applyColorMap(cam_u8, cv2.COLORMAP_JET)
-    orig = cv2.cvtColor(np.array(original_pil), cv2.COLOR_RGB2BGR)
-    return cv2.addWeighted(orig, alpha_orig, heat, alpha_heat, 0)
-
-
-def blend_heatmap_on_roi(
-    roi_bgr: np.ndarray, heatmap_small: np.ndarray, alpha_roi: float = 0.55
-) -> np.ndarray:
-    rh, rw = roi_bgr.shape[:2]
-    cam_u8 = cv2.resize(
-        (heatmap_small * 255).astype(np.uint8), (rw, rh), interpolation=cv2.INTER_CUBIC
-    )
-    heat = cv2.applyColorMap(cam_u8, cv2.COLORMAP_JET)
-    return cv2.addWeighted(roi_bgr, alpha_roi, heat, 1.0 - alpha_roi, 0)
-
-
-def paint_lesion_on_canvas(
-    canvas_bgr: np.ndarray,
-    x1: int,
-    y1: int,
-    x2: int,
-    y2: int,
-    crop_pil: Image.Image,
-    classifier_result: dict,
-) -> None:
-    """Blend specialist Grad-CAM inside bbox; draw white border on canvas."""
-    roi = canvas_bgr[y1:y2, x1:x2]
-    if roi.size == 0:
-        return
-    try:
-        model, target_layer = _pick_specialist(
-            classifier_result.get("specialist_model_key", "benign")
-        )
-        tensor = transform(crop_pil).unsqueeze(0).to(DEVICE)
-        heatmap = compute_gradcam_heatmap(
-            model,
-            target_layer,
-            tensor,
-            int(classifier_result.get("specialist_pred_idx", 0)),
-        )
-        cw, ch = crop_pil.size
-        heat224 = cv2.resize(
-            heatmap,
-            (config.IMG_SIZE, config.IMG_SIZE),
-            interpolation=cv2.INTER_CUBIC,
-        )
-        heat_roi = cv2.resize(heat224, (cw, ch), interpolation=cv2.INTER_CUBIC)
-        blended = blend_heatmap_on_roi(roi.copy(), heat_roi, alpha_roi=0.55)
-        canvas_bgr[y1:y2, x1:x2] = blended
-    except Exception:
-        pass
-    cv2.rectangle(canvas_bgr, (x1, y1), (x2, y2), (255, 255, 255), 2)
+    """Overlay JET heatmap on RGB uint8 array; returns BGR."""
+    h, w = rgb.shape[:2]
+    heat_up = upsample_heatmap(heatmap, h, w)
+    cam_u8 = (heat_up * 255).astype(np.uint8)
+    heat_bgr = cv2.applyColorMap(cam_u8, cv2.COLORMAP_JET)
+    orig_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    return cv2.addWeighted(orig_bgr, alpha_img, heat_bgr, 1.0 - alpha_img, 0)
 
 
 def numpy_bgr_to_png_b64(img_bgr: np.ndarray) -> str:
@@ -122,35 +96,65 @@ def pil_to_png_b64(pil_image: Image.Image) -> str:
 
 
 class GradCAMExplainer:
-    """Fail-soft GradCAM for crops; callers handle None overlay."""
+    """Grad-CAM over the Keras MobileNetV2 classifier."""
+
+    def __init__(self) -> None:
+        from services.classifier import lesion_classifier
+        self._gradcam_model = _build_gradcam_model(lesion_classifier.model)
 
     def overlay_for_lesion(
         self,
-        crop_pil: Image.Image,
+        pil_image: Image.Image,
         classifier_result: dict,
+        tag: str = "cam",
     ) -> str | None:
-        """PNG (base64) of the crop with specialist Grad-CAM blended in."""
+        """Return base64 PNG of pil_image with Grad-CAM overlay for predicted class."""
         try:
-            size = config.IMG_SIZE
-            crop_square = crop_pil.convert("RGB")
-            if crop_square.size != (size, size):
-                crop_square = crop_square.resize((size, size), Image.LANCZOS)
-            model, target_layer = _pick_specialist(
-                classifier_result.get("specialist_model_key", "benign")
+            rgb = pil_image.convert("RGB")
+            arr = pil_to_array(rgb)
+            target_idx = int(
+                classifier_result.get("pred_idx",
+                classifier_result.get("specialist_pred_idx", 0))
             )
-            tensor = transform(crop_square).unsqueeze(0).to(DEVICE)
-            heatmap = compute_gradcam_heatmap(
-                model,
-                target_layer,
-                tensor,
-                int(classifier_result.get("specialist_pred_idx", 0)),
-            )
-            heat_sq = cv2.resize(heatmap, (size, size), interpolation=cv2.INTER_CUBIC)
-            roi_bgr = cv2.cvtColor(np.array(crop_square), cv2.COLOR_RGB2BGR)
-            blended = blend_heatmap_on_roi(roi_bgr, heat_sq, alpha_roi=0.55)
-            return numpy_bgr_to_png_b64(blended)
-        except Exception:
+            heatmap = compute_gradcam_heatmap(self._gradcam_model, arr, target_idx)
+            rgb_arr = np.array(rgb)
+            overlay_bgr = blend_heatmap_on_rgb(rgb_arr, heatmap, alpha_img=0.55)
+            return numpy_bgr_to_png_b64(overlay_bgr)
+        except Exception as exc:
+            if config.DEBUG_INFERENCE:
+                print(f"[gradcam] failed {tag}: {exc}")
             return None
+
+
+def paint_lesion_on_canvas(
+    canvas_bgr: np.ndarray,
+    x1: int, y1: int, x2: int, y2: int,
+    crop_pil: Image.Image,
+    classifier_result: dict,
+) -> None:
+    """Blend Grad-CAM inside the bbox on an annotated canvas."""
+    roi = canvas_bgr[y1:y2, x1:x2]
+    if roi.size == 0:
+        return
+    try:
+        from services.classifier import lesion_classifier
+        gradcam_model = _build_gradcam_model(lesion_classifier.model)
+        rgb = crop_pil.convert("RGB")
+        arr = pil_to_array(rgb)
+        target_idx = int(
+            classifier_result.get("pred_idx",
+            classifier_result.get("specialist_pred_idx", 0))
+        )
+        heatmap = compute_gradcam_heatmap(gradcam_model, arr, target_idx)
+        rh, rw = roi.shape[:2]
+        heat_roi = upsample_heatmap(heatmap, rh, rw)
+        cam_u8 = (heat_roi * 255).astype(np.uint8)
+        heat = cv2.applyColorMap(cam_u8, cv2.COLORMAP_JET)
+        blended = cv2.addWeighted(roi, 0.55, heat, 0.45, 0)
+        canvas_bgr[y1:y2, x1:x2] = blended
+    except Exception:
+        pass
+    cv2.rectangle(canvas_bgr, (x1, y1), (x2, y2), (255, 255, 255), 2)
 
 
 gradcam_explainer = GradCAMExplainer()

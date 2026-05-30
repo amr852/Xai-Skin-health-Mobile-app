@@ -2,7 +2,7 @@
 
 Skin lesion stack: **YOLOv12 nano (`yolo12n`)** detection + **hierarchical EfficientNet-B0** classifier (primary `benign|malignant` → specialist 5-class benign OR 2-class malignant) with **Grad-CAM** on the specialist head. Camera images are enhanced when blurry or low-light; gallery skips that step. Results can be stored in **MongoDB** when `userId` is supplied.
 
-**Weights:** Put your Ultralytics **yolo12n** `best.pt` in `model-server/` (default filename `best.pt`). At startup the server checks `train_args.model` and warns (or aborts with `YOLO_STRICT_ARCH=1`) if it is not yolo12n-family. EfficientNet weights default to `C:\Users\admin\Desktop\Effnetb1\*.pth` and are overridable via env.
+**Weights:** Put your Ultralytics **yolo12n** `best.pt` in `model-server/` (default filename `best.pt`). At startup the server checks `train_args.model` and warns (or aborts with `YOLO_STRICT_ARCH=1`) if it is not yolo12n-family. EfficientNet-B0 hierarchical checkpoints default to `model-server/weights/{primary,benign,malignant}_effnet_b0_best.pth` (override via env).
 
 ## Requirements
 
@@ -25,12 +25,13 @@ Place the three EfficientNet-B0 checkpoints (`primary`, `benign`, `malignant`) a
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PRIMARY_WEIGHTS` | `…\Effnetb1\primary_effnet_b0_best (2).pth` | 2-class benign\|malignant head. |
-| `BENIGN_WEIGHTS` | `…\Effnetb1\benign_effnet_b0_best (2).pth` | 5-class benign specialist. |
-| `MALIGNANT_WEIGHTS` | `…\Effnetb1\malignant_effnet_b0_best (2).pth` | 2-class malignant specialist. |
-| `PRIMARY_CLASSES` | `benign,malignant` | Index order **must** match the primary checkpoint. |
-| `BENIGN_CLASSES` | `akiec,bkl,df,nv,vasc` | Index order **must** match the benign checkpoint. If all crops are predicted as `nv`, the order is wrong — re-derive from your training script and override here. |
-| `MALIGNANT_CLASSES` | `melanoma,basal_cell_carcinoma` | Index order **must** match the malignant checkpoint. |
+| `PRIMARY_WEIGHTS` | `weights/primary_effnet_b0_best.pth` | 2-class benign\|malignant head. |
+| `BENIGN_WEIGHTS` | `weights/benign_effnet_b0_best.pth` | 5-class benign specialist. |
+| `MALIGNANT_WEIGHTS` | `weights/malignant_effnet_b0_best.pth` | 2-class malignant specialist. |
+| `BACKBONE` | `effnet_b0` | Must match checkpoint architecture (`effnet_b0` or `mobilenetv2`). |
+| `PRIMARY_CLASSES` | `benign,malignant` | Index 0 = benign, 1 = malignant (`binary_label` in notebook). |
+| `BENIGN_CLASSES` | `akiec,bkl,df,nv,vasc` | Sorted HAM benign `dx` codes — index order **must** match checkpoint. |
+| `MALIGNANT_CLASSES` | `bcc,mel` | Sorted malignant `dx` codes (`bcc` then `mel`). |
 | `IMG_SIZE` | `224` | Square resize side for inference. |
 | `NORMALIZE_INPUT` | `1` | EfficientNet-B0 expects ImageNet normalization; keep on. |
 | `BLUR_THRESHOLD` | `20.0` | Laplacian variance below this → sharpen pass. |

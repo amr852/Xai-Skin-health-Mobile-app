@@ -7,11 +7,14 @@ import os
 import tempfile
 from datetime import datetime, timezone
 
+import io
+
 import cv2
 import numpy as np
 from PIL import Image
 
 import config
+from services.preprocess import open_rgb_pil
 from image_quality import (
     blur_variance,
     brightness_score,
@@ -40,22 +43,36 @@ def to_base64(image_path: str) -> str:
         return base64.b64encode(f.read()).decode("utf-8")
 
 
+def _read_upload_rgb(file_storage) -> Image.Image:
+    raw = file_storage.read()
+    if not raw:
+        raise ValueError("Could not read image")
+    try:
+        file_storage.stream.seek(0)
+    except Exception:
+        pass
+    return open_rgb_pil(raw)
+
+
 def save_enhanced_pair_from_upload(file_storage, id_prefix: str) -> dict:
     """
     Save upload to temp path, run blur/low-light enhancement, persist original + enhanced.
 
     Returns dict with original_image_name, enhanced_image_name, enhancements_applied,
     quality_* fields, img_pil (RGB enhanced).
+
+    Uses PIL loader (`_open_upload_pil`) for color/orientation correctness, then
+    drops to BGR ndarray for the existing cv2-based enhancement helpers.
     """
     ext = os.path.splitext(file_storage.filename)[1] or ".jpg"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-        file_storage.save(tmp.name)
-        tmp_path = tmp.name
+    pil_oriented = _read_upload_rgb(file_storage)
 
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+        tmp_path = tmp.name
     try:
-        image = cv2.imread(tmp_path)
-        if image is None:
-            raise ValueError("Could not read image")
+        pil_oriented.save(tmp_path, quality=95)
+
+        image = cv2.cvtColor(np.array(pil_oriented), cv2.COLOR_RGB2BGR)
 
         quality_before = {
             "blur_variance": blur_variance(image),
@@ -86,7 +103,7 @@ def save_enhanced_pair_from_upload(file_storage, id_prefix: str) -> dict:
         original_name = f"orig_{id_prefix}_{timestamp}{ext}"
         enhanced_name = f"enh_{id_prefix}_{timestamp}{ext}"
 
-        orig_bgr = cv2.imread(tmp_path)
+        orig_bgr = cv2.cvtColor(np.array(pil_oriented), cv2.COLOR_RGB2BGR)
         cv2.imwrite(os.path.join(config.UPLOAD_FOLDER, original_name), orig_bgr)
         cv2.imwrite(os.path.join(config.UPLOAD_FOLDER, enhanced_name), image)
 
@@ -110,15 +127,9 @@ def save_enhanced_pair_from_upload(file_storage, id_prefix: str) -> dict:
 
 
 def load_upload_as_pil_no_enhance(file_storage) -> Image.Image:
-    """Read multipart upload as RGB PIL; no quality pipeline (gallery path)."""
-    ext = os.path.splitext(file_storage.filename)[1] or ".jpg"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-        file_storage.save(tmp.name)
-        tmp_path = tmp.name
-    try:
-        image = cv2.imread(tmp_path)
-        if image is None:
-            raise ValueError("Could not read image")
-        return Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    finally:
-        os.unlink(tmp_path)
+    """Read multipart upload as RGB PIL; no quality pipeline (gallery path).
+
+    Matches notebook val_tf input: PIL.Image.open(...).convert('RGB') with EXIF
+    + ICC->sRGB normalization (see _open_upload_pil).
+    """
+    return _read_upload_rgb(file_storage)
