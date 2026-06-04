@@ -1,22 +1,22 @@
-"""Unit tests for config — 7-class MobileNetV2 HAM10000 config. No TF/YOLO import."""
+"""Unit tests for config — EfficientNet-B4 flat 7-class config. No TF/YOLO import."""
 
 import config
 
 
 def test_get_severity_urgent_mel():
-    assert config.get_severity("mel") == "urgent"
+    assert config.get_severity("MEL") == "urgent"
 
 
 def test_get_severity_urgent_bcc():
-    assert config.get_severity("bcc") == "urgent"
+    assert config.get_severity("BCC") == "urgent"
 
 
 def test_get_severity_stable_nevus():
-    assert config.get_severity("nv") == "stable"
+    assert config.get_severity("NV") == "stable"
 
 
-def test_get_severity_check_akiec():
-    assert config.get_severity("akiec") == "check"
+def test_get_severity_check_ak():
+    assert config.get_severity("AK") == "check"
 
 
 def test_get_severity_unknown_defaults_check():

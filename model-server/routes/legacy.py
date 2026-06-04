@@ -10,7 +10,7 @@ from flask import Blueprint, current_app, jsonify, request
 import config
 from helpers import load_pil, save_enhanced_pair_from_upload, save_image, to_base64
 from services.classifier import lesion_classifier
-from services.explainer import gradcam_explainer, numpy_bgr_to_png_b64
+from services.explainer import gradcam_explainer
 
 
 def _predict_pil(img_pil):
@@ -24,19 +24,16 @@ def _predict_pil(img_pil):
 
 
 def _legacy_cam(img_pil, classifier_result: dict):
-    """Grad-CAM using the Keras MobileNetV2 explainer."""
-    from services.explainer import (
-        compute_gradcam_heatmap,
-        blend_heatmap_on_rgb,
-    )
-    from services.preprocess import pil_to_array
+    """Return Grad-CAM as a BGR numpy array for the legacy /scan and /predict-xai routes."""
+    import base64
+    import cv2
     import numpy as np
 
-    arr = pil_to_array(img_pil)
-    target_idx = int(classifier_result.get("pred_idx", 0))
-    heatmap = compute_gradcam_heatmap(gradcam_explainer._gradcam_model, arr, target_idx)
-    rgb_arr = np.array(img_pil.convert("RGB"))
-    return blend_heatmap_on_rgb(rgb_arr, heatmap)
+    b64 = gradcam_explainer.overlay_for_lesion(img_pil, classifier_result, tag="legacy")
+    if b64 is None:
+        return None
+    buf = np.frombuffer(base64.b64decode(b64), dtype=np.uint8)
+    return cv2.imdecode(buf, cv2.IMREAD_COLOR)
 
 
 legacy_bp = Blueprint("legacy", __name__)
@@ -50,7 +47,7 @@ def home():
         {
             "status": "Skin Lesion Classifier API is running",
             "model_name": config.MODEL_NAME,
-            "model_path": config.KERAS_MODEL_PATH,
+            "model_path": config.MODEL_WEIGHTS,
             "num_classes": config.NUM_CLASSES,
             "yolo_model_path": yolo_detector.DETECTOR_WEIGHTS_PATH
             or config.YOLO_MODEL_PATH,
@@ -138,7 +135,7 @@ def scan_lesion():
     class_name = pred["class_name"]
     pred_score = pred["score"]
     top_preds = pred["top_preds"]
-    print(f"[/scan] mobilenetv2: {class_name} (idx={pred_idx}, score={pred_score:.4f})")
+    print(f"[/scan] effnetb4: {class_name} (idx={pred_idx}, score={pred_score:.4f})")
 
     cam_name = None
     cam_b64 = None

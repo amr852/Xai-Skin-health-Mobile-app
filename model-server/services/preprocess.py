@@ -1,13 +1,14 @@
-"""Image preprocessing for MobileNetV2 Keras inference.
+"""Image preprocessing for EfficientNet-B0 PyTorch inference.
 
-Preprocessing: resize to IMG_SIZE, apply MobileNetV2 preprocess_input
-(maps [0,255] → [-1,1]). PIL + EXIF + ICC->sRGB for phone JPEGs.
+Matches the Kaggle notebook pipeline exactly:
+  Resize(224, 224) → ToTensor ([0,1]) → Normalize(ImageNet mean/std)
+
+PIL + EXIF + ICC->sRGB handling ensures phone JPEGs are colour-correct.
 """
 
 from __future__ import annotations
 
 import io
-import os
 
 import numpy as np
 from PIL import Image, ImageCms, ImageOps
@@ -16,9 +17,13 @@ import config
 
 _SRGB_PROFILE = ImageCms.createProfile("sRGB")
 
+# Pre-converted to (3,1,1) for broadcast over (3,H,W) tensors.
+_MEAN = np.array(config.IMAGENET_MEAN, dtype=np.float32).reshape(3, 1, 1)
+_STD  = np.array(config.IMAGENET_STD,  dtype=np.float32).reshape(3, 1, 1)
+
 
 def open_rgb_pil(raw_bytes: bytes) -> Image.Image:
-    """Decode bytes to RGB PIL with EXIF orientation + ICC->sRGB conversion."""
+    """Decode bytes → RGB PIL with EXIF orientation + ICC→sRGB conversion."""
     img = Image.open(io.BytesIO(raw_bytes))
     img.load()
     icc = img.info.get("icc_profile")
@@ -40,17 +45,22 @@ def open_rgb_path(path: str) -> Image.Image:
         return open_rgb_pil(f.read())
 
 
-def pil_to_array(pil_image: Image.Image) -> np.ndarray:
-    """PIL RGB → (1, IMG_SIZE, IMG_SIZE, 3) float32 with MobileNetV2 preprocessing."""
-    import tensorflow as tf
+def pil_to_tensor(pil_image: Image.Image):
+    """PIL RGB → (1, 3, IMG_SIZE, IMG_SIZE) float32 torch.Tensor.
+
+    Matches torchvision ToTensor + Normalize(ImageNet mean, std).
+    """
+    import torch
     rgb = pil_image.convert("RGB").resize(
-        (config.IMG_SIZE, config.IMG_SIZE), Image.BILINEAR
+        (config.IMG_SIZE, config.IMG_SIZE), Image.BICUBIC
     )
-    arr = np.array(rgb, dtype=np.float32)
-    arr = tf.keras.applications.mobilenet_v2.preprocess_input(arr)
-    return np.expand_dims(arr, axis=0)
+    arr = np.array(rgb, dtype=np.float32) / 255.0   # HWC [0,1]
+    arr = arr.transpose(2, 0, 1)                     # CHW
+    arr = (arr - _MEAN) / _STD                       # ImageNet normalise
+    return torch.from_numpy(arr).unsqueeze(0)        # (1,3,H,W)
 
 
-def flip_array(arr: np.ndarray, axis: int) -> np.ndarray:
-    """Flip a (1, H, W, C) array along H(1) or W(2)."""
-    return np.flip(arr, axis=axis).copy()
+def flip_tensor(t, dim: int):
+    """Flip a (1,C,H,W) tensor along H(2) or W(3)."""
+    import torch
+    return torch.flip(t, [dim]).contiguous()

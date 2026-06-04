@@ -177,7 +177,10 @@ def scan_multi():
 
         lesion_id = str(uuid.uuid4())
         try:
-            overlay_b64 = gradcam_explainer.overlay_for_lesion(raw_crop, diag, tag=tag)
+            # GradCAM on the FULL image so the heatmap shows spatial context
+            # across the whole photo. Classification still runs on the crop for
+            # accurate specialist routing; target class comes from crop result.
+            overlay_b64 = gradcam_explainer.overlay_for_lesion(raw_pil, diag, tag=tag)
         except Exception:
             overlay_b64 = None
             partial_failure = True

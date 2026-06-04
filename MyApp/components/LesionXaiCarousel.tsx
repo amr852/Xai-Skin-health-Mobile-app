@@ -15,6 +15,7 @@ import {
 import type { LesionDetection } from '@/hooks/useLesions';
 import { C, FontFamily, Radius, Shadow } from '@/constants/theme';
 import { statusFromPrediction } from '@/lib/lesionSeverity';
+import { ImageWithBboxOverlay } from '@/components/ImageWithBboxOverlay';
 
 export type LesionCarouselItem = LesionDetection & { displayIndex: number };
 
@@ -25,6 +26,7 @@ export type LesionXaiCarouselHandle = {
 type Props = {
   lesions: LesionCarouselItem[];
   compositeUrl?: string | null;
+  originalImageUrl?: string | null;
   xaiMethod?: string;
   onSlideIndexChange: (zeroBased: number) => void;
   onScrollDragStart?: () => void;
@@ -45,14 +47,6 @@ const triageColors: Record<TriageKey, { bg: string; color: string; border: strin
   Urgent: { bg: C.urgentBg,  color: C.urgentText,  border: C.urgentBorder  },
 };
 
-/**
- * Renders crop / heatmap as a uniform 1:1 square. The model server now
- * preprocesses every crop (and its Grad-CAM overlay) to `IMG_SIZE × IMG_SIZE`
- * before the response is sent, so what we display here is exactly what the
- * classifier sees. `cover` ensures any legacy assets whose bytes still carry
- * a baked-in label strip get cropped flush to the square — no letterbox, no
- * dangling caption.
- */
 function PreprocessedImage({
   uri,
   style,
@@ -100,7 +94,6 @@ const sr = StyleSheet.create({
   fillHighlight:{ backgroundColor: C.primary },
 });
 
-/** A thin horizontal rule used to separate card sections. */
 function Divider() {
   return <View style={{ height: 1, backgroundColor: C.borderLight, marginVertical: 14 }} />;
 }
@@ -110,7 +103,7 @@ function Divider() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(function LesionXaiCarousel(
-  { lesions, compositeUrl, xaiMethod, onSlideIndexChange, onScrollDragStart }: Props,
+  { lesions, compositeUrl, originalImageUrl, xaiMethod, onSlideIndexChange, onScrollDragStart }: Props,
   ref,
 ) {
   const { width: winW } = useWindowDimensions();
@@ -152,16 +145,14 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
           ? item.diagnosis.score
           : 0;
       const cropUri    = item.cropUrl    ?? undefined;
-      const overlayUri = item.overlayUrl ?? compositeUrl ?? undefined;
+      const overlayUri = item.overlayUrl ?? undefined;
       const topK    = specialist?.top_k ?? item.diagnosis?.top_k ?? [];
       const detConf = ((item.bbox?.conf ?? 0) * 100).toFixed(1);
       const method  = xaiMethod ?? 'Grad-CAM';
 
-      // Specialist label drives the severity-tier colour for the subtype chip.
       const predStatus = statusFromPrediction(specialistLabelRaw);
       const predMeta   = triageColors[predStatus];
 
-      // Primary head verdict (benign|malignant) drives the top banner colour.
       const primary = item.primary;
       const primaryKey = (primary?.label || '').trim().toLowerCase();
       const isMalignant = primaryKey === 'malignant';
@@ -240,46 +231,47 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
 
             <Divider />
 
-            {/* ── Captured region image ──────────────────────────────── */}
+            {/* ── Crop + Crop XAI side by side ──────────────────────── */}
             <View style={s.sectionRow}>
-              <Text style={s.sectionLabel}>Captured region</Text>
+              <Text style={s.sectionLabel}>Detected region · XAI</Text>
               <Text style={s.methodBadge}>{method}</Text>
             </View>
-            {cropUri ? (
-              <PreprocessedImage
-                uri={cropUri}
-                style={s.squareImg}
-                accessibilityLabel="Detected lesion crop"
-              />
-            ) : (
-              <View style={[s.squareImg, s.imgPlaceholder]}>
-                <Text style={s.placeholderTxt}>Region crop unavailable</Text>
+            <View style={s.tileRow}>
+              <View style={s.tileWrap}>
+                <Text style={s.tileLabel}>Crop</Text>
+                {cropUri ? (
+                  <PreprocessedImage
+                    uri={cropUri}
+                    style={s.tileImg}
+                    accessibilityLabel="Detected lesion crop"
+                  />
+                ) : (
+                  <View style={[s.tileImg, s.imgPlaceholder]}>
+                    <Text style={s.placeholderTxt}>Unavailable</Text>
+                  </View>
+                )}
               </View>
-            )}
-
-            <Divider />
-
-            {/* ── Grad-CAM heatmap ───────────────────────────────────── */}
-            <View style={s.sectionRow}>
-              <Text style={s.sectionLabel}>Explainability heatmap</Text>
+              <View style={s.tileWrap}>
+                <Text style={[s.tileLabel, { color: C.primary }]}>XAI</Text>
+                {overlayUri ? (
+                  <PreprocessedImage
+                    uri={overlayUri}
+                    style={s.tileImg}
+                    accessibilityLabel="Crop Grad-CAM heatmap"
+                  />
+                ) : (
+                  <View style={[s.tileImg, s.imgPlaceholder]}>
+                    <Text style={s.placeholderTxt}>Unavailable</Text>
+                  </View>
+                )}
+              </View>
             </View>
-            {overlayUri ? (
-              <PreprocessedImage
-                uri={overlayUri}
-                style={s.squareImg}
-                accessibilityLabel="Grad-CAM explainability heatmap"
-              />
-            ) : (
-              <View style={[s.squareImg, s.imgPlaceholder]}>
-                <Text style={s.placeholderTxt}>Heatmap unavailable</Text>
-              </View>
-            )}
 
           </View>
         </View>
       );
     },
-    [cardW, compositeUrl, slideUnit, xaiMethod],
+    [cardW, slideUnit, xaiMethod],
   );
 
   const keyExtractor = useCallback(
@@ -301,6 +293,13 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
     [lesions.length, onSlideIndexChange, slideUnit],
   );
 
+  // Build bbox detections for the full-image overlay from all lesion items.
+  const fullImageDetections = lesions.map((L) => ({
+    bbox: L.bbox,
+    severity: L.severity,
+    label: L.specialist?.label ?? L.diagnosis?.label,
+  }));
+
   if (lesions.length === 0) return null;
 
   return (
@@ -321,6 +320,41 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
         onScrollBeginDrag={onScrollDragStart}
         onMomentumScrollEnd={onMomentumScrollEnd}
       />
+
+      {/* ── Full-image section below the per-lesion carousel ─────────── */}
+      {(originalImageUrl || compositeUrl) ? (
+        <View style={s.fullSection}>
+
+          {originalImageUrl ? (
+            <View style={s.fullBlock}>
+              <View style={s.sectionRow}>
+                <Text style={s.sectionLabel}>Full capture · detected regions</Text>
+              </View>
+              <ImageWithBboxOverlay
+                source={{ uri: originalImageUrl }}
+                height={220}
+                borderRadius={Radius.md}
+                detections={fullImageDetections}
+              />
+            </View>
+          ) : null}
+
+          {compositeUrl ? (
+            <View style={[s.fullBlock, originalImageUrl ? { marginTop: 14 } : undefined]}>
+              <View style={s.sectionRow}>
+                <Text style={s.sectionLabel}>Full capture · Grad-CAM</Text>
+                <Text style={s.methodBadge}>{xaiMethod ?? 'Grad-CAM'}</Text>
+              </View>
+              <PreprocessedImage
+                uri={compositeUrl}
+                style={s.fullImg}
+                accessibilityLabel="Full-image Grad-CAM explainability heatmap"
+              />
+            </View>
+          ) : null}
+
+        </View>
+      ) : null}
     </View>
   );
 });
@@ -379,7 +413,7 @@ const s = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // Primary verdict banner (benign / malignant)
+  // Primary verdict banner
   primaryBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -473,22 +507,51 @@ const s = StyleSheet.create({
     marginTop: 8,
   },
 
-  // Images — square 1:1 so captured region and heatmap line up at identical
-  // dimensions. The model returns both at IMG_SIZE × IMG_SIZE, so cover
-  // resizing here is a no-op for new data and a clean crop for legacy data.
-  squareImg: {
+  // Side-by-side crop + XAI tiles inside each card
+  tileRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  tileWrap: {
+    flex: 1,
+  },
+  tileLabel: {
+    fontSize: 10,
+    fontFamily: FontFamily.bodyBold,
+    color: C.textHint,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 5,
+  },
+  tileImg: {
     width: '100%',
     aspectRatio: 1,
     borderRadius: Radius.md,
     backgroundColor: C.surfaceAlt,
   },
+
   imgPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   placeholderTxt: {
-    fontSize: 13,
+    fontSize: 11,
     fontFamily: FontFamily.body,
     color: C.textHint,
+  },
+
+  // Full-image section below carousel
+  fullSection: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 4,
+  },
+  fullBlock: {},
+  // Full-image GradCAM — tall enough for portrait phone photos; contain keeps full image visible.
+  fullImg: {
+    width: '100%',
+    aspectRatio: 3 / 4,
+    borderRadius: Radius.md,
+    backgroundColor: C.surfaceAlt,
   },
 });

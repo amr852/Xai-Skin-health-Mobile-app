@@ -1,12 +1,6 @@
-"""Routing tests for HierarchicalClassifier.
+"""Shape and output tests for FlatClassifier (EfficientNet-B4).
 
-Skips entirely if the backbone weights are not on disk — the classifier
-loads three .pth files at import time, so without them no smoke test is
-possible. When weights exist, this asserts:
-
-  - primary == 'malignant' routes to the malignant specialist
-  - primary == 'benign'    routes to the benign specialist
-  - response shape carries `primary`, `specialist`, `specialist_model_key`
+Skips entirely if the .pth weight file is missing.
 """
 
 from __future__ import annotations
@@ -17,14 +11,11 @@ import pytest
 
 import config
 
-_WEIGHTS_PRESENT = all(
-    os.path.exists(p)
-    for p in (config.PRIMARY_WEIGHTS, config.BENIGN_WEIGHTS, config.MALIGNANT_WEIGHTS)
-)
+_WEIGHTS_PRESENT = os.path.exists(config.MODEL_WEIGHTS)
 
 pytestmark = pytest.mark.skipif(
     not _WEIGHTS_PRESENT,
-    reason="Classifier weight files not present on disk",
+    reason="Classifier weight file not present on disk",
 )
 
 
@@ -41,63 +32,55 @@ def _gray_pil():
 
 def test_predict_shape(classifier):
     out = classifier.predict(_gray_pil())
-    assert "primary" in out and "specialist" in out
+    assert "label" in out
+    assert "score" in out
+    assert "specialist" in out
+    assert "primary" in out
     assert "specialist_model_key" in out
-    assert out["specialist_model_key"] in {"benign", "malignant"}
-    assert isinstance(out["primary"]["score"], float)
-    assert isinstance(out["specialist"]["score"], float)
-    assert 0.0 <= out["primary"]["score"] <= 1.0
-    assert 0.0 <= out["specialist"]["score"] <= 1.0
+    assert out["specialist_model_key"] == "flat"
+    assert isinstance(out["score"], float)
+    assert 0.0 <= out["score"] <= 1.0
 
 
-def test_routing_consistency(classifier, monkeypatch):
-    """Force primary to malignant; specialist must be malignant head."""
-    import torch
-
-    real_forward = classifier._forward
-    state = {"calls": 0}
-
-    def fake_forward(net, tensor):
-        state["calls"] += 1
-        if state["calls"] == 1:
-            # primary head — force malignant by skewing logits.
-            mal_idx = next(
-                i for i, c in enumerate(classifier.primary_labels)
-                if c.lower() == "malignant"
-            )
-            logits = torch.full((1, len(classifier.primary_labels)), -10.0)
-            logits[0, mal_idx] = 10.0
-            return logits
-        return real_forward(net, tensor)
-
-    monkeypatch.setattr(classifier, "_forward", fake_forward)
+def test_predict_label_in_known_classes(classifier):
     out = classifier.predict(_gray_pil())
-    assert out["specialist_model_key"] == "malignant"
-    assert out["specialist"]["label"] in classifier.malignant_labels
+    assert out["label"] in config.ALL_CLASSES
+    assert out["specialist"]["label"] in config.ALL_CLASSES
 
 
-def test_routing_benign_branch(classifier, monkeypatch):
-    """Force primary to benign; specialist must be benign head (pure primary gate, no override)."""
-    import torch
-
-    ben_primary_idx = next(
-        i for i, c in enumerate(classifier.primary_labels) if c.lower() == "benign"
-    )
-
-    def fake_forward(net, tensor):
-        if net is classifier.primary:
-            logits = torch.full((1, len(classifier.primary_labels)), -10.0)
-            logits[0, ben_primary_idx] = 10.0
-            return logits
-        if net is classifier.benign:
-            logits = torch.full((1, len(classifier.benign_labels)), 0.0)
-            logits[0, 0] = 5.0
-            return logits
-        # Malignant head should not be called under pure primary-gate routing.
-        raise AssertionError("malignant specialist invoked when primary said benign")
-
-    monkeypatch.setattr(classifier, "_forward", fake_forward)
+def test_predict_top_k_structure(classifier):
     out = classifier.predict(_gray_pil())
-    assert out["specialist_model_key"] == "benign"
-    assert out["specialist"]["label"] in classifier.benign_labels
-    assert out["primary"]["label"].lower() == "benign"
+    top_k = out["top_k"]
+    assert isinstance(top_k, list) and len(top_k) >= 1
+    for entry in top_k:
+        assert "label" in entry and "score" in entry and "display" in entry
+        assert entry["label"] in config.ALL_CLASSES
+    # top result score should be >= rest
+    assert top_k[0]["score"] == max(e["score"] for e in top_k)
+
+
+def test_predict_primary_derived(classifier):
+    out = classifier.predict(_gray_pil())
+    primary = out["primary"]
+    assert primary["label"] in {"benign", "malignant"}
+    # derivation must be consistent with the flat label
+    if out["label"] in config.MALIGNANT_LABELS:
+        assert primary["label"] == "malignant"
+    else:
+        assert primary["label"] == "benign"
+
+
+def test_predict_uncertainty_keys(classifier):
+    out = classifier.predict(_gray_pil())
+    u = out["uncertainty"]
+    assert "low_confidence" in u
+    assert isinstance(u["low_confidence"], bool)
+
+
+def test_gradcam_produces_output(classifier):
+    from services.explainer import gradcam_explainer
+    img = _gray_pil()
+    result = classifier.predict(img)
+    cam_b64 = gradcam_explainer.overlay_for_lesion(img, result, tag="test")
+    assert cam_b64 is not None
+    assert len(cam_b64) > 100

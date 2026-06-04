@@ -45,7 +45,7 @@ export default function WelcomeScreen() {
         </View>
         {/* Asymmetric mark, top-left — clean, no petal behind */}
         <View style={s.heroMark}>
-          <Crest size={72} />
+          <Crest size={72} withMonogram={false} />
         </View>
         <View style={s.heroBody}>
           <Text style={s.heroEyebrow}>XAI · DERMATOLOGY</Text>

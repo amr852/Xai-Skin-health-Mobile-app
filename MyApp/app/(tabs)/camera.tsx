@@ -37,6 +37,7 @@ import {
 import { statusFromPrediction } from '@/lib/lesionSeverity';
 import { useLiveDetect, type LiveDetection } from '@/hooks/useLiveDetect';
 import { containLayout, bboxToOverlayRect, reticleCropInPhotoPx } from '@/lib/bboxLayout';
+import { apiFetch } from '@/lib/api';
 
 const DEFAULT_FORM: LesionFields = {
   title: '', description: '', location: '', status: 'Stable', notes: '',
@@ -457,6 +458,20 @@ export default function CameraScreen() {
     setSaving(true);
     try {
       await addLesion({ ...form, title: form.title.trim() }, uploadedImageUrl ?? capturedPhoto ?? undefined, analysis);
+
+      // Persist title + description to the scan session so history shows them.
+      if (analysis?.sessionId) {
+        try {
+          await apiFetch(`/scan-sessions/${encodeURIComponent(analysis.sessionId)}`, {
+            method: 'PATCH',
+            json: {
+              title: form.title.trim(),
+              ...(form.description.trim() ? { description: form.description.trim() } : {}),
+            },
+          });
+        } catch { /* non-fatal — lesion record already saved */ }
+      }
+
       showAlert({
         title: 'Lesion Recorded',
         message: 'Your lesion has been saved successfully and added to your records.',
@@ -640,6 +655,7 @@ export default function CameraScreen() {
                   ref={xaiCarouselRef}
                   lesions={carouselLesions}
                   compositeUrl={analysis.camImageUrl}
+                  originalImageUrl={analysis.imageUrl ?? null}
                   xaiMethod={analysis.xaiMethod}
                   onSlideIndexChange={onXaiCarouselSlideSettled}
                   onScrollDragStart={onXaiCarouselDragStart}

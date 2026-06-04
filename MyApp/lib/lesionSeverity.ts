@@ -21,7 +21,7 @@ const CHECK = new Set(
     'actinic keratoses', 'actinic keratosis',
     'monkeypox', 'hfmd',
     'vascular lesions', 'vascular lesion',
-    'akiec', 'vasc',
+    'akiec', 'ak', 'vasc',
   ].map(norm),
 );
 
