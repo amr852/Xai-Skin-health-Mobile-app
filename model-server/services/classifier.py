@@ -1,11 +1,11 @@
-"""Flat EfficientNet-B4 skin lesion classifier (efficientnet_pytorch).
+"""Flat ResNet50 skin lesion classifier (torchvision).
 
 Pipeline:
-  Single EfficientNet-B4 head → 7-class flat prediction
+  Single ResNet50 head → 7-class flat prediction
   Labels: AK BCC BKL DF MEL NV VASC
 
-Preprocessing: Resize(380,380, BICUBIC) → ToTensor → Normalize(ImageNet mean/std)
-Grad-CAM target: model._conv_head  (1792-ch final conv before avgpool)
+Preprocessing: Resize(224,224, BILINEAR) → ToTensor → Normalize(ImageNet mean/std)
+Grad-CAM target: model.layer4[-1]  (final bottleneck block before avgpool)
 """
 
 from __future__ import annotations
@@ -23,14 +23,14 @@ from services.preprocess import flip_tensor, pil_to_tensor
 
 # ── Model loading ─────────────────────────────────────────────────────────────
 
-def _load_effnet_b4(num_classes: int, path: str) -> nn.Module:
-    from efficientnet_pytorch import EfficientNet
+def _load_resnet50(num_classes: int, path: str) -> nn.Module:
+    from torchvision.models import resnet50
 
     if not os.path.isfile(path):
-        raise FileNotFoundError(f"EfficientNet-B4 weights not found: {path}")
+        raise FileNotFoundError(f"ResNet50 weights not found: {path}")
 
-    model = EfficientNet.from_name("efficientnet-b4")
-    model._fc = nn.Linear(model._fc.in_features, num_classes)
+    model = resnet50(weights=None)
+    model.fc = nn.Linear(model.fc.in_features, num_classes)
     state = torch.load(path, map_location="cpu", weights_only=True)
     model.load_state_dict(state, strict=True)
     model.eval()
@@ -76,11 +76,11 @@ def _forward_tta(model: nn.Module, tensor: torch.Tensor) -> np.ndarray:
 # ── Classifier ────────────────────────────────────────────────────────────────
 
 class FlatClassifier:
-    """Single EfficientNet-B4 head: flat 7-class prediction."""
+    """Single ResNet50 head: flat 7-class prediction."""
 
     def __init__(self) -> None:
-        print("Loading EfficientNet-B4 flat classifier …")
-        self.model = _load_effnet_b4(config.NUM_CLASSES, config.MODEL_WEIGHTS)
+        print("Loading ResNet50 flat classifier …")
+        self.model = _load_resnet50(config.NUM_CLASSES, config.MODEL_WEIGHTS)
         self._self_test()
 
     def _self_test(self) -> None:

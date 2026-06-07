@@ -1,7 +1,8 @@
-"""Image preprocessing for EfficientNet-B0 PyTorch inference.
+"""Image preprocessing for the flat ResNet50 PyTorch classifier.
 
-Matches the Kaggle notebook pipeline exactly:
-  Resize(224, 224) → ToTensor ([0,1]) → Normalize(ImageNet mean/std)
+Matches the training notebook pipeline (byte-for-byte the EfficientNet-B4
+pipeline besides resolution):
+  Resize(IMG_SIZE, BILINEAR) → ToTensor ([0,1]) → Normalize(ImageNet mean/std)
 
 PIL + EXIF + ICC->sRGB handling ensures phone JPEGs are colour-correct.
 """
@@ -51,8 +52,9 @@ def pil_to_tensor(pil_image: Image.Image):
     Matches torchvision ToTensor + Normalize(ImageNet mean, std).
     """
     import torch
+    interp = getattr(Image, config.RESIZE_INTERPOLATION, Image.BILINEAR)
     rgb = pil_image.convert("RGB").resize(
-        (config.IMG_SIZE, config.IMG_SIZE), Image.BICUBIC
+        (config.IMG_SIZE, config.IMG_SIZE), interp
     )
     arr = np.array(rgb, dtype=np.float32) / 255.0   # HWC [0,1]
     arr = arr.transpose(2, 0, 1)                     # CHW

@@ -1,10 +1,10 @@
-"""PyTorch Grad-CAM for flat EfficientNet-B4 classifier.
+"""PyTorch Grad-CAM for flat ResNet50 classifier.
 
 For each detected lesion:
   - Classification runs on the padded bbox CROP.
   - Grad-CAM runs on the FULL image (shows spatial context across the whole photo).
 
-GradCAM target layer: model._conv_head  (1792-ch final conv before avgpool).
+GradCAM target layer: model.layer4[-1]  (final bottleneck block, 2048-ch, before avgpool).
 Output: the full image with the JET heatmap blended in, resized to
 MAX_OVERLAY_SIDE on the longest dimension before base64 encoding.
 """
@@ -29,6 +29,8 @@ MAX_OVERLAY_SIDE = 512
 
 def _get_target_layer(model: "torch.nn.Module") -> "torch.nn.Module":
     """Return the GradCAM target layer for a given model architecture."""
+    if hasattr(model, "layer4"):       # torchvision ResNet
+        return model.layer4[-1]
     if hasattr(model, "_conv_head"):   # efficientnet_pytorch
         return model._conv_head
     return model.features[-1]          # torchvision EfficientNet fallback
@@ -118,7 +120,7 @@ def pil_to_png_b64(pil_image: Image.Image) -> str:
 # ── GradCAM explainer ─────────────────────────────────────────────────────────
 
 class GradCAMExplainer:
-    """Produces Grad-CAM overlays using the flat EfficientNet-B4 model."""
+    """Produces Grad-CAM overlays using the flat ResNet50 model."""
 
     def __init__(self) -> None:
         from services.classifier import lesion_classifier

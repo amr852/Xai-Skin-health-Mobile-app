@@ -1,7 +1,7 @@
-"""Configuration — flat EfficientNet-B4 classifier (efficientnet_pytorch).
+"""Configuration — flat ResNet50 classifier (torchvision).
 
-Pipeline: single EfficientNet-B4 head → 7-class flat prediction
-          → Grad-CAM on model._conv_head
+Pipeline: single ResNet50 head → 7-class flat prediction
+          → Grad-CAM on model.layer4[-1]
 """
 
 from __future__ import annotations
@@ -18,12 +18,18 @@ NUM_CLASSES = len(ALL_CLASSES)
 
 # ── Model weights ─────────────────────────────────────────────────────────────
 MODEL_WEIGHTS = os.environ.get(
-    "MODEL_WEIGHTS", os.path.join(_WEIGHTS_DIR, "last_effnetb4.pth")
+    "MODEL_WEIGHTS", os.path.join(_WEIGHTS_DIR, "best_resnet50.pth")
 )
-MODEL_NAME = "EfficientNet-B4"
+MODEL_NAME = "ResNet50"
+MODEL_ARCH = "resnet50"
 
 # ── Image preprocessing ───────────────────────────────────────────────────────
-IMG_SIZE = int(os.environ.get("IMG_SIZE", "380"))
+# Native ResNet50 resolution (torchvision); training used Resize(224, BILINEAR)
+# + ImageNet normalize — byte-for-byte the EfficientNet-B4 pipeline besides size.
+IMG_SIZE = int(os.environ.get("IMG_SIZE", "224"))
+# torchvision transforms.Resize default interpolation is BILINEAR — matches
+# the ResNet50 training pipeline (B4 used BICUBIC to match its own notebook).
+RESIZE_INTERPOLATION = os.environ.get("RESIZE_INTERPOLATION", "BILINEAR")
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD  = [0.229, 0.224, 0.225]
 
