@@ -6,7 +6,7 @@
 
 - **MyApp/** — React Native (Expo SDK 54) mobile client: skin photo capture, multi-lesion scan UI, history, auth.
 - **xai-skin-backend/** — Node.js (Express) + MongoDB: auth, lesion CRUD, **scan session** orchestration (incl. user-editable scan metadata). Receives uploads and calls the Python model server.
-- **model-server/** — Flask app: YOLO-style detector → per-crop classifier → Grad-CAM; returns boxes, diagnoses, crops, overlays. Aggregate whole-image boxes and nested boxes are deduped **before** classification using **soft containment** — see `services/bbox_dedupe.py`, used from `routes/scan.py`.
+- **model-server/** — Flask app: YOLOv12n detector → flat **ResNet50** 7-class classifier (`AK BCC BKL DF MEL NV VASC`, `config.ALL_CLASSES`; `experiment/resnet50-default` branch — replaces the prior hierarchical EfficientNet-B0 primary→specialist stack, `FlatClassifier` keeps `primary`/`specialist` compat keys) → Grad-CAM on `model.layer4[-1]`; returns boxes, diagnoses, crops, overlays, **plus a separate whole-image diagnosis+heatmap** (`whole_image{...}`). Aggregate whole-image boxes and nested boxes are deduped **before** classification using **soft containment** — see `services/bbox_dedupe.py`, used from `routes/scan.py`.
 
 End-to-end scan: **App** `POST /scan-sessions` (multipart image) → **Node** persists session, forwards to **Flask** `POST /scan-multi` → JSON back with `lesions[]` (bbox, diagnosis, `crop_b64` / `overlay_b64` stored as files in Node). History is **scan-first** (every scan is shown, named, and editable); users can also save specific regions from a scan as tracked lesion records.
 
@@ -42,7 +42,7 @@ End-to-end scan: **App** `POST /scan-sessions` (multipart image) → **Node** pe
 - **`lib/mediaUrl.ts`** — Normalizes API/media URLs (`localhost`/`127.0.0.1`/relative paths) for real-device reachability.
 - **`constants/theme.ts`** — **Single source for colors/spacing** (`C`, `Radius`, `Overlay`, etc.). Do not hardcode plum/rose hex in UI; use tokens.
 - **`components/ImageWithBboxOverlay.tsx`** — Bbox drawing + lesion badges + highlight mode.
-- **`components/LesionXaiCarousel.tsx`** — Per-lesion cards (model + Grad-CAM). Crop and heatmap panels render as **uniform 1:1 squares** (`aspectRatio: 1`, `resizeMode="contain"`) so the full preprocessed `IMG_SIZE × IMG_SIZE` tensor is visible end-to-end with no edge crop. No baked-in caption strip, no redundant prediction chip below the heatmap (the diagnosis card at the top of each slide is the single source of truth).
+- **`components/LesionXaiCarousel.tsx`** — Per-lesion cards (model + Grad-CAM), each independently classified — own `crop_b64`/`overlay_b64`/diagnosis from `body.lesions[i]`, never synced across lesions or with the whole-image result. Crop and heatmap panels render with `resizeMode="contain"` so the full image is visible end-to-end with no edge crop. Below the carousel: a 3rd **"WHOLE IMAGE · XAI"** card showing the true full-photo Grad-CAM (`wholeImage.overlayUrl` ← `whole_overlay_b64`, computed on the raw uncropped image — distinct from the per-region annotated canvas), then a "Full capture · detected regions" bbox-overlay block. No `compositeUrl` prop (removed — was a mislabeled duplicate showing the per-region painted canvas as if it were a whole-image heatmap).
 - **`lib/bboxDedupe.ts`** — Client-side bbox dedupe via **soft containment** (`bboxSoftContains`, threshold 0.85 — server also dedupes), including suppression of giant aggregate containers that cover multiple smaller lesions.
 
 ### Backend Node (`xai-skin-backend/`)

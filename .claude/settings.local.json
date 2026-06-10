@@ -13,7 +13,18 @@
       "Bash(git checkout *)",
       "Bash(.venv\\\\Scripts\\\\python.exe -m pip install timm --quiet)",
       "PowerShell(& \"c:\\\\Users\\\\admin\\\\Desktop\\\\Xai-Skin-health-Mobile-app\\\\model-server\\\\.venv\\\\Scripts\\\\python.exe\" -c \"import timm; print\\('timm', timm.__version__\\)\" 2>&1)",
-      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\admin\\\\Downloads\" | Where-Object { $_.Name -match \"\\\\.pth$|best2\" } | Select-Object Name, Attributes, Length)"
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\admin\\\\Downloads\" | Where-Object { $_.Name -match \"\\\\.pth$|best2\" } | Select-Object Name, Attributes, Length)",
+      "Bash(npm start *)",
+      "Bash(npx expo *)",
+      "Bash(env)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000 -State Listen | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Get-Process -Id $_ | Select-Object Id, ProcessName, Path })",
+      "PowerShell(Stop-Process -Id 14444 -Force)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('routes/scan.py'\\).read\\(\\)\\); ast.parse\\(open\\('services/explainer.py'\\).read\\(\\)\\); print\\('OK syntax'\\)\")",
+      "Bash(python -c \"import ast; [ast.parse\\(open\\(f\\).read\\(\\)\\) for f in ['config.py','services/lesion_crop.py','services/explainer.py']]; print\\('OK'\\)\")",
+      "mcp__plugin_claude-mem_mcp-search__get_observations",
+      "Bash(ls model-server/scripts/)",
+      "Bash(ls model-server/tests/)"
     ]
   }
 }

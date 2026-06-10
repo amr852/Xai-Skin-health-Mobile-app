@@ -12,7 +12,7 @@ import {
   type NativeScrollEvent,
   type StyleProp,
 } from 'react-native';
-import type { LesionDetection } from '@/hooks/useLesions';
+import type { LesionDetection, WholeImageDiagnosis } from '@/hooks/useLesions';
 import { C, FontFamily, Radius, Shadow } from '@/constants/theme';
 import { statusFromPrediction } from '@/lib/lesionSeverity';
 import { ImageWithBboxOverlay } from '@/components/ImageWithBboxOverlay';
@@ -25,8 +25,8 @@ export type LesionXaiCarouselHandle = {
 
 type Props = {
   lesions: LesionCarouselItem[];
-  compositeUrl?: string | null;
   originalImageUrl?: string | null;
+  wholeImage?: WholeImageDiagnosis | null;
   xaiMethod?: string;
   onSlideIndexChange: (zeroBased: number) => void;
   onScrollDragStart?: () => void;
@@ -103,7 +103,7 @@ function Divider() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(function LesionXaiCarousel(
-  { lesions, compositeUrl, originalImageUrl, xaiMethod, onSlideIndexChange, onScrollDragStart }: Props,
+  { lesions, originalImageUrl, wholeImage, xaiMethod, onSlideIndexChange, onScrollDragStart }: Props,
   ref,
 ) {
   const { width: winW } = useWindowDimensions();
@@ -300,6 +300,11 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
     label: L.specialist?.label ?? L.diagnosis?.label,
   }));
 
+  // Whole-image XAI card — shows only the full-photo Grad-CAM heatmap,
+  // no diagnosis (diagnosis lives on the per-lesion cards).
+  const wholeOverlayUri = wholeImage?.overlayUrl ?? undefined;
+  const wholeMethod = xaiMethod ?? 'Grad-CAM';
+
   if (lesions.length === 0) return null;
 
   return (
@@ -321,38 +326,71 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
         onMomentumScrollEnd={onMomentumScrollEnd}
       />
 
+      {/* ── Whole-image XAI box — 3rd card, below the per-lesion carousel ─ */}
+      {wholeImage ? (
+        <View style={{ width: '100%', paddingHorizontal: horizontalPad, marginTop: 14 }}>
+          <View style={[s.card, { width: '100%' }]}>
+
+            <View style={s.header}>
+              <View>
+                <Text style={s.lesionNumLabel}>WHOLE IMAGE</Text>
+                <Text style={s.lesionNum}>XAI</Text>
+              </View>
+            </View>
+
+            <View style={s.sectionRow}>
+              <Text style={s.sectionLabel}>Full capture · XAI</Text>
+              <Text style={s.methodBadge}>{wholeMethod}</Text>
+            </View>
+            <View style={s.tileRow}>
+              <View style={s.tileWrap}>
+                <Text style={s.tileLabel}>Original</Text>
+                {originalImageUrl ? (
+                  <PreprocessedImage
+                    uri={originalImageUrl}
+                    style={s.tileImg}
+                    accessibilityLabel="Full captured image"
+                  />
+                ) : (
+                  <View style={[s.tileImg, s.imgPlaceholder]}>
+                    <Text style={s.placeholderTxt}>Unavailable</Text>
+                  </View>
+                )}
+              </View>
+              <View style={s.tileWrap}>
+                <Text style={[s.tileLabel, { color: C.primary }]}>XAI</Text>
+                {wholeOverlayUri ? (
+                  <PreprocessedImage
+                    uri={wholeOverlayUri}
+                    style={s.tileImg}
+                    accessibilityLabel="Whole-image Grad-CAM heatmap"
+                  />
+                ) : (
+                  <View style={[s.tileImg, s.imgPlaceholder]}>
+                    <Text style={s.placeholderTxt}>Unavailable</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+          </View>
+        </View>
+      ) : null}
+
       {/* ── Full-image section below the per-lesion carousel ─────────── */}
-      {(originalImageUrl || compositeUrl) ? (
+      {originalImageUrl ? (
         <View style={s.fullSection}>
-
-          {originalImageUrl ? (
-            <View style={s.fullBlock}>
-              <View style={s.sectionRow}>
-                <Text style={s.sectionLabel}>Full capture · detected regions</Text>
-              </View>
-              <ImageWithBboxOverlay
-                source={{ uri: originalImageUrl }}
-                height={220}
-                borderRadius={Radius.md}
-                detections={fullImageDetections}
-              />
+          <View style={s.fullBlock}>
+            <View style={s.sectionRow}>
+              <Text style={s.sectionLabel}>Full capture · detected regions</Text>
             </View>
-          ) : null}
-
-          {compositeUrl ? (
-            <View style={[s.fullBlock, originalImageUrl ? { marginTop: 14 } : undefined]}>
-              <View style={s.sectionRow}>
-                <Text style={s.sectionLabel}>Full capture · Grad-CAM</Text>
-                <Text style={s.methodBadge}>{xaiMethod ?? 'Grad-CAM'}</Text>
-              </View>
-              <PreprocessedImage
-                uri={compositeUrl}
-                style={s.fullImg}
-                accessibilityLabel="Full-image Grad-CAM explainability heatmap"
-              />
-            </View>
-          ) : null}
-
+            <ImageWithBboxOverlay
+              source={{ uri: originalImageUrl }}
+              height={220}
+              borderRadius={Radius.md}
+              detections={fullImageDetections}
+            />
+          </View>
         </View>
       ) : null}
     </View>
@@ -547,11 +585,4 @@ const s = StyleSheet.create({
     paddingBottom: 4,
   },
   fullBlock: {},
-  // Full-image GradCAM — tall enough for portrait phone photos; contain keeps full image visible.
-  fullImg: {
-    width: '100%',
-    aspectRatio: 3 / 4,
-    borderRadius: Radius.md,
-    backgroundColor: C.surfaceAlt,
-  },
 });

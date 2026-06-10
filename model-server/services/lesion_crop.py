@@ -20,8 +20,9 @@ def padded_bbox_crop(
     w, h = pil_image.size
     bw = max(1, x2 - x1)
     bh = max(1, y2 - y1)
-    mx = int(bw * pad)
-    my = int(bh * pad)
+    min_margin = config.LESION_CROP_MIN_MARGIN_PX
+    mx = max(int(bw * pad), min_margin)
+    my = max(int(bh * pad), min_margin)
     cx1 = max(0, x1 - mx)
     cy1 = max(0, y1 - my)
     cx2 = min(w, x2 + mx)

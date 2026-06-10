@@ -6,10 +6,10 @@ Agent entry point. Read README.md for human-facing detail; this file is the rule
 
 - **MyApp/** — React Native + Expo SDK 54 (mobile client).
 - **xai-skin-backend/** — Node.js + Express + MongoDB. Auth, lesion CRUD, scan-session orchestration. Forwards uploads to Flask.
-- **model-server/** — Flask + Python. YOLOv12n detector → **hierarchical** EfficientNet-B0 classifier (primary benign|malignant → specialist 5-class benign OR 2-class malignant) → Grad-CAM on the specialist head. Also hosts `/detect-fast` (detector-only, 3 fps live mode).
+- **model-server/** — Flask + Python. YOLOv12n detector → **flat ResNet50** classifier (single 7-class HAM10000 head: `AK BCC BKL DF MEL NV VASC`, `config.ALL_CLASSES`) → Grad-CAM on `model.layer4[-1]`. Current default on `experiment/resnet50-default` (replaces the prior hierarchical EfficientNet-B0 primary→specialist stack — `FlatClassifier` keeps `primary`/`specialist` compat keys so the rest of the pipeline + frontend types are unchanged). Also hosts `/detect-fast` (detector-only, 3 fps live mode).
 
 End-to-end scan path:
-`App → POST /scan-sessions (Node, multipart) → POST /scan-multi (Flask) → JSON{lesions[{primary, specialist, ...}], crop_b64, overlay_b64} → Node persists crops/overlays → App renders.`
+`App → POST /scan-sessions (Node, multipart) → POST /scan-multi (Flask) → JSON{lesions[{primary, specialist, ...}], whole_image{...}, crop_b64, overlay_b64} → Node persists crops/overlays → App renders per-lesion carousel + whole-image XAI card.`
 
 Live mode path:
 `App (3 fps reticle crop) → POST /detect-fast (Flask, detector only) → boxes[] normalized 0..1 against uploaded crop.`
@@ -48,11 +48,11 @@ All UI color/spacing from `MyApp/constants/theme.ts` (`C`, `Radius`, `Overlay`, 
 ### Auth screen back button
 Login/register top-bar uses `router.replace('/(auth)/welcome')`, **not** `router.back()`. Intentional UX.
 
-### Grad-CAM target = specialist model
-For each crop, `services/classifier.py::HierarchicalClassifier.predict` returns `specialist_model_key ∈ {"benign","malignant"}` and `specialist_pred_idx`. `services/explainer.py::overlay_for_lesion` MUST resolve the model + target layer from that key (`features[-1]` of EfficientNet-B0). Never run Grad-CAM on the primary head — the user needs to see *why* the subtype was chosen, not just "is it bad".
+### Grad-CAM target = ResNet50 layer4[-1], run per-image not per-canvas
+`services/explainer.py::_get_target_layer` resolves `model.layer4[-1]` (final 2048-ch bottleneck, pre-avgpool) for torchvision ResNet. `overlay_for_lesion(pil_image, classifier_result)` is generic — `routes/scan.py` calls it **twice**: once per lesion on the **padded crop** (`raw_crop`, so the heatmap aligns with `crop_b64`) using that lesion's own `diag`, and once on the **full raw image** (`raw_pil`) using the separately-computed `whole_diag` for `whole_image.overlay_b64`. Never pass the full image when explaining a crop's diagnosis (heatmap won't align with what's shown) — fixed in `809` after Haiku shipped that bug.
 
-### Hierarchical class label maps
-`PRIMARY_CLASSES = ["benign","malignant"]`, `BENIGN_CLASSES = ["akiec","bkl","df","nv","vasc"]`, `MALIGNANT_CLASSES = ["bcc","mel"]` (HAM `dx` codes; sorted at train time). All env-overridable. Order matters — checkpoints carry no embedded labels, so re-order via env vars only after confirming with a known-label test image. EfficientNet-B0 needs ImageNet normalization (`NORMALIZE_INPUT=1`, now the default).
+### Flat classifier label map
+`config.ALL_CLASSES = ["AK","BCC","BKL","DF","MEL","NV","VASC"]` (HAM `dx` codes, order matches the trained `best_resnet50.pth` checkpoint — checkpoints carry no embedded labels, only re-order via env vars after confirming with a known-label test image). `FlatClassifier.predict` derives a coarse `primary: benign|malignant` from `MALIGNANT_LABELS = {"MEL","BCC"}` for the UI banner, and emits `specialist`/`specialist_model_key="flat"`/`specialist_pred_idx` compat keys so `explainer.py` and the frontend (`primary`/`specialist` typed fields) need no changes. ResNet50 needs ImageNet normalization (`IMAGENET_MEAN/STD`, always on).
 
 ## Key files
 
@@ -68,7 +68,7 @@ For each crop, `services/classifier.py::HierarchicalClassifier.predict` returns 
 - `hooks/useScanSessions.ts` — fetch/delete/update sessions.
 - `lib/api.ts`, `lib/mediaUrl.ts` — URL resolution for physical devices.
 - `components/ImageWithBboxOverlay.tsx` — static bbox draw + lesion badges.
-- `components/LesionXaiCarousel.tsx` — per-lesion cards. **`resizeMode="contain"`** (see hard rules).
+- `components/LesionXaiCarousel.tsx` — per-lesion cards (own `crop_b64`/`overlay_b64`, independently classified — never synced across lesions or with `wholeImage`), **`resizeMode="contain"`** (see hard rules), plus a 3rd "WHOLE IMAGE · XAI" card below the carousel rendering `wholeImage.overlayUrl` (true full-photo Grad-CAM from `whole_overlay_b64`, distinct from the per-region annotated canvas). No `compositeUrl` prop — removed `843` as a mislabeled duplicate ("Full capture · Grad-CAM" was actually the per-region painted canvas, not a real whole-image heatmap).
 
 ### Backend Node (`xai-skin-backend/`)
 - `routes/scanSessions.js` — POST/GET/PATCH/DELETE. Multer upload → Flask `/scan-multi` → save crops/overlays.
@@ -76,12 +76,12 @@ For each crop, `services/classifier.py::HierarchicalClassifier.predict` returns 
 - `routes/lesions.js` + `models/Lesion.js` — saved lesion records with `cropUrl`/`overlayUrl`.
 
 ### Model server (`model-server/`)
-- `routes/scan.py` — `/scan-multi` full pipeline + `/detect-fast` (detector only, ~320 px max input, normalized 0..1 boxes).
-- `services/classifier.py` — `HierarchicalClassifier`: loads three EfficientNet-B0 heads at import time; routes primary verdict to benign/malignant specialist; exposes `target_layers` for Grad-CAM.
-- `services/explainer.py` — `overlay_for_lesion(crop_pil, classifier_result)` resolves the specialist model+layer and produces the heatmap PNG (base64).
+- `routes/scan.py` — `/scan-multi` full pipeline (whole-image classify+Grad-CAM, then per-lesion: detect → crop → classify → Grad-CAM-on-crop, each independent) + `/detect-fast` (detector only, ~320 px max input, normalized 0..1 boxes).
+- `services/classifier.py` — `FlatClassifier`: loads single ResNet50 head (`config.MODEL_WEIGHTS`, default `weights/best_resnet50.pth`) at import time; flat 7-class softmax + 4-flip TTA; emits `primary`/`specialist` compat dict for the rest of the pipeline.
+- `services/explainer.py` — `GradCAMExplainer.overlay_for_lesion(pil_image, classifier_result)` — generic, runs Grad-CAM on whatever image it's given (crop or full) using that image's own classifier result; resolves target layer via `_get_target_layer` (`layer4[-1]` for ResNet).
 - `services/bbox_dedupe.py` — soft-containment server-side.
-- `config.py` — `PRIMARY_WEIGHTS / BENIGN_WEIGHTS / MALIGNANT_WEIGHTS` paths + `PRIMARY_CLASSES / BENIGN_CLASSES / MALIGNANT_CLASSES` label maps + `LABEL_DISPLAY` + `SEVERITY` map.
-- Bench: `scripts/bench_detect_fast.py`. Tests: `tests/test_detect_fast.py`, `tests/test_hierarchical_classifier.py`, `tests/test_config.py`.
+- `config.py` — `MODEL_WEIGHTS`/`MODEL_ARCH="resnet50"` + `ALL_CLASSES` flat label map + `LABEL_DISPLAY` + `SEVERITY` + `MALIGNANT_LABELS` + `LESION_CROP_PADDING`/`LESION_CROP_MIN_MARGIN_PX`.
+- Bench: `scripts/bench_detect_fast.py`, `scripts/bench_resnet50.py` (also `bench_effnetb4.py`/`bench_mobilevit.py` from earlier A/B experiments — see `S144`/`789`). Tests: `tests/test_detect_fast.py`, `tests/test_config.py`, `tests/test_hierarchical_classifier.py` (misnamed — actually exercises `FlatClassifier`, skips if weights missing), `tests/test_bbox_dedupe.py`.
 
 ## Latency / production notes
 

@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
   },
   box: {
     position: 'absolute',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderRadius: Radius.xs,
     backgroundColor: 'transparent',
     overflow: 'visible',

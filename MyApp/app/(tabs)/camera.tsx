@@ -654,8 +654,8 @@ export default function CameraScreen() {
                 <LesionXaiCarousel
                   ref={xaiCarouselRef}
                   lesions={carouselLesions}
-                  compositeUrl={analysis.camImageUrl}
                   originalImageUrl={analysis.imageUrl ?? null}
+                  wholeImage={analysis.wholeImage ?? null}
                   xaiMethod={analysis.xaiMethod}
                   onSlideIndexChange={onXaiCarouselSlideSettled}
                   onScrollDragStart={onXaiCarouselDragStart}
@@ -1327,7 +1327,7 @@ const s = StyleSheet.create({
   },
   liveBox: {
     position: 'absolute',
-    borderWidth: 3,
+    borderWidth: 2,
     borderRadius: Radius.xs,
     backgroundColor: 'transparent',
     shadowOffset: { width: 0, height: 0 },

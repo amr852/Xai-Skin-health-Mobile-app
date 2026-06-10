@@ -20,6 +20,14 @@ export type SpecialistDiagnosis = {
   top_k?: TopPrediction[];
 };
 
+export type WholeImageDiagnosis = {
+  primary?: PrimaryVerdict;
+  specialist?: SpecialistDiagnosis;
+  diagnosis?: { label: string; display?: string; score: number; top_k?: TopPrediction[] };
+  severity?: string;
+  overlayUrl?: string | null;
+};
+
 export type LesionAnalysis = {
   label: string;
   score: number;
@@ -35,6 +43,7 @@ export type LesionAnalysis = {
   bbox?: LesionBbox;
   primary?: PrimaryVerdict;
   specialist?: SpecialistDiagnosis;
+  wholeImage?: WholeImageDiagnosis | null;
 };
 
 export type LesionDetection = {
@@ -211,6 +220,13 @@ export function useLesions() {
       partial_failure: boolean;
       annotatedImageUrl?: string | null;
       originalImageUrl?: string;
+      wholeImage?: {
+        primary?: PrimaryVerdict;
+        specialist?: SpecialistDiagnosis;
+        diagnosis?: { label?: string; display?: string; score?: number; top_k?: TopPrediction[] };
+        severity?: string;
+        overlayImageUrl?: string | null;
+      } | null;
       quality_metadata?: { enhancements_applied?: string[] };
       lesions: Array<{
         lesion_id: string;
@@ -250,6 +266,24 @@ export function useLesions() {
       normalizeApiMediaUrl(body.originalImageUrl, API_URL) ?? body.originalImageUrl;
     const normalizedAnnotatedImageUrl =
       normalizeApiMediaUrl(body.annotatedImageUrl, API_URL) ?? body.annotatedImageUrl;
+
+    const wholeImageRaw = body.wholeImage;
+    const wholeImage: WholeImageDiagnosis | null = wholeImageRaw
+      ? {
+          primary: wholeImageRaw.primary,
+          specialist: wholeImageRaw.specialist,
+          diagnosis: wholeImageRaw.diagnosis
+            ? {
+                label: wholeImageRaw.diagnosis.label ?? '—',
+                display: wholeImageRaw.diagnosis.display,
+                score: wholeImageRaw.diagnosis.score ?? 0,
+                top_k: Array.isArray(wholeImageRaw.diagnosis.top_k) ? wholeImageRaw.diagnosis.top_k : undefined,
+              }
+            : undefined,
+          severity: wholeImageRaw.severity,
+          overlayUrl: normalizeApiMediaUrl(wholeImageRaw.overlayImageUrl, API_URL) ?? null,
+        }
+      : null;
 
     const first = body.lesions?.[0];
     const MODEL_NAME = 'EfficientNet-B0 hierarchical + YOLOv12n (Grad-CAM)';
@@ -345,6 +379,7 @@ export function useLesions() {
     return {
       ...analysis,
       imageUrl: normalizedOriginalImageUrl,
+      wholeImage,
       lesions: lesionsSummary.filter((x) => x.bbox),
       lesionCount: body.lesion_count,
       noLesionFound: !!body.no_lesion_found,

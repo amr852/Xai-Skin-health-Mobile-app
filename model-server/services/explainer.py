@@ -1,8 +1,11 @@
 """PyTorch Grad-CAM for flat ResNet50 classifier.
 
-For each detected lesion:
-  - Classification runs on the padded bbox CROP.
-  - Grad-CAM runs on the FULL image (shows spatial context across the whole photo).
+`overlay_for_lesion` is generic — it runs Grad-CAM on whatever PIL image it is
+given, using the target class from the matching classifier result. The route
+calls it twice per request:
+  - once on the padded bbox CROP for each detected lesion (heatmap aligns with
+    crop_b64 shown next to it),
+  - once on the FULL image for spatial context (whole_overlay_b64).
 
 GradCAM target layer: model.layer4[-1]  (final bottleneck block, 2048-ch, before avgpool).
 Output: the full image with the JET heatmap blended in, resized to
@@ -134,8 +137,9 @@ class GradCAMExplainer:
     ) -> str | None:
         """Return base64 PNG of pil_image with Grad-CAM overlay.
 
-        pil_image         — FULL image (not the bbox crop) for spatial context.
-        classifier_result — dict from FlatClassifier.predict().
+        pil_image         — image to explain: lesion crop for per-lesion overlays,
+                            full image for whole-image spatial-context overlay.
+        classifier_result — dict from FlatClassifier.predict() for that same image.
         """
         try:
             target = int(
@@ -201,7 +205,7 @@ def paint_lesion_on_canvas(
         canvas_bgr[y1:y2, x1:x2] = cv2.addWeighted(roi, 0.55, heat, 0.45, 0)
     except Exception:
         pass
-    cv2.rectangle(canvas_bgr, (x1, y1), (x2, y2), (255, 255, 255), 2)
+    cv2.rectangle(canvas_bgr, (x1, y1), (x2, y2), (255, 255, 255), 1)
 
 
 gradcam_explainer = GradCAMExplainer()

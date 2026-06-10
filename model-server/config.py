@@ -60,6 +60,11 @@ MALIGNANT_LABELS: set[str] = {"MEL", "BCC"}
 # ── Inference settings ────────────────────────────────────────────────────────
 LESION_CROP_PADDING: float = float(os.environ.get("LESION_CROP_PADDING", "0.12"))
 
+# Floor on crop margin (source-image px) so small bboxes still pull in
+# surrounding skin context — proportional padding alone leaves a near-tight
+# crop when the box itself is tiny (e.g. a 30px detection -> ~4px margin).
+LESION_CROP_MIN_MARGIN_PX: int = int(os.environ.get("LESION_CROP_MIN_MARGIN_PX", "40"))
+
 INFERENCE_TTA = os.environ.get("INFERENCE_TTA", "1").strip().lower() in {
     "1", "true", "yes", "on",
 }
