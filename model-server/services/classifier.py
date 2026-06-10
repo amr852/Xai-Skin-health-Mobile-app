@@ -1,11 +1,11 @@
-"""Flat ResNet50 skin lesion classifier (torchvision).
+"""Flat EfficientNet-B4 skin lesion classifier (efficientnet_pytorch).
 
 Pipeline:
-  Single ResNet50 head → 7-class flat prediction
+  Single EfficientNet-B4 head → 7-class flat prediction
   Labels: AK BCC BKL DF MEL NV VASC
 
-Preprocessing: Resize(224,224, BILINEAR) → ToTensor → Normalize(ImageNet mean/std)
-Grad-CAM target: model.layer4[-1]  (final bottleneck block before avgpool)
+Preprocessing: Resize(380,380, BICUBIC) → ToTensor → Normalize(ImageNet mean/std)
+Grad-CAM target: model._conv_head  (final conv block before avgpool)
 """
 
 from __future__ import annotations
@@ -36,6 +36,27 @@ def _load_resnet50(num_classes: int, path: str) -> nn.Module:
     model.eval()
     print(f"  OK loaded {path}  ({num_classes} classes)")
     return model
+
+
+def _load_efficientnet_b4(num_classes: int, path: str) -> nn.Module:
+    from efficientnet_pytorch import EfficientNet
+
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"EfficientNet-B4 weights not found: {path}")
+
+    model = EfficientNet.from_name("efficientnet-b4")
+    model._fc = nn.Linear(model._fc.in_features, num_classes)
+    state = torch.load(path, map_location="cpu", weights_only=True)
+    model.load_state_dict(state, strict=True)
+    model.eval()
+    print(f"  OK loaded {path}  ({num_classes} classes)")
+    return model
+
+
+_LOADERS = {
+    "resnet50": _load_resnet50,
+    "efficientnet_b4": _load_efficientnet_b4,
+}
 
 
 # ── Inference helpers ─────────────────────────────────────────────────────────
@@ -76,11 +97,14 @@ def _forward_tta(model: nn.Module, tensor: torch.Tensor) -> np.ndarray:
 # ── Classifier ────────────────────────────────────────────────────────────────
 
 class FlatClassifier:
-    """Single ResNet50 head: flat 7-class prediction."""
+    """Single flat-head classifier (arch selected via config.MODEL_ARCH)."""
 
     def __init__(self) -> None:
-        print("Loading ResNet50 flat classifier …")
-        self.model = _load_resnet50(config.NUM_CLASSES, config.MODEL_WEIGHTS)
+        loader = _LOADERS.get(config.MODEL_ARCH)
+        if loader is None:
+            raise ValueError(f"Unsupported MODEL_ARCH: {config.MODEL_ARCH!r}")
+        print(f"Loading {config.MODEL_NAME} flat classifier …")
+        self.model = loader(config.NUM_CLASSES, config.MODEL_WEIGHTS)
         self._self_test()
 
     def _self_test(self) -> None:
