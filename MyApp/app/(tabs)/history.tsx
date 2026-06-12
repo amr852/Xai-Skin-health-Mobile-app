@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   StatusBar, Platform, Image, ActivityIndicator, Modal,
-  KeyboardAvoidingView,
+  KeyboardAvoidingView, RefreshControl,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -326,7 +326,7 @@ function LesionRegionsModal({
       }));
     }
 
-    const mapped = (source.item.lesions ?? []).map((L) => ({
+    const mapped: RegionView[] = (source.item.lesions ?? []).map((L) => ({
       lesion_id: L.lesionId,
       bbox: L.bbox,
       severity: L.severity,
@@ -837,7 +837,7 @@ function SessionCard({
 export default function HistoryScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { lesions, loading, error, fetchLesions, addLesion, updateLesion, deleteLesion } = useLesions();
+  const { lesions, loading, error, fetchLesions, updateLesion, deleteLesion } = useLesions();
   const {
     sessions,
     loading: sessionsLoading,
@@ -847,7 +847,10 @@ export default function HistoryScreen() {
     updateSession,
   } = useScanSessions();
   const [activeNav, setActiveNav]         = useState<NavKey>('history');
-  const listTab: HistoryListTab           = 'sessions';
+  // Widened cast (not a literal annotation) so the `listTab === 'lesions'`
+  // branch below stays type-valid; the legacy lesions list is intentionally
+  // kept behind this constant (scan-first history).
+  const listTab = 'sessions' as HistoryListTab;
   const [statusFilter, setStatusFilter]   = useState<FilterKey>('all');
   const [editingLesion, setEditingLesion] = useState<Lesion | null>(null);
   const [editingScan, setEditingScan]     = useState<ScanSession | null>(null);
@@ -856,7 +859,17 @@ export default function HistoryScreen() {
   const [saving, setSaving]               = useState(false);
   const [savingScan, setSavingScan]       = useState(false);
   const [unreadCount, setUnreadCount]     = useState(0);
+  const [refreshing, setRefreshing]       = useState(false);
   const { showAlert, alertNode }          = useAppAlert();
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([fetchLesions(), fetchSessions()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchLesions, fetchSessions]);
 
   const { openAvatarMenu } = useUiOverlay();
 
@@ -1080,7 +1093,15 @@ export default function HistoryScreen() {
       <ScrollView
         style={hs.scroll}
         contentContainerStyle={hs.scrollContent}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void onRefresh()}
+            tintColor={C.primary}
+            colors={[C.primary]}
+          />
+        }>
 
         {/* Page Header */}
         <PageHeader

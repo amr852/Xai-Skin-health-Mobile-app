@@ -215,6 +215,7 @@ export function useLesions() {
       _id: string;
       session_id?: string | null;
       nodeSessionId?: string;
+      model_name?: string | null;
       lesion_count: number;
       no_lesion_found: boolean;
       partial_failure: boolean;
@@ -286,7 +287,11 @@ export function useLesions() {
       : null;
 
     const first = body.lesions?.[0];
-    const MODEL_NAME = 'EfficientNet-B0 hierarchical + YOLOv12n (Grad-CAM)';
+    // Model identity is reported by the server (Flask → Node passthrough);
+    // never hardcode an architecture here — it changes between branches.
+    const MODEL_NAME = body.model_name
+      ? `${body.model_name} + YOLOv12n (Grad-CAM)`
+      : 'Lesion classifier + YOLOv12n (Grad-CAM)';
     let analysis: Omit<LesionAnalysis, 'imageUrl'>;
     if (first) {
       const specialist = first.specialist;

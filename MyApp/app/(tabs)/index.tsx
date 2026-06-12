@@ -2,6 +2,8 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Sun } from 'lucide-react-native';
+import Animated, { FadeInUp } from 'react-native-reanimated';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 import { C, FontFamily, FontSize, Overlay, Radius, Shadow, Space } from '@/constants/theme';
 import { Screen } from '@/components/ui/Screen';
@@ -31,6 +33,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { openAvatarMenu } = useUiOverlay();
+  const reducedMotion = useReducedMotion();
   const [activeNav, setActiveNav] = useState<NavKey>('home');
   const [unreadCount, setUnreadCount] = useState(0);
   const {
@@ -85,6 +88,11 @@ export default function HomeScreen() {
 
   const todayStr = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 
+  // Staggered section entrance — one soft rise per bento block, skipped
+  // entirely when the OS asks for reduced motion.
+  const enter = (delay: number) =>
+    reducedMotion ? undefined : FadeInUp.duration(420).delay(delay);
+
   return (
     <Screen
       header={
@@ -101,7 +109,7 @@ export default function HomeScreen() {
       scrollProps={{ contentContainerStyle: { paddingHorizontal: 0 } }}>
 
       {/* ── Gradient greeting strip — bento element 1 ────────────────── */}
-      <View style={s.greetingWrap}>
+      <Animated.View entering={enter(0)} style={s.greetingWrap}>
         <GradientHero style={s.gradient}>
           {/* Two diagonal petal hints — decorative; hidden from screen readers. */}
           <View
@@ -134,10 +142,10 @@ export default function HomeScreen() {
             </Text>
           </View>
         </GradientHero>
-      </View>
+      </Animated.View>
 
       {/* ── UV bento tile (full width) ───────────────────────────────── */}
-      <View style={s.bentoBlock}>
+      <Animated.View entering={enter(70)} style={s.bentoBlock}>
         <View style={s.uvCard}>
           <View
             pointerEvents="none"
@@ -196,17 +204,19 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
-      </View>
+      </Animated.View>
 
       {/* ── Daily habits — small tracked label, hairline above ────────── */}
-      <View style={s.sectionMargin}>
+      <Animated.View entering={enter(140)} style={s.sectionMargin}>
         <SectionHeader title="Daily Habits" tracked />
-      </View>
+      </Animated.View>
 
-      <SunProtectionCard />
+      <Animated.View entering={enter(170)}>
+        <SunProtectionCard />
+      </Animated.View>
 
       {/* ── Vitals row ─────────────────────────────────────────────────── */}
-      <View style={s.vitalsGrid}>
+      <Animated.View entering={enter(210)} style={s.vitalsGrid}>
         {(() => {
           const water = formatWaterValue(waterLiters);
           const sleep = formatSleepValue(sleepHours);
@@ -249,9 +259,11 @@ export default function HomeScreen() {
             </>
           );
         })()}
-      </View>
+      </Animated.View>
 
-      <MonitorLesionsSection />
+      <Animated.View entering={enter(260)}>
+        <MonitorLesionsSection />
+      </Animated.View>
 
       <View style={{ height: 8 }} />
     </Screen>

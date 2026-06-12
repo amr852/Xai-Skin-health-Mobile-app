@@ -170,6 +170,7 @@ router.post('/', verifyToken, (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     const source = req.body?.source || 'camera';
+    const startedAt = Date.now();
 
     try {
       const raw = await callScanMulti(req.file.path, req.userId, source);
@@ -236,10 +237,16 @@ router.post('/', verifyToken, (req, res) => {
       });
       await doc.save();
 
+      console.log(
+        `POST /scan-sessions ok: ${doc.lesionCount} lesion(s) in ${Date.now() - startedAt}ms` +
+          (raw.timings_ms?.total ? ` (model ${raw.timings_ms.total}ms)` : ''),
+      );
+
       return res.status(201).json({
         _id: doc._id,
         session_id: raw.session_id || null,
         nodeSessionId: String(doc._id),
+        model_name: raw.model_name || null,
         lesion_count: doc.lesionCount,
         no_lesion_found: doc.noLesionFound,
         partial_failure: doc.partialFailure,

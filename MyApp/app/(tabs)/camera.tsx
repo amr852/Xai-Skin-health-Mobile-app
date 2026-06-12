@@ -13,7 +13,10 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import Animated, { FadeInUp } from 'react-native-reanimated';
 import { C, FontFamily, Shadow, Overlay, Radius } from '@/constants/theme';
+import { Petal } from '@/components/decor/Petal';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useLesions, type LesionFields, type AnalyzeImageResult } from '@/hooks/useLesions';
 import { ImageWithBboxOverlay } from '@/components/ImageWithBboxOverlay';
 import { LesionFilterBar } from '@/components/LesionFilterBar';
@@ -37,6 +40,7 @@ import {
 import { statusFromPrediction } from '@/lib/lesionSeverity';
 import { useLiveDetect, type LiveDetection } from '@/hooks/useLiveDetect';
 import { containLayout, bboxToOverlayRect, reticleCropInPhotoPx } from '@/lib/bboxLayout';
+import { resolvePhotoSize } from '@/lib/imageSize';
 import { apiFetch } from '@/lib/api';
 
 const DEFAULT_FORM: LesionFields = {
@@ -101,7 +105,13 @@ async function cropToReticle(
   }
 }
 
+/** YOLO head emits two classes: 'Healthy' and 'lesion'. */
+function isHealthyClass(cls: string): boolean {
+  return (cls || '').trim().toLowerCase() === 'healthy';
+}
+
 function liveSeverityColor(cls: string): string {
+  if (isHealthyClass(cls)) return C.floralSage; // healthy skin ≠ lesion triage
   const status = statusFromPrediction(cls).toLowerCase();
   if (status === 'urgent') return C.urgentBorder;
   if (status === 'stable') return C.stableBorder;
@@ -129,6 +139,7 @@ export default function CameraScreen() {
   const [xaiCarouselIndex, setXaiCarouselIndex] = useState(0);
   const cameraRef = useRef<CameraView>(null);
   const xaiCarouselRef = useRef<LesionXaiCarouselHandle>(null);
+  const reducedMotion = useReducedMotion();
   const carouselDragRef = useRef(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [captureBusy, setCaptureBusy] = useState(false);
@@ -286,12 +297,24 @@ export default function CameraScreen() {
   const handleTakePhoto = async () => {
     if (!cameraRef.current || !isCameraReady || captureBusy) return;
 
-    if (liveDetect.detections.length === 0) {
-      showAlert({
-        title: 'No lesion in frame',
-        message: 'No skin lesion detected in the reticle. Point the camera at the area of concern and try again.',
-        variant: 'warning',
-      });
+    const lesionDetections = liveDetect.detections.filter(d => !isHealthyClass(d.cls));
+    if (lesionDetections.length === 0) {
+      const healthyOnly = liveDetect.detections.length > 0;
+      showAlert(
+        healthyOnly
+          ? {
+              title: 'Healthy skin detected',
+              message:
+                'The detector sees healthy skin in the reticle — no photo was taken. You are well and healthy!',
+              variant: 'success',
+            }
+          : {
+              title: 'No lesion in frame',
+              message:
+                'No skin lesion detected in the reticle. Point the camera at the area of concern and try again.',
+              variant: 'warning',
+            },
+      );
       return;
     }
 
@@ -300,13 +323,17 @@ export default function CameraScreen() {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
       if (!photo?.uri) return;
 
+      // SDK 54 PictureRef can omit width/height — decode them from disk so the
+      // reticle crop never silently falls back to the full frame.
+      const photoSize = await resolvePhotoSize(photo.uri, photo.width, photo.height);
+
       // Reticle-region crop: capture only the lesion inside the framing box.
       const croppedUri = await cropToReticle(
         photo.uri,
         cameraLayout.w,
         cameraLayout.h,
-        photo.width,
-        photo.height,
+        photoSize?.width,
+        photoSize?.height,
       );
 
       const ok = await ensureSharpEnough(croppedUri);
@@ -577,6 +604,11 @@ export default function CameraScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
 
+            {/* Floral accent — soft rose rosette behind the header (see
+                DECORATION_BUDGET.Petal, camera.review.header). */}
+            <View pointerEvents="none" style={s.reviewPetal}>
+              <Petal size={150} color={C.rose} opacity={0.16} animate={!reducedMotion} />
+            </View>
             <Text style={s.scanResultEyebrow}>Scan result</Text>
 
             <View style={s.photoWrap}>
@@ -614,7 +646,9 @@ export default function CameraScreen() {
             </View>
 
             {analysis && !analysisLoading && carouselLesions.length > 0 ? (
-              <View style={s.xaiBlock}>
+              <Animated.View
+                style={s.xaiBlock}
+                entering={reducedMotion ? undefined : FadeInUp.duration(420)}>
                 <Text style={s.xaiBlockTitle}>Model analysis & explainability</Text>
                 {(() => {
                   const counts = carouselLesions.reduce(
@@ -654,7 +688,6 @@ export default function CameraScreen() {
                 <LesionXaiCarousel
                   ref={xaiCarouselRef}
                   lesions={carouselLesions}
-                  originalImageUrl={analysis.imageUrl ?? null}
                   wholeImage={analysis.wholeImage ?? null}
                   xaiMethod={analysis.xaiMethod}
                   onSlideIndexChange={onXaiCarouselSlideSettled}
@@ -673,10 +706,12 @@ export default function CameraScreen() {
                     ))}
                   </View>
                 </View>
-              </View>
+              </Animated.View>
             ) : null}
 
-            <View style={s.formCard}>
+            <Animated.View
+              style={s.formCard}
+              entering={reducedMotion ? undefined : FadeInUp.duration(420).delay(90)}>
               <AppInput
                 label="Title" required
                 value={form.title}
@@ -707,9 +742,11 @@ export default function CameraScreen() {
                 placeholder="Tenderness, sun exposure that day, anything to remember…"
                 multiline editable={!saving}
               />
-            </View>
+            </Animated.View>
 
-            <View style={s.analysisCard}>
+            <Animated.View
+              style={s.analysisCard}
+              entering={reducedMotion ? undefined : FadeInUp.duration(420).delay(150)}>
               <Text style={s.analysisTitle}>Session summary</Text>
               {analysisLoading ? (
                 <Text style={s.analysisSubtext}>Analyzing your image…</Text>
@@ -774,7 +811,7 @@ export default function CameraScreen() {
               ) : (
                 <Text style={s.analysisSubtext}>Preparing analysis…</Text>
               )}
-            </View>
+            </Animated.View>
 
             <AppButton
               label="Save Lesion"
@@ -798,7 +835,7 @@ export default function CameraScreen() {
   // ── Live camera ─────────────────────────────────────────────────────────────
   // Server bboxes are normalized against the uploaded *reticle-cropped* frame,
   // so project onto the on-screen reticle box only.
-  const liveBoxes: Array<{ left: number; top: number; width: number; height: number; color: string; label: string; conf: number; key: string }> =
+  const liveBoxes: { left: number; top: number; width: number; height: number; color: string; label: string; conf: number; key: string }[] =
     (() => {
       if (!liveDetect.frameSize) return [];
       if (cameraLayout.w <= 0 || cameraLayout.h <= 0) return [];
@@ -884,43 +921,54 @@ export default function CameraScreen() {
       {/* Detection status pill — always visible while camera screen open.
           Drives off live detector state so text + color stay in sync with
           the actual /detect-fast stream instead of a hardcoded label. */}
-      {scanPhase === 'camera' && !liveDetect.offline ? (
-        <View
-          pointerEvents="none"
-          style={[
-            s.liveStatusPill,
-            { top: insets.top + 72 },
-            liveBoxes.length > 0
-              ? s.liveStatusPillDetected
-              : isCameraReady && liveDetect.lastMs != null
-                ? s.liveStatusPillHealthy
-                : s.liveStatusPillScanning,
-          ]}>
-          <Text
-            style={[
-              s.liveStatusTxt,
-              liveBoxes.length > 0
-                ? s.liveStatusTxtDetected
-                : isCameraReady && liveDetect.lastMs != null
-                  ? s.liveStatusTxtHealthy
-                  : s.liveStatusTxtScanning,
-            ]}>
-            {liveBoxes.length > 0
-              ? (() => {
-                  const top = liveBoxes.reduce(
-                    (m, b) => (b.conf > m.conf ? b : m),
-                    liveBoxes[0],
-                  );
-                  return `Lesion Detected (${liveBoxes.length}) · ${top.label} ${(top.conf * 100).toFixed(0)}% — tap shutter`;
-                })()
-              : isCameraReady && liveDetect.lastMs != null
-                ? `Scanning live · clear (${liveDetect.lastMs.toFixed(0)} ms)`
-                : isCameraReady
-                  ? 'Scanning… place lesion inside the box'
-                  : 'Starting camera…'}
-          </Text>
-        </View>
-      ) : null}
+      {scanPhase === 'camera' && !liveDetect.offline ? (() => {
+          // One derived status drives pill colour, text colour, and label so
+          // the three can never drift out of sync.
+          type LiveStatus = 'detected' | 'healthy' | 'clear' | 'scanning' | 'starting';
+          const lesionLiveBoxes = liveBoxes.filter(b => !isHealthyClass(b.label));
+          const status: LiveStatus =
+            lesionLiveBoxes.length > 0 ? 'detected'
+            : liveBoxes.length > 0 ? 'healthy'
+            : isCameraReady && liveDetect.lastMs != null ? 'clear'
+            : isCameraReady ? 'scanning'
+            : 'starting';
+
+          const pillStyle: Record<LiveStatus, object> = {
+            detected: s.liveStatusPillDetected,
+            healthy:  s.liveStatusPillHealthy,
+            clear:    s.liveStatusPillHealthy,
+            scanning: s.liveStatusPillScanning,
+            starting: s.liveStatusPillScanning,
+          };
+          const txtStyle: Record<LiveStatus, object> = {
+            detected: s.liveStatusTxtDetected,
+            healthy:  s.liveStatusTxtHealthy,
+            clear:    s.liveStatusTxtHealthy,
+            scanning: s.liveStatusTxtScanning,
+            starting: s.liveStatusTxtScanning,
+          };
+          const label: Record<LiveStatus, () => string> = {
+            detected: () => {
+              const top = lesionLiveBoxes.reduce(
+                (m, b) => (b.conf > m.conf ? b : m),
+                lesionLiveBoxes[0],
+              );
+              return `Lesion Detected (${lesionLiveBoxes.length}) · ${top.label} ${(top.conf * 100).toFixed(0)}% — tap shutter`;
+            },
+            healthy:  () => 'Healthy skin — no lesion detected',
+            clear:    () => `Scanning live · clear (${liveDetect.lastMs!.toFixed(0)} ms)`,
+            scanning: () => 'Scanning… place lesion inside the box',
+            starting: () => 'Starting camera…',
+          };
+
+          return (
+            <View
+              pointerEvents="none"
+              style={[s.liveStatusPill, { top: insets.top + 72 }, pillStyle[status]]}>
+              <Text style={[s.liveStatusTxt, txtStyle[status]]}>{label[status]()}</Text>
+            </View>
+          );
+        })() : null}
 
       <View style={[s.camTopBar, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity
@@ -1127,6 +1175,11 @@ const s = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     marginBottom: 10,
+  },
+  reviewPetal: {
+    position: 'absolute',
+    top: -34,
+    right: -38,
   },
   photoWrap: {
     width: '100%',

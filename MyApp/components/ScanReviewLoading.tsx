@@ -136,4 +136,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.2,
   },
+  elapsed: {
+    fontFamily: FontFamily.body,
+    color: C.textHint,
+  },
+  subHint: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+    fontSize: 12,
+    fontFamily: FontFamily.body,
+    color: C.textHint,
+    textAlign: 'center',
+    lineHeight: 17,
+  },
 });

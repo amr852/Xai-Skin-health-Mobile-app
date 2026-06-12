@@ -1,8 +1,10 @@
-import { forwardRef, useCallback, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react';
 import {
   FlatList,
   Image,
+  Modal,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -12,10 +14,13 @@ import {
   type NativeScrollEvent,
   type StyleProp,
 } from 'react-native';
+import Feather from '@expo/vector-icons/Feather';
+import Animated, { FadeInUp } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import type { LesionDetection, WholeImageDiagnosis } from '@/hooks/useLesions';
-import { C, FontFamily, Radius, Shadow } from '@/constants/theme';
+import { C, FontFamily, Overlay, Radius, Shadow } from '@/constants/theme';
 import { statusFromPrediction } from '@/lib/lesionSeverity';
-import { ImageWithBboxOverlay } from '@/components/ImageWithBboxOverlay';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 export type LesionCarouselItem = LesionDetection & { displayIndex: number };
 
@@ -25,7 +30,6 @@ export type LesionXaiCarouselHandle = {
 
 type Props = {
   lesions: LesionCarouselItem[];
-  originalImageUrl?: string | null;
   wholeImage?: WholeImageDiagnosis | null;
   xaiMethod?: string;
   onSlideIndexChange: (zeroBased: number) => void;
@@ -66,6 +70,32 @@ function PreprocessedImage({
   );
 }
 
+/** Tile image that expands to a full-screen viewer on tap. */
+function ZoomTile({
+  uri,
+  a11y,
+  onExpand,
+  imgStyle,
+}: {
+  uri: string;
+  a11y: string;
+  onExpand: () => void;
+  imgStyle?: StyleProp<ImageStyle>;
+}) {
+  return (
+    <Pressable
+      onPress={onExpand}
+      accessibilityRole="imagebutton"
+      accessibilityLabel={`${a11y} — tap to expand`}
+      style={s.tileTouch}>
+      <PreprocessedImage uri={uri} style={imgStyle ?? s.tileImg} accessibilityLabel={a11y} />
+      <View style={s.zoomBadge} pointerEvents="none">
+        <Feather name="maximize-2" size={11} color={C.textSub} />
+      </View>
+    </Pressable>
+  );
+}
+
 /** Horizontal score bar for top-k classification rows. */
 function ScoreRow({ label, score, highlight }: { label: string; score: number; highlight?: boolean }) {
   const pct = Math.max(0, Math.min(1, score));
@@ -103,11 +133,19 @@ function Divider() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(function LesionXaiCarousel(
-  { lesions, originalImageUrl, wholeImage, xaiMethod, onSlideIndexChange, onScrollDragStart }: Props,
+  { lesions, wholeImage, xaiMethod, onSlideIndexChange, onScrollDragStart }: Props,
   ref,
 ) {
   const { width: winW } = useWindowDimensions();
   const listRef = useRef<FlatList<LesionCarouselItem>>(null);
+  const reduced = useReducedMotion();
+  const [preview, setPreview] = useState<{ uri: string; title: string } | null>(null);
+
+  const cardEntering = useCallback(
+    (oneBased: number) =>
+      reduced ? undefined : FadeInUp.duration(380).delay(Math.min(oneBased - 1, 3) * 70),
+    [reduced],
+  );
   const horizontalPad = 16;
   const peek = 10;
   const cardW = Math.max(220, winW - horizontalPad * 2 - peek);
@@ -165,7 +203,7 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
 
       return (
         <View style={[s.slideCell, { width: slideUnit }]}>
-          <View style={[s.card, { width: cardW }]}>
+          <Animated.View entering={cardEntering(item.displayIndex)} style={[s.card, { width: cardW }]}>
 
             {/* ── Header ─────────────────────────────────────────────── */}
             <View style={s.header}>
@@ -240,10 +278,12 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
               <View style={s.tileWrap}>
                 <Text style={s.tileLabel}>Crop</Text>
                 {cropUri ? (
-                  <PreprocessedImage
+                  <ZoomTile
                     uri={cropUri}
-                    style={s.tileImg}
-                    accessibilityLabel="Detected lesion crop"
+                    a11y="Detected lesion crop"
+                    onExpand={() =>
+                      setPreview({ uri: cropUri, title: `Lesion ${item.displayIndex} · Crop` })
+                    }
                   />
                 ) : (
                   <View style={[s.tileImg, s.imgPlaceholder]}>
@@ -254,10 +294,15 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
               <View style={s.tileWrap}>
                 <Text style={[s.tileLabel, { color: C.primary }]}>XAI</Text>
                 {overlayUri ? (
-                  <PreprocessedImage
+                  <ZoomTile
                     uri={overlayUri}
-                    style={s.tileImg}
-                    accessibilityLabel="Crop Grad-CAM heatmap"
+                    a11y="Crop Grad-CAM heatmap"
+                    onExpand={() =>
+                      setPreview({
+                        uri: overlayUri,
+                        title: `Lesion ${item.displayIndex} · ${method} heatmap`,
+                      })
+                    }
                   />
                 ) : (
                   <View style={[s.tileImg, s.imgPlaceholder]}>
@@ -267,11 +312,11 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
               </View>
             </View>
 
-          </View>
+          </Animated.View>
         </View>
       );
     },
-    [cardW, slideUnit, xaiMethod],
+    [cardW, slideUnit, xaiMethod, cardEntering],
   );
 
   const keyExtractor = useCallback(
@@ -284,24 +329,23 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
     [slideUnit],
   );
 
+  const lastSettledRef = useRef(-1);
   const onMomentumScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const x = e.nativeEvent.contentOffset.x;
-      const i = Math.round(x / slideUnit);
-      onSlideIndexChange(Math.max(0, Math.min(lesions.length - 1, i)));
+      const i = Math.max(0, Math.min(lesions.length - 1, Math.round(x / slideUnit)));
+      if (i !== lastSettledRef.current) {
+        lastSettledRef.current = i;
+        void Haptics.selectionAsync().catch(() => {});
+      }
+      onSlideIndexChange(i);
     },
     [lesions.length, onSlideIndexChange, slideUnit],
   );
 
-  // Build bbox detections for the full-image overlay from all lesion items.
-  const fullImageDetections = lesions.map((L) => ({
-    bbox: L.bbox,
-    severity: L.severity,
-    label: L.specialist?.label ?? L.diagnosis?.label,
-  }));
-
   // Whole-image XAI card — shows only the full-photo Grad-CAM heatmap,
-  // no diagnosis (diagnosis lives on the per-lesion cards).
+  // no diagnosis (diagnosis lives on the per-lesion cards) and no duplicate
+  // of the original photo (it is already shown once above the carousel).
   const wholeOverlayUri = wholeImage?.overlayUrl ?? undefined;
   const wholeMethod = xaiMethod ?? 'Grad-CAM';
 
@@ -309,6 +353,36 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
 
   return (
     <View style={s.root}>
+      {/* ── Whole-image XAI — rendered once, before the per-lesion cards ── */}
+      {wholeImage && wholeOverlayUri ? (
+        <View style={{ width: '100%', paddingHorizontal: horizontalPad, marginBottom: 14 }}>
+          <Animated.View
+            entering={reduced ? undefined : FadeInUp.duration(380)}
+            style={[s.card, { width: '100%' }]}>
+
+            <View style={s.sectionRow}>
+              <Text style={s.sectionLabel}>Whole image · XAI</Text>
+              <Text style={s.methodBadge}>{wholeMethod}</Text>
+            </View>
+            <ZoomTile
+              uri={wholeOverlayUri}
+              a11y="Whole-image Grad-CAM heatmap"
+              imgStyle={s.wholeTileImg}
+              onExpand={() =>
+                setPreview({
+                  uri: wholeOverlayUri,
+                  title: `Whole image · ${wholeMethod} heatmap`,
+                })
+              }
+            />
+            <Text style={s.wholeHint}>
+              Heatmap over the full capture — warm areas drove the model most. Tap to enlarge.
+            </Text>
+          </Animated.View>
+        </View>
+      ) : null}
+
+      {/* ── Per-lesion carousel: one card per detection (crop + XAI) ────── */}
       <FlatList
         ref={listRef}
         data={lesions}
@@ -324,77 +398,74 @@ export const LesionXaiCarousel = forwardRef<LesionXaiCarouselHandle, Props>(func
         onScrollToIndexFailed={onScrollToIndexFailed}
         onScrollBeginDrag={onScrollDragStart}
         onMomentumScrollEnd={onMomentumScrollEnd}
+        initialNumToRender={2}
+        maxToRenderPerBatch={3}
+        windowSize={5}
       />
 
-      {/* ── Whole-image XAI box — 3rd card, below the per-lesion carousel ─ */}
-      {wholeImage ? (
-        <View style={{ width: '100%', paddingHorizontal: horizontalPad, marginTop: 14 }}>
-          <View style={[s.card, { width: '100%' }]}>
-
-            <View style={s.header}>
-              <View>
-                <Text style={s.lesionNumLabel}>WHOLE IMAGE</Text>
-                <Text style={s.lesionNum}>XAI</Text>
-              </View>
-            </View>
-
-            <View style={s.sectionRow}>
-              <Text style={s.sectionLabel}>Full capture · XAI</Text>
-              <Text style={s.methodBadge}>{wholeMethod}</Text>
-            </View>
-            <View style={s.tileRow}>
-              <View style={s.tileWrap}>
-                <Text style={s.tileLabel}>Original</Text>
-                {originalImageUrl ? (
-                  <PreprocessedImage
-                    uri={originalImageUrl}
-                    style={s.tileImg}
-                    accessibilityLabel="Full captured image"
-                  />
-                ) : (
-                  <View style={[s.tileImg, s.imgPlaceholder]}>
-                    <Text style={s.placeholderTxt}>Unavailable</Text>
-                  </View>
-                )}
-              </View>
-              <View style={s.tileWrap}>
-                <Text style={[s.tileLabel, { color: C.primary }]}>XAI</Text>
-                {wholeOverlayUri ? (
-                  <PreprocessedImage
-                    uri={wholeOverlayUri}
-                    style={s.tileImg}
-                    accessibilityLabel="Whole-image Grad-CAM heatmap"
-                  />
-                ) : (
-                  <View style={[s.tileImg, s.imgPlaceholder]}>
-                    <Text style={s.placeholderTxt}>Unavailable</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-
-          </View>
-        </View>
-      ) : null}
-
-      {/* ── Full-image section below the per-lesion carousel ─────────── */}
-      {originalImageUrl ? (
-        <View style={s.fullSection}>
-          <View style={s.fullBlock}>
-            <View style={s.sectionRow}>
-              <Text style={s.sectionLabel}>Full capture · detected regions</Text>
-            </View>
-            <ImageWithBboxOverlay
-              source={{ uri: originalImageUrl }}
-              height={220}
-              borderRadius={Radius.md}
-              detections={fullImageDetections}
+      {/* ── Full-screen image viewer (crop / heatmap zoom) ────────────── */}
+      <Modal
+        visible={preview != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreview(null)}>
+        <Pressable
+          style={v.backdrop}
+          onPress={() => setPreview(null)}
+          accessibilityRole="button"
+          accessibilityLabel="Close image preview">
+          <Text style={v.title}>{preview?.title}</Text>
+          {preview ? (
+            <Image
+              source={{ uri: preview.uri }}
+              resizeMode="contain"
+              style={v.img}
+              accessibilityLabel={preview.title}
             />
+          ) : null}
+          <View style={v.closeRow}>
+            <Feather name="x" size={16} color={C.white} />
+            <Text style={v.closeTxt}>Tap anywhere to close</Text>
           </View>
-        </View>
-      ) : null}
+        </Pressable>
+      </Modal>
     </View>
   );
+});
+
+// Full-screen viewer styles
+const v = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: Overlay.scrimBlack,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  title: {
+    fontSize: 13,
+    fontFamily: FontFamily.bodyBold,
+    color: C.white,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  img: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: Radius.lg,
+  },
+  closeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 16,
+  },
+  closeTxt: {
+    fontSize: 12,
+    fontFamily: FontFamily.bodyMedium,
+    color: Overlay.whiteHigh,
+  },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -567,6 +638,22 @@ const s = StyleSheet.create({
     borderRadius: Radius.md,
     backgroundColor: C.surfaceAlt,
   },
+  tileTouch: {
+    position: 'relative',
+  },
+  zoomBadge: {
+    position: 'absolute',
+    right: 6,
+    bottom: 6,
+    width: 22,
+    height: 22,
+    borderRadius: Radius.full,
+    backgroundColor: Overlay.whiteAlmost,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   imgPlaceholder: {
     alignItems: 'center',
@@ -578,11 +665,18 @@ const s = StyleSheet.create({
     color: C.textHint,
   },
 
-  // Full-image section below carousel
-  fullSection: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 4,
+  // Whole-image XAI card (single full-width heatmap tile)
+  wholeTileImg: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    borderRadius: Radius.md,
+    backgroundColor: C.surfaceAlt,
   },
-  fullBlock: {},
+  wholeHint: {
+    marginTop: 8,
+    fontSize: 12,
+    fontFamily: FontFamily.body,
+    color: C.textHint,
+    lineHeight: 17,
+  },
 });

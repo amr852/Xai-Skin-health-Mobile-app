@@ -24,7 +24,16 @@
       "Bash(python -c \"import ast; [ast.parse\\(open\\(f\\).read\\(\\)\\) for f in ['config.py','services/lesion_crop.py','services/explainer.py']]; print\\('OK'\\)\")",
       "mcp__plugin_claude-mem_mcp-search__get_observations",
       "Bash(ls model-server/scripts/)",
-      "Bash(ls model-server/tests/)"
+      "Bash(ls model-server/tests/)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(python -c \"import ast; [ast.parse\\(open\\(f\\).read\\(\\)\\) for f in ['config.py','services/classifier.py']]; print\\('OK'\\)\")",
+      "Bash(git add *)",
+      "Bash(git -C .. add model-server/config.py model-server/services/classifier.py)",
+      "Bash(git -C .. status)",
+      "Bash(git push *)",
+      "PowerShell(git ls-files -- MyApp xai-skin-backend model-server | Where-Object { $_ -notmatch 'assets/|weights/|\\\\.png$|\\\\.jpg$|\\\\.jpeg$|\\\\.ttf$|\\\\.pt$|\\\\.pth$' } | Out-String -Width 300)",
+      "PowerShell(Set-Location C:\\\\Users\\\\admin\\\\Desktop\\\\Xai-Skin-health-Mobile-app\\\\MyApp; npx tsc --noEmit 2>&1 | Select-Object -First 30; \"tsc exit: $LASTEXITCODE\")"
     ]
   }
 }

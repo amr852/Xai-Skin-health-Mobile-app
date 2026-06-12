@@ -166,6 +166,9 @@ export const Overlay = {
 
 export const DECORATION_BUDGET = {
   GradientHero:   ['auth.welcome', 'home.greetingStrip'],
+  // Petal granted a third home 2026-06-11 (user request: lean further into the
+  // floral identity). Keep ≤3; camera.review render is faint (opacity 0.16).
+  Petal:          ['auth.welcome.hero', 'home.greetingStrip', 'camera.review.header'],
   FloralBand:     ['history.titleBlock', 'profile.hero'],
   Crest:          ['auth.welcome',  'auth.login'],
   PulseLine:      ['home.greetingStrip', 'home.uvCard'],

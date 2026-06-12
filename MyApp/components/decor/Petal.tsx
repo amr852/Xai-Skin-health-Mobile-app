@@ -19,9 +19,10 @@ interface Props {
 
 /**
  * Soft 8-petal rosette — the single sanctioned botanical accent in the
- * medical-clinical system. Two homes only (DECORATION_BUDGET):
+ * medical-clinical system. Three homes only (DECORATION_BUDGET.Petal):
  *   1. Auth welcome hero, behind the Crest.
  *   2. Home greeting strip corner.
+ *   3. Camera scan-review header corner (faint, opacity ≤0.16).
  *
  * Petals use radial gradients for soft falloff, no hard edges. Center is
  * deliberately empty so the Crest or other content can sit on top without

@@ -124,6 +124,12 @@ router.post('/analyze', verifyToken, (req, res) => {
           ? raw.enhancements_applied
           : [];
 
+      // Model identity comes from the model server (additive `model_name`
+      // field); fall back to a generic label so the UI never shows a stale arch.
+      const modelName = raw?.model_name
+        ? `${raw.model_name} + YOLOv12n (Grad-CAM)`
+        : 'Lesion classifier + YOLOv12n (Grad-CAM)';
+
       const first = raw?.lesions?.[0];
       let analysis;
       if (first) {
@@ -131,7 +137,7 @@ router.post('/analyze', verifyToken, (req, res) => {
           label: first.diagnosis?.label,
           score: typeof first.diagnosis?.score === 'number' ? first.diagnosis.score : 0,
           camImageUrl: camUrl,
-          modelName: 'effnet_b0_hierarchical + YOLO (Grad-CAM)',
+          modelName,
           predictionIndex: undefined,
           xaiMethod: 'Grad-CAM',
           enhancementsApplied,
@@ -147,7 +153,7 @@ router.post('/analyze', verifyToken, (req, res) => {
           label: 'No lesion detected',
           score: 0,
           camImageUrl: camUrl,
-          modelName: 'effnet_b0_hierarchical + YOLO (Grad-CAM)',
+          modelName,
           predictionIndex: undefined,
           xaiMethod: 'Grad-CAM',
           enhancementsApplied,
@@ -161,7 +167,7 @@ router.post('/analyze', verifyToken, (req, res) => {
             : 'Analysis unavailable',
           score: 0,
           camImageUrl: camUrl,
-          modelName: 'effnet_b0_hierarchical + YOLO (Grad-CAM)',
+          modelName,
           predictionIndex: undefined,
           xaiMethod: 'Grad-CAM',
           enhancementsApplied,
