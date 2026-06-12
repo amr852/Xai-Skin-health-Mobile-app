@@ -1,10 +1,10 @@
 """Configuration — flat 7-class classifier, arch switchable via MODEL_ARCH.
 
 Supported archs (see services/classifier.py::_LOADERS):
-  MODEL_ARCH=resnet50         (default) → weights/best_resnet50.pth, 224px BILINEAR,
-                                          Grad-CAM on model.layer4[-1]
-  MODEL_ARCH=efficientnet_b4            → weights/last_effnetb4.pth, 380px BICUBIC,
+  MODEL_ARCH=efficientnet_b4  (default) → weights/last_effnetb4.pth, 380px BICUBIC,
                                           Grad-CAM on model._conv_head
+  MODEL_ARCH=resnet50                   → weights/best_resnet50.pth, 224px BILINEAR,
+                                          Grad-CAM on model.layer4[-1]
 
 Each arch carries its own weights/name/img-size/interpolation defaults; any of
 them can still be overridden individually via MODEL_WEIGHTS / MODEL_NAME /
@@ -41,7 +41,7 @@ _ARCH_DEFAULTS: dict[str, dict] = {
     },
 }
 
-MODEL_ARCH = os.environ.get("MODEL_ARCH", "resnet50").strip().lower()
+MODEL_ARCH = os.environ.get("MODEL_ARCH", "efficientnet_b4").strip().lower()
 if MODEL_ARCH not in _ARCH_DEFAULTS:
     raise ValueError(
         f"Unsupported MODEL_ARCH={MODEL_ARCH!r}; expected one of {sorted(_ARCH_DEFAULTS)}"
