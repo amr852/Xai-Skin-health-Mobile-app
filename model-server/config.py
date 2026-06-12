@@ -1,7 +1,14 @@
-"""Configuration — flat EfficientNet-B4 classifier (efficientnet_pytorch).
+"""Configuration — flat 7-class classifier, arch switchable via MODEL_ARCH.
 
-Pipeline: single EfficientNet-B4 head → 7-class flat prediction
-          → Grad-CAM on model._conv_head
+Supported archs (see services/classifier.py::_LOADERS):
+  MODEL_ARCH=efficientnet_b4  (default) → weights/last_effnetb4.pth, 380px BICUBIC,
+                                          Grad-CAM on model._conv_head
+  MODEL_ARCH=resnet50                   → weights/best_resnet50.pth, 224px BILINEAR,
+                                          Grad-CAM on model.layer4[-1]
+
+Each arch carries its own weights/name/img-size/interpolation defaults; any of
+them can still be overridden individually via MODEL_WEIGHTS / MODEL_NAME /
+IMG_SIZE / RESIZE_INTERPOLATION.
 """
 
 from __future__ import annotations
@@ -16,18 +23,39 @@ _WEIGHTS_DIR = os.path.join(BASE_DIR, "weights")
 ALL_CLASSES: list[str] = ["AK", "BCC", "BKL", "DF", "MEL", "NV", "VASC"]
 NUM_CLASSES = len(ALL_CLASSES)
 
-# ── Model weights ─────────────────────────────────────────────────────────────
+# ── Model arch + weights (env-switchable) ─────────────────────────────────────
+# Per-arch defaults: training-native input size + interpolation travel with the
+# checkpoint. Override any single value via its own env var if needed.
+_ARCH_DEFAULTS: dict[str, dict] = {
+    "efficientnet_b4": {
+        "weights": "last_effnetb4.pth",
+        "name": "EfficientNet-B4",
+        "img_size": 380,
+        "interp": "BICUBIC",
+    },
+    "resnet50": {
+        "weights": "best_resnet50.pth",
+        "name": "ResNet50",
+        "img_size": 224,
+        "interp": "BILINEAR",
+    },
+}
+
+MODEL_ARCH = os.environ.get("MODEL_ARCH", "efficientnet_b4").strip().lower()
+if MODEL_ARCH not in _ARCH_DEFAULTS:
+    raise ValueError(
+        f"Unsupported MODEL_ARCH={MODEL_ARCH!r}; expected one of {sorted(_ARCH_DEFAULTS)}"
+    )
+_ARCH = _ARCH_DEFAULTS[MODEL_ARCH]
+
 MODEL_WEIGHTS = os.environ.get(
-    "MODEL_WEIGHTS", os.path.join(_WEIGHTS_DIR, "last_effnetb4.pth")
+    "MODEL_WEIGHTS", os.path.join(_WEIGHTS_DIR, _ARCH["weights"])
 )
-MODEL_NAME = "EfficientNet-B4"
-MODEL_ARCH = "efficientnet_b4"
+MODEL_NAME = os.environ.get("MODEL_NAME", _ARCH["name"])
 
 # ── Image preprocessing ───────────────────────────────────────────────────────
-# Native EfficientNet-B4 resolution; training notebook used Resize(380, BICUBIC)
-# + ImageNet normalize.
-IMG_SIZE = int(os.environ.get("IMG_SIZE", "380"))
-RESIZE_INTERPOLATION = os.environ.get("RESIZE_INTERPOLATION", "BICUBIC")
+IMG_SIZE = int(os.environ.get("IMG_SIZE", str(_ARCH["img_size"])))
+RESIZE_INTERPOLATION = os.environ.get("RESIZE_INTERPOLATION", _ARCH["interp"])
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD  = [0.229, 0.224, 0.225]
 

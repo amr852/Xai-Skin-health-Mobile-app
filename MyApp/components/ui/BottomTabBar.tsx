@@ -1,7 +1,10 @@
+import { useEffect, useRef, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Activity, Camera, ClipboardList, UserRound } from 'lucide-react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { C, FontFamily, Shadow } from '@/constants/theme';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 export type NavKey = 'home' | 'scan' | 'history' | 'profile';
 
@@ -17,10 +20,41 @@ interface Props {
   onPress: (key: NavKey) => void;
 }
 
+/** Icon pill that softly pops when its tab becomes active. */
+function TabIconWrap({ isActive, children }: { isActive: boolean; children: ReactNode }) {
+  const reducedMotion = useReducedMotion();
+  const scale = useSharedValue(1);
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    // Skip the initial render — each screen mounts its own tab bar, and the
+    // already-active tab popping on every navigation reads as a glitch. Only
+    // animate genuine activations within this instance's lifetime.
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    if (reducedMotion) return;
+    if (isActive) {
+      scale.value = 0.84;
+      scale.value = withSpring(1, { damping: 14, stiffness: 220 });
+    }
+  }, [isActive, reducedMotion, scale]);
+
+  const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  return (
+    <Animated.View style={[s.iconWrap, isActive && s.iconWrapActive, anim]}>
+      {children}
+    </Animated.View>
+  );
+}
+
 /**
  * Floating bottom tab bar.
  *  • Lucide icons (stroke-1.5, 22px), no decoration.
- *  • Active state: rose-tinted background with primary-colored icon and label.
+ *  • Active state: rose-tinted background with primary-colored icon and label,
+ *    plus a soft spring pop on activation (skipped under reduce-motion).
  *  • Inactive: muted slate, identical layout (no shift).
  */
 export function BottomTabBar({ active, onPress }: Props) {
@@ -39,13 +73,13 @@ export function BottomTabBar({ active, onPress }: Props) {
             accessibilityRole="button"
             accessibilityLabel={tab.label}
             accessibilityState={{ selected: isActive }}>
-            <View style={[s.iconWrap, isActive && s.iconWrapActive]}>
+            <TabIconWrap isActive={isActive}>
               <Icon
                 size={22}
                 strokeWidth={1.6}
                 color={isActive ? C.primary : C.textSub}
               />
-            </View>
+            </TabIconWrap>
             <Text style={[s.label, isActive && s.labelActive]}>{tab.label}</Text>
             {isActive && <View style={s.activeIndicator} />}
           </Pressable>

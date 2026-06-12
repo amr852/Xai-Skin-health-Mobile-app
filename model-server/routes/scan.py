@@ -1,14 +1,19 @@
-"""Multi-lesion scan API — MobileNetV2 7-class HAM10000 classifier.
+"""Multi-lesion scan API — flat 7-class HAM10000 classifier (arch via config.MODEL_ARCH).
 
 Pipeline per request:
   1. Load + (optionally enhance) uploaded image.
-  2. Whole-image classification + Grad-CAM.
-  3. YOLO detection → per-lesion crop classification + Grad-CAM.
-  4. If no lesions detected → healthy response.
+  2. YOLO detection (healthy early-exit when no boxes).
+  3. Whole-image classification + Grad-CAM.
+  4. Per-lesion crop classification + Grad-CAM.
+
+Each stage is timed; a structured timing line is logged per request and the
+stage breakdown is returned additively as `timings_ms`.
 """
 
 from __future__ import annotations
 
+import base64
+import os
 import time
 import uuid
 from datetime import datetime, timezone
@@ -22,14 +27,12 @@ import config
 from helpers import (
     load_upload_as_pil_no_enhance,
     save_enhanced_pair_from_upload,
-    save_image,
-    to_base64,
 )
 from services.classifier import lesion_classifier
 from services.detector import lesion_detector
 from services.explainer import gradcam_explainer, paint_lesion_on_canvas, pil_to_png_b64
 from services.bbox_dedupe import dedupe_nested_boxes
-from services.lesion_crop import center_fallback_crop, padded_bbox_crop
+from services.lesion_crop import padded_bbox_crop
 
 scan_bp = Blueprint("scan", __name__)
 
@@ -44,7 +47,12 @@ def _classify(pil: PILImage.Image, tag: str) -> dict:
     return lesion_classifier.predict(pil, tag=tag)
 
 
-def _healthy_response(quality_metadata: dict) -> dict:
+def _is_healthy_box(box: dict) -> bool:
+    """True when the detector classed this box as healthy skin (not a lesion)."""
+    return str(box.get("cls", "lesion")).strip().lower() == "healthy"
+
+
+def _healthy_response(quality_metadata: dict, timings_ms: dict | None = None) -> dict:
     """Response when no skin lesions are detected."""
     return {
         "session_id": None,
@@ -57,11 +65,20 @@ def _healthy_response(quality_metadata: dict) -> dict:
         "quality_metadata": quality_metadata,
         "whole_image": None,
         "lesions": [],
+        "model_name": config.MODEL_NAME,
+        "timings_ms": timings_ms or {},
     }
+
+
+def _ms_since(start: float) -> float:
+    return round((time.perf_counter() - start) * 1000.0, 1)
 
 
 @scan_bp.route("/scan-multi", methods=["POST"])
 def scan_multi():
+    t_request = time.perf_counter()
+    timings: dict[str, float] = {}
+
     if "image" not in request.files:
         return jsonify({"error": "Missing image file"}), 400
 
@@ -69,6 +86,7 @@ def scan_multi():
     source = (request.form.get("source") or "camera").strip().lower()
     file = request.files["image"]
 
+    t_stage = time.perf_counter()
     try:
         if source == "gallery":
             raw_pil = load_upload_as_pil_no_enhance(file)
@@ -93,6 +111,7 @@ def scan_multi():
             }
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+    timings["load_enhance"] = _ms_since(t_stage)
 
     # ── YOLO detection ────────────────────────────────────────────────────────
     full_bgr = cv2.cvtColor(np.array(display_pil.convert("RGB")), cv2.COLOR_RGB2BGR)
@@ -101,26 +120,43 @@ def scan_multi():
     sx = raw_w / float(w) if w > 0 else 1.0
     sy = raw_h / float(h) if h > 0 else 1.0
 
+    t_stage = time.perf_counter()
     try:
         boxes = lesion_detector.detect(full_bgr)
     except Exception:
         boxes = []
+    timings["detect"] = _ms_since(t_stage)
+
+    # The YOLO head emits two classes: 'Healthy' and 'lesion'. Healthy-skin
+    # boxes must never reach the 7-class lesion classifier (it has no healthy
+    # class and would mislabel clear skin as a lesion type).
+    n_healthy = sum(1 for b in boxes if _is_healthy_box(b))
+    boxes = [b for b in boxes if not _is_healthy_box(b)]
 
     if not boxes:
-        # No lesions detected — skip classification and return healthy response.
-        return jsonify(_healthy_response(quality_metadata)), 200
+        # Nothing lesion-class detected — skip classification, report healthy.
+        timings["total"] = _ms_since(t_request)
+        print(
+            f"[/scan-multi] healthy (no lesion boxes, {n_healthy} healthy box(es)) "
+            f"timings_ms={timings}"
+        )
+        return jsonify(_healthy_response(quality_metadata, timings)), 200
 
     boxes = dedupe_nested_boxes(boxes)
 
     # ── Whole-image classification + Grad-CAM ─────────────────────────────────
+    t_stage = time.perf_counter()
     try:
         whole_diag = _classify(raw_pil, tag="whole_image")
     except Exception:
         return jsonify({"error": "classification_failed"}), 500
+    timings["whole_classify"] = _ms_since(t_stage)
 
+    t_stage = time.perf_counter()
     whole_overlay_b64 = gradcam_explainer.overlay_for_lesion(
         raw_pil, whole_diag, tag="whole_image"
     )
+    timings["whole_gradcam"] = _ms_since(t_stage)
 
     whole_severity = config.get_severity(whole_diag["specialist"]["label"])
     whole_image_payload = {
@@ -143,6 +179,7 @@ def scan_multi():
     )
 
     # ── Per-lesion classification + Grad-CAM ──────────────────────────────────
+    t_stage = time.perf_counter()
     canvas = full_bgr.copy()
     lesions_out: list[dict] = []
     partial_failure = False
@@ -211,11 +248,28 @@ def scan_multi():
         except Exception:
             pass
 
+    timings["lesions"] = _ms_since(t_stage)
+
+    # Encode the annotated canvas once in memory; persist the same bytes to
+    # disk (the session doc references the filename) without a re-read.
+    t_stage = time.perf_counter()
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
     ann_name = f"annot_multi_{timestamp}.png"
-    ann_path = save_image(canvas, ann_name)
-    annotated_image_b64 = to_base64(ann_path)
+    annotated_image_b64 = None
+    ok, ann_buf = cv2.imencode(".png", canvas)
+    if ok:
+        ann_bytes = ann_buf.tobytes()
+        annotated_image_b64 = base64.b64encode(ann_bytes).decode("utf-8")
+        try:
+            with open(os.path.join(config.UPLOAD_FOLDER, ann_name), "wb") as f:
+                f.write(ann_bytes)
+        except OSError as exc:
+            print(f"[/scan-multi] WARNING: could not persist {ann_name}: {exc}")
+    timings["annotate_encode"] = _ms_since(t_stage)
 
+    # Flask-side persistence is best-effort: the Node backend keeps the
+    # authoritative ScanSession copy, so a down Mongo must not fail the scan.
+    t_stage = time.perf_counter()
     session_id = None
     if user_id:
         scan_col = current_app.config["SCAN_SESSIONS_COL"]
@@ -243,8 +297,18 @@ def scan_multi():
                 "severity": whole_image_payload["severity"],
             },
         }
-        insert_result = scan_col.insert_one(doc)
-        session_id = str(insert_result.inserted_id)
+        try:
+            insert_result = scan_col.insert_one(doc)
+            session_id = str(insert_result.inserted_id)
+        except Exception as exc:
+            print(f"[/scan-multi] WARNING: Mongo persist failed ({exc}); continuing without session_id")
+    timings["persist"] = _ms_since(t_stage)
+    timings["total"] = _ms_since(t_request)
+
+    print(
+        f"[/scan-multi] {len(lesions_out)} lesion(s), partial_failure={partial_failure}, "
+        f"timings_ms={timings}"
+    )
 
     return jsonify(
         {
@@ -258,6 +322,8 @@ def scan_multi():
             "quality_metadata": quality_metadata,
             "whole_image": whole_image_payload,
             "lesions": lesions_out,
+            "model_name": config.MODEL_NAME,
+            "timings_ms": timings,
         }
     ), 200
 

@@ -6,6 +6,7 @@ import type { CameraView } from 'expo-camera';
 import { API_URL, ApiError } from '@/lib/api';
 import { getStoredToken } from '@/context/AuthContext';
 import { reticleCropInPhotoPx, type LesionBbox } from '@/lib/bboxLayout';
+import { resolvePhotoSize, type ImageSize } from '@/lib/imageSize';
 
 const RETICLE_SIZE_PX = 220;
 
@@ -72,6 +73,9 @@ export function useLiveDetect({
   // background/inactive event (also tolerant of test environments where
   // currentState is undefined).
   const appActiveRef = useRef(AppState.currentState !== 'background' && AppState.currentState !== 'inactive');
+  // Camera sensor size is constant per session — decode once when the photo
+  // object omits width/height (SDK 54 PictureRef drift), then reuse.
+  const sensorSizeRef = useRef<ImageSize | null>(null);
 
   const minInterval = Math.max(1, Math.round(1000 / Math.max(1, fps)));
 
@@ -101,6 +105,21 @@ export function useLiveDetect({
       return false;
     }
     if (!uri) return false;
+
+    // Photo object can omit dimensions (SDK 54 PictureRef). Without them the
+    // crop op was silently skipped and the *full frame* went to /detect-fast,
+    // misaligning the live boxes projected onto the reticle. Decode once and
+    // cache — the sensor size doesn't change within a camera session. Only
+    // bother when a layout exists, i.e. when the reticle crop can actually run.
+    if (layoutW > 0 && layoutH > 0 && (!photoW || !photoH)) {
+      if (!sensorSizeRef.current) {
+        sensorSizeRef.current = await resolvePhotoSize(uri, photoW, photoH);
+      }
+      if (sensorSizeRef.current) {
+        photoW = sensorSizeRef.current.width;
+        photoH = sensorSizeRef.current.height;
+      }
+    }
 
     let processedUri = uri;
     try {

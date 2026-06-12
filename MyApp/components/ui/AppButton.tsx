@@ -1,6 +1,8 @@
 import { Pressable, Text, ActivityIndicator, StyleSheet, View, ViewStyle, Platform } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing } from 'react-native-reanimated';
 import { C, FontFamily, Shadow } from '@/constants/theme';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
@@ -30,9 +32,14 @@ const BDR: Record<Variant, string | undefined> = {
   primary: undefined, secondary: C.primary, ghost: 'transparent', danger: C.urgentBorder,
 };
 
+const PRESS_SCALE = 0.97;
+const PRESS_IN_MS = 110;
+const PRESS_OUT_MS = 160;
+
 /**
- * Calm, predictable CTA. No spring scale, no bloom. Press feedback is opacity
- * change only — keeps layout stable, accessible.
+ * Calm, predictable CTA. Press feedback is a soft 0.97 timing-scale plus a
+ * slight opacity dip — no spring overshoot, no bloom. The scale is skipped
+ * entirely under OS reduce-motion, falling back to opacity only.
  */
 export function AppButton({
   label, onPress, variant = 'primary', size = 'md',
@@ -40,46 +47,68 @@ export function AppButton({
 }: Props) {
   const isDisabled = disabled || loading;
   const isFilled = variant === 'primary' || variant === 'danger';
+  const reducedMotion = useReducedMotion();
+  const scale = useSharedValue(1);
+
+  const pressAnim = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const onPressIn = () => {
+    if (reducedMotion) return;
+    scale.value = withTiming(PRESS_SCALE, { duration: PRESS_IN_MS, easing: Easing.out(Easing.quad) });
+  };
+  const onPressOut = () => {
+    // Always restore — if reduce-motion flips on mid-press, snap instead of
+    // leaving the button stuck at PRESS_SCALE.
+    scale.value = reducedMotion
+      ? 1
+      : withTiming(1, { duration: PRESS_OUT_MS, easing: Easing.out(Easing.quad) });
+  };
 
   return (
     <View style={style}>
-      <Pressable
-        style={({ pressed }) => [
-          s.base,
-          {
-            height: HEIGHT[size],
-            borderRadius: RADIUS[size],
-            paddingHorizontal: PAD_H[size],
-            backgroundColor: BG[variant],
-            borderWidth: BDR[variant] ? 1.5 : 0,
-            borderColor: BDR[variant],
-            opacity: isDisabled ? 0.55 : pressed ? 0.85 : 1,
-          },
-          isFilled && Platform.OS === 'ios' ? Shadow.sm : null,
-        ]}
-        onPress={onPress}
-        disabled={isDisabled}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: isDisabled, busy: loading }}
-        accessibilityLabel={label}>
-        {loading ? (
-          <ActivityIndicator size="small" color={CLR[variant]} />
-        ) : (
-          <>
-            {icon && !iconRight && (
-              <Feather name={icon} size={ICON_SZ[size]} color={CLR[variant]} />
-            )}
-            <Text
-              numberOfLines={1}
-              style={[s.label, { fontSize: FONT_SZ[size], color: CLR[variant] }]}>
-              {label}
-            </Text>
-            {icon && iconRight && (
-              <Feather name={icon} size={ICON_SZ[size]} color={CLR[variant]} />
-            )}
-          </>
-        )}
-      </Pressable>
+      <Animated.View style={pressAnim}>
+        <Pressable
+          style={({ pressed }) => [
+            s.base,
+            {
+              height: HEIGHT[size],
+              borderRadius: RADIUS[size],
+              paddingHorizontal: PAD_H[size],
+              backgroundColor: BG[variant],
+              borderWidth: BDR[variant] ? 1.5 : 0,
+              borderColor: BDR[variant],
+              opacity: isDisabled ? 0.55 : pressed ? 0.88 : 1,
+            },
+            isFilled && Platform.OS === 'ios' ? Shadow.sm : null,
+          ]}
+          onPress={onPress}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
+          disabled={isDisabled}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isDisabled, busy: loading }}
+          accessibilityLabel={label}>
+          {loading ? (
+            <ActivityIndicator size="small" color={CLR[variant]} />
+          ) : (
+            <>
+              {icon && !iconRight && (
+                <Feather name={icon} size={ICON_SZ[size]} color={CLR[variant]} />
+              )}
+              <Text
+                numberOfLines={1}
+                style={[s.label, { fontSize: FONT_SZ[size], color: CLR[variant] }]}>
+                {label}
+              </Text>
+              {icon && iconRight && (
+                <Feather name={icon} size={ICON_SZ[size]} color={CLR[variant]} />
+              )}
+            </>
+          )}
+        </Pressable>
+      </Animated.View>
     </View>
   );
 }

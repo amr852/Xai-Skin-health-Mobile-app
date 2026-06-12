@@ -11,6 +11,7 @@ import {
   StatusBar,
   Platform,
   KeyboardAvoidingView,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -52,15 +53,16 @@ export default function ScanSessionDetailScreen() {
   const [renaming, setRenaming] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [savingTitle, setSavingTitle] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { showAlert, alertNode } = useAppAlert();
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!id || typeof id !== 'string') {
       setError('Missing scan id');
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!opts?.silent) setLoading(true);
     setError(null);
     try {
       const doc = await fetchScanSessionById(id);
@@ -237,7 +239,18 @@ export default function ScanSessionDetailScreen() {
         <ScrollView
           style={s.scroll}
           contentContainerStyle={s.scrollContent}
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                void load({ silent: true }).finally(() => setRefreshing(false));
+              }}
+              tintColor={C.primary}
+              colors={[C.primary]}
+            />
+          }>
           <LinearGradient
             colors={[...Gradient.surfaceTint]}
             start={{ x: 0, y: 0 }}
@@ -606,7 +619,7 @@ export default function ScanSessionDetailScreen() {
                 }}
               />
               <Text style={s.renameHint}>
-                Give this scan a short, memorable name so it's easy to find later.
+                Give this scan a short, memorable name so it&apos;s easy to find later.
               </Text>
             </View>
           </KeyboardAvoidingView>
