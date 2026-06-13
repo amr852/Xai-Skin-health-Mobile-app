@@ -68,8 +68,19 @@ pip install -r requirements.txt
 python app.py            # serves http://localhost:5000
 ```
 
-First boot downloads/loads the YOLOv12n detector + ResNet50 classifier weights
-(`weights/best_resnet50.pth` is committed). Confirm it's healthy:
+Both model weights are **committed to the repo**, so a fresh clone runs the full
+pipeline with no extra downloads:
+
+| File | Size | Role | Loaded via |
+|------|------|------|------------|
+| `model-server/best.pt` | ~5 MB | YOLOv12n lesion **detector** (live mode + scans) | `config.YOLO_MODEL_PATH` (default `model-server/best.pt`) |
+| `model-server/weights/best_resnet50.pth` | ~91 MB | ResNet50 7-class **classifier** | `config.MODEL_WEIGHTS` (default `weights/best_resnet50.pth`) |
+
+Both load at Flask startup. To point at your own checkpoints instead, set the env
+vars `YOLO_MODEL_PATH` / `MODEL_WEIGHTS` before `python app.py`. The experimental
+EfficientNet-B4 checkpoint is **not** committed (opt-in only — see `MODEL_ARCH` below).
+
+Confirm the server is healthy:
 
 ```bash
 curl http://localhost:5000/health

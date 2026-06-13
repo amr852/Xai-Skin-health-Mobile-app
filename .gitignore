@@ -8,11 +8,18 @@ env/
 # Node at repo root
 node_modules/
 
-# Model weights
+# Model weights (large checkpoints ignored by default)
 *.pth
 *.h5
 *.keras
 *.pt
+
+# ...but bundle the two runtime models so the project is clone-and-run:
+#   - YOLOv12n lesion detector (5 MB)
+#   - ResNet50 7-class classifier (91 MB)
+# EffNetB4 stays ignored (experimental, opt-in via MODEL_ARCH).
+!model-server/best.pt
+!model-server/weights/best_resnet50.pth
 
 # Python cache
 __pycache__/
