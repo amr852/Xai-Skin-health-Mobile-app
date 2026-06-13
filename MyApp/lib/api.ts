@@ -146,6 +146,16 @@ export function invalidateLocalSession() {
   onSessionInvalidated?.();
 }
 
+/**
+ * Public access-token refresh for callers that bypass `apiFetch` (e.g. the
+ * 3fps live-detect loop, which owns its own abort/timeout). Returns true when
+ * a fresh token was stored. Without this, raw-fetch callers can never recover
+ * from an expired token and fail silently.
+ */
+export function refreshAccessToken(): Promise<boolean> {
+  return tryRefreshAccessToken();
+}
+
 function resolveAuthHeader(token: string | null | undefined): Record<string, string> {
   if (token === null) return {};
   const access = token !== undefined ? token : getAccessToken();

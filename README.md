@@ -12,19 +12,133 @@ End-to-end scan: **App** `POST /scan-sessions` (multipart image) → **Node** pe
 
 **Live mode (shipped)**: the camera screen runs real-time detection by default — the app streams ~320 px frames at 3 fps from the centered 220 px reticle to Flask **`POST /detect-fast`** (detector-only, no classifier, no Grad-CAM) and overlays bboxes on the live preview. Each bbox renders with a class+confidence chip (e.g. `Basal cell carcinoma 0.94`), and a top-of-screen status pill shows `Scanning… place lesion inside the box` while idle, switching to red `Lesion Detected! (N)` when detections are present. Reticle is mapped through the camera preview's aspect-fill (cover) scale via `reticleCropInPhotoPx` so the crop hits the right region in source-photo pixels (not layout px). Live frames are never persisted; tapping the shutter captures a fresh hi-res still, crops it to the same reticle, and runs the full `/scan-sessions` pipeline. Plan: [`docs/superpowers/plans/2026-05-15-unified-realtime-lesion-detection.md`](docs/superpowers/plans/2026-05-15-unified-realtime-lesion-detection.md). Tracker: [`planning/realtime-lesion-detection-plan.md`](planning/realtime-lesion-detection-plan.md). Spec: [`planning/realtime-lesion-detection.md`](planning/realtime-lesion-detection.md). Dev-box latency note: p50 ≈ 257 ms on CPU YOLOv12n — above 150 ms spec; client 3 fps cap absorbs it. Production needs GPU/quant.
 
-## Quick start (human or agent)
+## Run it on your own machine (full local setup)
 
-| Layer | Directory | Typical command | Default URL |
-|--------|-----------|-----------------|-------------|
-| Mobile | `MyApp/` | `npx expo start` | Metro; API from `EXPO_PUBLIC_API_URL` or LAN host **:3000** (see `MyApp/lib/api.ts`) |
-| API | `xai-skin-backend/` | `npm start` | **http://localhost:3000** |
-| Models | `model-server/` | Flask app entry (see that folder’s docs / `requirements.txt`) | **http://localhost:5000** (Node uses `MODEL_SERVER_URL`) |
+The app has **three services** that run at the same time: the **MongoDB** database, the
+**Node API** (port 3000), and the **Flask model server** (port 5000). The **Expo app** is the
+fourth process. Start them in this order: Mongo → Flask → Node → Expo.
 
-**Mobile → API:** Set `EXPO_PUBLIC_API_URL` (e.g. `http://192.168.x.x:3000`) for physical devices if auto-discovery fails.
+```
+                 ┌─────────────┐  port 3000   ┌──────────────┐  port 5000   ┌──────────────┐
+  Expo phone ───▶│  Node API   │─────────────▶│ Flask models │              │   MongoDB    │
+   (Metro)       │ (Express)   │              │ YOLO+ResNet50│              │  port 27017  │
+                 └─────────────┘◀── stores ───┴──────────────┘              └──────▲───────┘
+                        └────────────────── reads/writes users + scans ────────────┘
+```
 
-**Node → Flask:** `xai-skin-backend`: `MODEL_SERVER_URL` (default `http://localhost:5000`).
+### 0. Prerequisites (install once)
 
-**Node → Mongo:** `MONGODB_URI` (default `mongodb://localhost:27017/xai-skin-health`).
+| Tool | Version | Check |
+|------|---------|-------|
+| **Node.js** + npm | 18 LTS or newer | `node -v` |
+| **Python** | 3.10 – 3.12 | `python --version` |
+| **MongoDB** | 6.x or newer (or Docker, or a free Atlas cluster) | see step 1 |
+| **Expo Go** app | latest | install on your phone from the App Store / Play Store |
+
+Clone the repo, then open **three terminals** (one per service).
+
+### 1. Start MongoDB
+
+Pick **one** of these — the app just needs a reachable MongoDB at `mongodb://localhost:27017`.
+
+**Option A — Docker (easiest, no install):**
+```bash
+docker run -d --name xai-mongo -p 27017:27017 -v xai-mongo-data:/data/db mongo:7
+```
+
+**Option B — Local install:** install [MongoDB Community Server](https://www.mongodb.com/try/download/community).
+On Windows it runs as a service automatically. On macOS: `brew install mongodb-community && brew services start mongodb-community`. On Linux: `sudo systemctl start mongod`.
+
+**Option C — MongoDB Atlas (cloud, free tier):** create a cluster, copy its connection string,
+and set it as `MONGODB_URI` in the backend `.env` (step 3). Nothing to run locally.
+
+> Default database name is `xai-skin-health` — it is created automatically on first write.
+
+### 2. Start the Flask model server (port 5000)
+
+```bash
+cd model-server
+python -m venv .venv
+# Windows:
+.venv\Scripts\activate
+# macOS / Linux:
+source .venv/bin/activate
+
+pip install -r requirements.txt
+python app.py            # serves http://localhost:5000
+```
+
+First boot downloads/loads the YOLOv12n detector + ResNet50 classifier weights
+(`weights/best_resnet50.pth` is committed). Confirm it's healthy:
+
+```bash
+curl http://localhost:5000/health
+# {"ok":true,"model_arch":"resnet50","num_classes":7,"mongo":true,...}
+```
+
+### 3. Start the Node API (port 3000)
+
+```bash
+cd xai-skin-backend
+cp .env.example .env      # then edit if needed (see vars below)
+npm install
+npm run seed              # creates the demo login  patient@skin.com / 123456  (see below)
+npm start                 # serves http://localhost:3000
+```
+
+`.env` variables (defaults work for an all-local setup):
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `MONGODB_URI` | `mongodb://localhost:27017/xai-skin-health` | database connection (use your Atlas string for Option C) |
+| `MODEL_SERVER_URL` | `http://localhost:5000` | where the Flask model server lives |
+| `JWT_SECRET` | dev placeholder | **change for any non-local use**; keep it stable or tokens invalidate on restart |
+
+### 4. Start the Expo mobile app
+
+```bash
+cd MyApp
+npm install
+npx expo start
+```
+
+Scan the QR code with **Expo Go** (or press `a` / `i` for an emulator). Then sign in with the
+demo account below.
+
+**Physical phone on Wi-Fi?** The phone must reach your computer's Node API. Find your machine's
+LAN IP (`ipconfig` on Windows / `ifconfig` on macOS) and set it before `expo start`:
+
+```bash
+# Windows PowerShell
+$env:EXPO_PUBLIC_API_URL="http://192.168.x.x:3000"; npx expo start
+# macOS / Linux
+EXPO_PUBLIC_API_URL="http://192.168.x.x:3000" npx expo start
+```
+
+If detection/scan requests time out from a physical device, Windows Firewall may be blocking
+ports 3000/5000 — run `model-server/scripts/open_dev_firewall.ps1` (as admin) to open them.
+
+### Demo login
+
+A ready-to-use patient account is seeded by `npm run seed`:
+
+```
+Email:    patient@skin.com
+Password: 123456
+```
+
+The password is 6 characters because the app's login form requires at least 6 (`MyApp/lib/validators.ts`, `PASSWORD_MIN = 6`); a shorter one is rejected before the request reaches the API.
+
+Re-running `npm run seed` is safe — it resets that account's password back to `123456`.
+
+### Quick reference
+
+| Layer | Directory | Command | URL |
+|--------|-----------|---------|-----|
+| Database | — | `docker run … mongo:7` (or local/Atlas) | `mongodb://localhost:27017` |
+| Models | `model-server/` | `python app.py` | **http://localhost:5000** |
+| API | `xai-skin-backend/` | `npm start` (seed first: `npm run seed`) | **http://localhost:3000** |
+| Mobile | `MyApp/` | `npx expo start` | Metro → Expo Go |
 
 ## Key files (edit here first)
 

@@ -3,7 +3,7 @@ import { AppState, Platform, type AppStateStatus } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 import type { CameraView } from 'expo-camera';
 
-import { API_URL, ApiError } from '@/lib/api';
+import { API_URL, ApiError, refreshAccessToken } from '@/lib/api';
 import { getStoredToken } from '@/context/AuthContext';
 import { reticleCropInPhotoPx, type LesionBbox } from '@/lib/bboxLayout';
 import { resolvePhotoSize, type ImageSize } from '@/lib/imageSize';
@@ -69,6 +69,9 @@ export function useLiveDetect({
   const stopRef = useRef(false);
   const failureCountRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  // Guards a single token refresh per expiry so a dead session doesn't hammer
+  // /users/refresh every frame. Reset on the next successful round-trip.
+  const triedRefreshRef = useRef(false);
   // Default to active so the loop runs until AppState reports an explicit
   // background/inactive event (also tolerant of test environments where
   // currentState is undefined).
@@ -177,7 +180,24 @@ export function useLiveDetect({
       });
       clearTimeout(timer);
       if (!res.ok) {
-        // 4xx/5xx is still a successful round-trip — clear offline counter but skip update.
+        // The Node /detect-fast proxy requires a valid JWT. An expired access
+        // token makes every live frame 401 — refresh once and retry next tick
+        // (mirrors the scan path's apiFetch behaviour) so live mode self-heals
+        // instead of silently showing zero boxes. A persistent 401 (no/dead
+        // refresh token) surfaces as the offline banner rather than a silent
+        // empty success.
+        if (res.status === 401 || res.status === 403) {
+          if (!triedRefreshRef.current) {
+            triedRefreshRef.current = true;
+            const refreshed = await refreshAccessToken();
+            if (refreshed) return false; // retry next tick with the fresh token
+          }
+          failureCountRef.current += 1;
+          if (failureCountRef.current >= OFFLINE_AFTER_FAILURES) setOffline(true);
+          return false;
+        }
+        // Other 4xx/5xx (e.g. 413 frame-too-large) is still a completed
+        // round-trip — clear the offline counter but skip the box update.
         failureCountRef.current = 0;
         return true;
       }
@@ -203,6 +223,7 @@ export function useLiveDetect({
       setFrameSize({ width: W, height: H });
       setLastMs(typeof body.ms === 'number' ? body.ms : null);
       failureCountRef.current = 0;
+      triedRefreshRef.current = false; // allow a fresh refresh on a later expiry
       setOffline(false);
       return true;
     } catch (e) {
@@ -228,6 +249,7 @@ export function useLiveDetect({
       setOffline(false);
       setLastMs(null);
       failureCountRef.current = 0;
+      triedRefreshRef.current = false;
       return;
     }
 

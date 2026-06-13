@@ -20,9 +20,13 @@ jest.mock('@/context/AuthContext', () => ({
 jest.mock('@/lib/api', () => ({
   API_URL: 'http://test.local',
   ApiError: class ApiError extends Error {},
+  refreshAccessToken: jest.fn(async () => false),
 }));
 
 import { useLiveDetect, type UseLiveDetectResult } from '@/hooks/useLiveDetect';
+import { refreshAccessToken } from '@/lib/api';
+
+const mockRefresh = refreshAccessToken as unknown as jest.Mock;
 
 function makeCameraRef(takePictureAsync: jest.Mock) {
   return { current: { takePictureAsync } } as any;
@@ -35,6 +39,14 @@ function okResponse(
     ok: true,
     status: 200,
     json: async () => ({ boxes, width: 320, height: 320, ms: 12 }),
+  } as any;
+}
+
+function unauthorizedResponse() {
+  return {
+    ok: false,
+    status: 401,
+    json: async () => ({ error: 'Token required' }),
   } as any;
 }
 
@@ -110,6 +122,46 @@ describe('useLiveDetect', () => {
   it('flips offline after consecutive network failures', async () => {
     const takePictureAsync = jest.fn(async () => ({ uri: 'file:///t.jpg' }));
     fetchSpy.mockRejectedValue(new Error('Network down'));
+
+    const h = mountHook({
+      cameraRef: makeCameraRef(takePictureAsync),
+      enabled: true,
+      fps: 1000,
+    });
+
+    await waitFor(() => h.ref.current?.offline === true);
+    expect(h.ref.current?.offline).toBe(true);
+    h.unmount();
+  });
+
+  it('refreshes the access token and retries when /detect-fast returns 401', async () => {
+    const takePictureAsync = jest.fn(async () => ({ uri: 'file:///t.jpg' }));
+    mockRefresh.mockResolvedValue(true);
+    let call = 0;
+    fetchSpy.mockImplementation(async () => {
+      call += 1;
+      return call === 1
+        ? unauthorizedResponse()
+        : okResponse([{ x: 0.1, y: 0.2, w: 0.3, h: 0.4, cls: 'lesion', conf: 0.9 }]);
+    });
+
+    const h = mountHook({
+      cameraRef: makeCameraRef(takePictureAsync),
+      enabled: true,
+      fps: 1000,
+    });
+
+    await waitFor(() => (h.ref.current?.detections.length ?? 0) > 0);
+    expect(mockRefresh).toHaveBeenCalled();
+    expect(h.ref.current?.detections[0].cls).toBe('lesion');
+    expect(h.ref.current?.offline).toBe(false);
+    h.unmount();
+  });
+
+  it('flips offline when 401 persists and the token refresh fails', async () => {
+    const takePictureAsync = jest.fn(async () => ({ uri: 'file:///t.jpg' }));
+    mockRefresh.mockResolvedValue(false);
+    fetchSpy.mockResolvedValue(unauthorizedResponse());
 
     const h = mountHook({
       cameraRef: makeCameraRef(takePictureAsync),
