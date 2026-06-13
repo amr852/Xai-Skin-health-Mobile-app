@@ -46,7 +46,7 @@ Pick **one** of these — the app just needs a reachable MongoDB at `mongodb://l
 docker run -d --name xai-mongo -p 27017:27017 -v xai-mongo-data:/data/db mongo:7
 ```
 
-**Option B — Local install:** install [MongoDB Community Server](https://www.mongodb.com/try/download/community).
+**Option B — Local recommended install:** install [MongoDB Community Server](https://www.mongodb.com/try/download/community).
 On Windows it runs as a service automatically. On macOS: `brew install mongodb-community && brew services start mongodb-community`. On Linux: `sudo systemctl start mongod`.
 
 **Option C — MongoDB Atlas (cloud, free tier):** create a cluster, copy its connection string,
