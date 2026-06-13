@@ -69,12 +69,18 @@ python app.py            # serves http://localhost:5000
 ```
 
 Both model weights are **committed to the repo**, so a fresh clone runs the full
-pipeline with no extra downloads:
+pipeline with no manual downloads:
 
-| File | Size | Role | Loaded via |
-|------|------|------|------------|
-| `model-server/best.pt` | ~5 MB | YOLOv12n lesion **detector** (live mode + scans) | `config.YOLO_MODEL_PATH` (default `model-server/best.pt`) |
-| `model-server/weights/best_resnet50.pth` | ~91 MB | ResNet50 7-class **classifier** | `config.MODEL_WEIGHTS` (default `weights/best_resnet50.pth`) |
+| File | Size | Role | Stored as | Loaded via |
+|------|------|------|-----------|------------|
+| `model-server/best.pt` | ~5 MB | YOLOv12n lesion **detector** (live mode + scans) | plain git blob | `config.YOLO_MODEL_PATH` (default `model-server/best.pt`) |
+| `model-server/weights/best_resnet50.pth` | ~91 MB | ResNet50 7-class **classifier** | **Git LFS** (`*.pth`) | `config.MODEL_WEIGHTS` (default `weights/best_resnet50.pth`) |
+
+> **Install Git LFS before cloning** — the 91 MB classifier is stored via Git LFS.
+> Run `git lfs install` once, then a normal `git clone` pulls the real weight file.
+> If you cloned without LFS and `best_resnet50.pth` is only a few hundred bytes
+> (a pointer stub), run `git lfs pull` to fetch it. The YOLO detector (`best.pt`)
+> is a plain blob and needs no LFS.
 
 Both load at Flask startup. To point at your own checkpoints instead, set the env
 vars `YOLO_MODEL_PATH` / `MODEL_WEIGHTS` before `python app.py`. The experimental
